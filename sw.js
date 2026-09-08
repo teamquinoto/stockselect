@@ -12,7 +12,7 @@
    ACTUALIZACIÓN CONTROLADA: no auto-activamos con skipWaiting; cuando hay
    versión nueva el SW queda "waiting" y la app muestra el botón "Update".
    ============================================================ */
-const CACHE = "mayor-stock-v49";   // v49: rename a Stock Select + nuevo logo/iconos
+const CACHE = "mayor-stock-v50";   // v50: logo del topbar (tb-mark) ahora usa icon-192.png en vez del SVG viejo
 
 const ASSETS = [
   "./",
