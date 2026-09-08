@@ -4,7 +4,7 @@
    Todo vive en scope global (sin módulos), igual que antes.
    ============================================================ */
 /* ============================================================
-   Gestor de Stock — vanilla, último costo, sincronizado
+   Stock Select — vanilla, último costo, sincronizado
    ============================================================ */
 if (window.pdfjsLib) {
   pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -671,3 +671,4 @@ function moverStock(prod, delta, valorUnit, refTipo, refId, ref, opts){
     obs: opts.obs || ""
   });
 }
+
