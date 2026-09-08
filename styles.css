@@ -1,54 +1,54 @@
   :root{
-    --ink:#1a1a1a;
-    --ink-soft:#3a362f;
-    --paper:#faf9f7;
+    --ink:#1b1725;
+    --ink-soft:#2e2838;
+    --paper:#faf9fc;
     --surface:#ffffff;
-    --surface-2:#f5f3ef;
-    --line:#eae7e1;
-    --line-strong:#dad6ce;
-    --accent:#2563eb;
-    --accent-ink:#2563eb;
-    --up:#2563eb;
-    --up-bg:#eaf0fc;
+    --surface-2:#f3f0f9;
+    --line:#eae5f2;
+    --line-strong:#d8d0e6;
+    --accent:#7c3aed;
+    --accent-ink:#6d28d9;
+    --up:#7c3aed;
+    --up-bg:#f0e9fc;
     --down:#dc2626;
     --down-bg:#fbecec;
     --alert:#dc2626;
     --alert-bg:#fbecec;
-    --muted:#7a756c;
-    --text:#1a1a1a;
+    --muted:#78708a;
+    --text:#1b1725;
     --radius:14px;
     --mono:"Spline Sans Mono",ui-monospace,"SF Mono","Menlo","Consolas",monospace;
     --sans:"Inter Tight",-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,sans-serif;
     --shadow:0 1px 2px rgba(26,26,26,.05);
-    --side-bg:#f3f1ed;
-    --side-hover:#e9e6df;
-    --nav-ink:#5a554c;
+    --side-bg:#f2eef9;
+    --side-hover:#e8e1f4;
+    --nav-ink:#6b6280;
     --topbar-bg:#ffffff;
-    --login-bg:#f0eee9;
+    --login-bg:#efeaf7;
   }
   :root[data-theme="dark"]{
-    --ink:#0b0e13;
-    --paper:#0f141b;
-    --surface:#161c25;
-    --surface-2:#1d2530;
-    --line:#28303c;
-    --line-strong:#38424f;
-    --accent:#4d82e8;
-    --accent-ink:#7aa5f0;
-    --up:#4d82e8;
-    --up-bg:#17243b;
+    --ink:#0c0a13;
+    --paper:#100e18;
+    --surface:#191524;
+    --surface-2:#221c33;
+    --line:#2f2743;
+    --line-strong:#40365a;
+    --accent:#a78bfa;
+    --accent-ink:#c4b5fd;
+    --up:#a78bfa;
+    --up-bg:#241a3b;
     --down:#f16a68;
     --down-bg:#3a1e1e;
     --alert:#f16a68;
     --alert-bg:#3a1e1e;
-    --muted:#8b93a1;
-    --text:#e6e9ee;
+    --muted:#968ba8;
+    --text:#eae6f4;
     --shadow:0 1px 2px rgba(0,0,0,.45);
-    --side-bg:#12171f;
-    --side-hover:#1d2530;
-    --nav-ink:#c2c9d4;
-    --topbar-bg:#12171f;
-    --login-bg:#0b0f15;
+    --side-bg:#140f1f;
+    --side-hover:#221c33;
+    --nav-ink:#c7bdd9;
+    --topbar-bg:#140f1f;
+    --login-bg:#0b0912;
   }
   :root[data-theme="dark"] .banner.warn{color:#f3b3b3;border-color:#5a2b2b}
   :root[data-theme="dark"] .banner.ok{color:var(--accent-ink);border-color:#264a6e}
@@ -94,7 +94,7 @@
   .topbar.scrolled{ background:color-mix(in srgb, var(--paper) 72%, transparent); border-bottom-color:var(--line) }
   @supports not (background:color-mix(in srgb, red, blue)){ .topbar.scrolled{ background:var(--topbar-bg) } }
   .topbar .tb-brand{display:flex;align-items:center;gap:9px;min-width:0}
-  .topbar .tb-mark{width:27px;height:27px;border-radius:7px;flex-shrink:0;object-fit:cover;box-shadow:0 2px 8px rgba(29,78,216,.28)}
+  .topbar .tb-mark{width:27px;height:27px;border-radius:7px;flex-shrink:0;object-fit:cover;box-shadow:0 2px 8px rgba(124,58,237,.28)}
   .topbar .tb-name{font-size:15px;font-weight:800;color:var(--text);letter-spacing:-.4px;white-space:nowrap}
   .topbar .tb-right{display:flex;align-items:center;gap:14px}
   .topbar .tb-sync{font-size:11.5px;font-weight:700;white-space:nowrap}
@@ -144,7 +144,7 @@
   .nav button:hover .ico{transform:scale(1.14)}
   .nav button:not(.on):hover{transform:translateX(3px)}
   .nav button:not(.on):hover::before{height:16px}
-  .nav button.on{background:var(--accent);color:#fff;box-shadow:0 4px 12px rgba(29,78,216,.24)}
+  .nav button.on{background:var(--accent);color:#fff;box-shadow:0 4px 12px rgba(124,58,237,.24)}
   .nav button.on .ico{opacity:1;animation:navPop .32s cubic-bezier(.34,1.56,.64,1)}
   /* stagger de entrada: cada botón entra un toque después que el anterior */
   .nav button:nth-child(1){animation-delay:.02s}
@@ -515,14 +515,14 @@
   @keyframes cardIn{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
   .login-logo-wrap{display:inline-flex;margin-bottom:16px;animation:logoFloat 5s ease-in-out infinite}
   @keyframes logoFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
-  .login-logo{border-radius:18px;box-shadow:0 10px 30px rgba(29,78,216,.28);display:block}
+  .login-logo{border-radius:18px;box-shadow:0 10px 30px rgba(124,58,237,.28);display:block}
   .login-card h1{color:var(--text);font-size:23px;margin:0 0 6px;letter-spacing:-.6px;font-weight:900}
   .login-sub{color:var(--muted);font-size:13.5px;margin:0 0 24px;line-height:1.5}
   .login-card .field{text-align:left;margin-bottom:14px}
   .login-card .field label{color:var(--muted);font-size:12.5px;font-weight:600}
   .login-card .inp{background:var(--surface);border-color:var(--line-strong);color:var(--text);padding:11px 12px;border-radius:10px;transition:border-color .15s,box-shadow .15s}
   .login-card .inp:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
-  @supports not (background:color-mix(in srgb,red,blue)){.login-card .inp:focus{box-shadow:0 0 0 3px rgba(29,78,216,.18)}}
+  @supports not (background:color-mix(in srgb,red,blue)){.login-card .inp:focus{box-shadow:0 0 0 3px rgba(124,58,237,.18)}}
   /* contraseña con "ojito" para mostrar/ocultar */
   .pass-wrap{position:relative}
   .pass-wrap .inp{padding-right:42px}
