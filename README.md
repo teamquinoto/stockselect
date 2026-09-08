@@ -1,4 +1,4 @@
-# Gestor de Stock
+# Stock Select
 
 Gestor de inventario en **vanilla HTML/CSS/JS**, sin frameworks ni build. Todo vive en un único `index.html`. Las **compras suman** stock (por sociedad) y fijan el **último costo**; las **ventas restan** desde un **pool unificado** con costeo **FIFO global por fecha**; los **ajustes** corrigen a mano. Cada movimiento queda trazado en un **kardex**. Importa facturas en **PDF** (OCR con Gemini vía el Worker) y sincroniza entre dispositivos contra un backend en **Cloudflare Worker + D1**. Es una **PWA** instalable y usable offline.
 

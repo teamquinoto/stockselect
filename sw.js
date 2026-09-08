@@ -1,5 +1,5 @@
 /* ============================================================
-   Service Worker — Mayor de Stock  (versión app partida en módulos)
+   Service Worker — Stock Select  (versión app partida en módulos)
    - index.html / navegación: NETWORK-FIRST (siempre la última si hay red).
    - NUESTROS .js y .css: NETWORK-FIRST con copia en cache. Así, al editar
      un archivo y subirlo, el cambio se ve al toque online; y offline queda
@@ -12,7 +12,7 @@
    ACTUALIZACIÓN CONTROLADA: no auto-activamos con skipWaiting; cuando hay
    versión nueva el SW queda "waiting" y la app muestra el botón "Update".
    ============================================================ */
-const CACHE = "mayor-stock-v48";   // v48: app partida en styles.css + js/*.js (mismo comportamiento que v47)
+const CACHE = "mayor-stock-v49";   // v49: rename a Stock Select + nuevo logo/iconos
 
 const ASSETS = [
   "./",
