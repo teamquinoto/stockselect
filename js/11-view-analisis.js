@@ -213,7 +213,7 @@ function viewAnalisis(){
   const socRows = socOrder.filter(k=>bySoc[k]).map(k=>{
     const e = bySoc[k];
     const mg = round2(e.revenue - e.cogs);
-    return { soc:k, nombre: k==="—"?"— (sin desglose)":storeName(k), units:e.units, cogs:e.cogs,
+    return { soc:k, nombre: k==="—"?"— (no breakdown)":storeName(k), units:e.units, cogs:e.cogs,
              avg: e.units>0 ? round2(e.cogs/e.units) : 0, revenue:e.revenue, margin:mg,
              marginPct: e.revenue>0 ? (mg/e.revenue*100) : 0 };
   });

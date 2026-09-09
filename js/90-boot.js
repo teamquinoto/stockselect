@@ -17,10 +17,10 @@
   if (faltan.length){
     document.body.innerHTML =
       '<div style="font-family:system-ui,-apple-system,sans-serif;max-width:640px;margin:3rem auto;padding:1.5rem 1.75rem;border:1px solid #ffb3b3;border-radius:12px;background:#fff5f5;color:#611">'
-      + '<h2 style="margin:0 0 .5rem;color:#c0392b">No se cargaron todos los archivos</h2>'
-      + '<p style="margin:.25rem 0">La app no arranca porque falta(n) este(os) archivo(s) JS. Revisá que existan en la carpeta <code>js/</code> y que el nombre coincida EXACTO con el del index.html:</p>'
+      + '<h2 style="margin:0 0 .5rem;color:#c0392b">Some files didn\'t load</h2>'
+      + '<p style="margin:.25rem 0">The app can\'t start because these JS file(s) are missing. Check that they exist in the <code>js/</code> folder and that the name matches EXACTLY the one in index.html:</p>'
       + '<ul style="margin:.5rem 0">' + faltan.map(function(f){return "<li><code>js/"+f+"</code></li>";}).join("") + '</ul>'
-      + '<p style="margin:.5rem 0 0;color:#a55;font-size:.9em">Causas típicas: te olvidaste de subir el archivo, le erraste al nombre, o hay un error de sintaxis adentro de ese archivo (miralo en la consola con F12).</p>'
+      + '<p style="margin:.5rem 0 0;color:#a55;font-size:.9em">Common causes: you forgot to upload the file, misspelled the name, or there\'s a syntax error inside it (check the console with F12).</p>'
       + '</div>';
     throw new Error("gestordestock: faltan .js -> " + faltan.join(", "));
   }

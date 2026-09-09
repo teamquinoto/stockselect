@@ -590,8 +590,8 @@ function hideLogin(){
 }
 
 /* ---------- Formato ---------- */
-const nf0 = new Intl.NumberFormat("es-AR",{maximumFractionDigits:2});
-const nf2 = new Intl.NumberFormat("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2});
+const nf0 = new Intl.NumberFormat("en-US",{maximumFractionDigits:2});
+const nf2 = new Intl.NumberFormat("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
 /* money(n, ccy): formatea con el símbolo de la moneda indicada. Si no se pasa
    moneda, usa la de REPORTE (por defecto USD). Los montos consolidados llegan
    ya convertidos a la moneda de reporte; los deposit-scoped pasan su ccy. */

@@ -72,7 +72,7 @@ function openConjClientePicker(anchor){
   const search = pop.querySelector(".ppick-search"), listEl = pop.querySelector(".ppick-list");
   const paint=(q)=>{
     q=(q||"").trim().toLowerCase();
-    let lista = db.clientes.slice().sort((a,b)=>String(a.nombre||"").localeCompare(String(b.nombre||""),"es"));
+    let lista = db.clientes.slice().sort((a,b)=>String(a.nombre||"").localeCompare(String(b.nombre||""),"en"));
     if(q) lista = lista.filter(c=> ((c.nombre||"")+" "+(c.empresa||"")).toLowerCase().includes(q));
     let html = lista.map(c=>`<button type="button" class="ppick-item${c.id===conjDraft.clienteId?" active":""}" data-pickcli="${c.id}">
       <span class="pi-name">${esc(c.nombre)}${c.empresa?` · ${esc(c.empresa)}`:""}</span></button>`).join("");
@@ -145,7 +145,7 @@ function openConjProductPicker(i, anchor){
   const cur = conjDraft.lineas[i].productoId;
   const paint=(q)=>{
     q=(q||"").trim().toLowerCase();
-    let lista = db.productos.slice().sort((a,b)=> String(a.nombre||"").localeCompare(String(b.nombre||""),"es",{numeric:true}));
+    let lista = db.productos.slice().sort((a,b)=> String(a.nombre||"").localeCompare(String(b.nombre||""),"en",{numeric:true}));
     if(q) lista = lista.filter(p=> ((p.nombre||"")+" "+(p.sku||"")).toLowerCase().includes(q));
     let html = lista.map(p=>{
       const sku = p.sku ? `<span class="sku">${esc(p.sku)}</span>` : "";
@@ -271,7 +271,7 @@ function openRecibirTransito(prodId){
 function openEnviarTransito(){
   if(!isAdmin()){ toast("Only admins can move stock","warn"); return; }
   const prods = db.productos.filter(p=> STORE_IDS.some(s=> stockDe(p,s)>0))
-    .sort((a,b)=> String(a.nombre||"").localeCompare(String(b.nombre||""),"es"));
+    .sort((a,b)=> String(a.nombre||"").localeCompare(String(b.nombre||""),"en"));
   if(!prods.length){ toast("No sellable stock to send to transit","warn"); return; }
   const prodOpts = prods.map(p=>`<option value="${p.id}">${esc(p.sku?("["+p.sku+"] "):"")}${esc(p.nombre)}</option>`).join("");
   const body = `
@@ -374,7 +374,7 @@ function deleteConjunta(id){
 
 function viewConjunta(){
   const enTransito = db.productos.filter(p=> transUnits(p)>0)
-    .sort((a,b)=> String(a.nombre||"").localeCompare(String(b.nombre||""),"es"));
+    .sort((a,b)=> String(a.nombre||"").localeCompare(String(b.nombre||""),"en"));
   const trRows = enTransito.map(p=>`<tr>
       <td><span class="sku">${esc(p.sku||"—")}</span> ${esc(p.nombre)}</td>
       <td class="r num">${qty(transUnits(p))}</td>

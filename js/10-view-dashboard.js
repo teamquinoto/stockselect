@@ -60,7 +60,7 @@ function sagaDe(p){
   return w.length>3 ? w.slice(0,3).join(" ") : base;
 }
 function sagasUnicas(){
-  return [...new Set(db.productos.map(sagaDe))].filter(s=>s&&s!=="—").sort((a,b)=>a.localeCompare(b,"es"));
+  return [...new Set(db.productos.map(sagaDe))].filter(s=>s&&s!=="—").sort((a,b)=>a.localeCompare(b,"en"));
 }
 /* Filtrado genérico de productos por {q,saga,estado,cmin,cmax,sortKey,sortDir} */
 function filtrarProds(f){
@@ -116,7 +116,7 @@ function filtrarProds(f){
   out.sort((a,b)=>{
     const va=valOf(a), vb=valOf(b);
     if(typeof va==="number") return dir*(va-vb);
-    return dir*va.localeCompare(vb,"es",{numeric:true});
+    return dir*va.localeCompare(vb,"en",{numeric:true});
   });
   return out;
 }

@@ -34,14 +34,14 @@ function fileToBase64(file){
   return new Promise((res,rej)=>{
     const r=new FileReader();
     r.onload=()=>res(String(r.result).split(",")[1]||"");
-    r.onerror=()=>rej(new Error("no se pudo leer el archivo"));
+    r.onerror=()=>rej(new Error("couldn't read the file"));
     r.readAsDataURL(file);
   });
 }
 async function handlePdfIA(file){
   const out=document.getElementById("importOut");
-  if(!session){ out.innerHTML=`<div class="banner warn">Necesitás estar logueado para usar la lectura con IA.</div>`; return; }
-  out.innerHTML=`<p style="color:var(--muted);padding:14px 0">✨ Leyendo <b>${esc(file.name)}</b> con IA… (puede tardar unos segundos)</p>`;
+  if(!session){ out.innerHTML=`<div class="banner warn">You need to be logged in to use AI reading.</div>`; return; }
+  out.innerHTML=`<p style="color:var(--muted);padding:14px 0">✨ Reading <b>${esc(file.name)}</b> with AI… (may take a few seconds)</p>`;
   try{
     const b64=await fileToBase64(file);
     const res=await fetch(apiBase()+"/parse-invoice",{
@@ -109,7 +109,7 @@ async function handlePdf(file){
     showImportEditor(file.name, parsed);
   }catch(e){
     console.error(e);
-    out.innerHTML=`<div class="banner warn">No pude leer ese PDF (${esc(e.message||"error")}). Puede estar escaneado como imagen. Cargá la compra a mano.</div>`;
+    out.innerHTML=`<div class="banner warn">Couldn't read that PDF (${esc(e.message||"error")}). It may be a scanned image. Load the purchase by hand.</div>`;
   }
 }
 

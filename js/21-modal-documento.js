@@ -439,7 +439,7 @@ function pickerItemsHTML(i, q){
   let lista = isC ? db.productos.slice()
                   : db.productos.filter(p=> stockDe(p, vstoreVenta)>0 || p.id===cur);
   // orden alfabético SIEMPRE (task 2), por nombre
-  lista.sort((a,b)=> String(a.nombre||"").localeCompare(String(b.nombre||""),"es",{numeric:true}));
+  lista.sort((a,b)=> String(a.nombre||"").localeCompare(String(b.nombre||""),"en",{numeric:true}));
   if(q) lista = lista.filter(p=> ((p.nombre||"")+" "+(p.sku||"")).toLowerCase().includes(q));
   let html = lista.map(p=>{
     const sku = p.sku ? `<span class="sku">${esc(p.sku)}</span>` : "";
@@ -558,7 +558,7 @@ function openClientePicker(anchor){
   const search = pop.querySelector(".ppick-search"), listEl = pop.querySelector(".ppick-list");
   const paint=(q)=>{
     q=(q||"").trim().toLowerCase();
-    let lista = db.clientes.slice().sort((a,b)=>String(a.nombre||"").localeCompare(String(b.nombre||""),"es"));
+    let lista = db.clientes.slice().sort((a,b)=>String(a.nombre||"").localeCompare(String(b.nombre||""),"en"));
     if(q) lista = lista.filter(c=> ((c.nombre||"")+" "+(c.empresa||"")+" "+(c.email||"")).toLowerCase().includes(q));
     let html = lista.map(c=>`<button type="button" class="ppick-item${c.id===draft.clienteId?" active":""}" data-pickcli="${c.id}">
       <span class="pi-name">${esc(c.nombre)}${c.empresa?` · ${esc(c.empresa)}`:""}</span></button>`).join("");

@@ -20,8 +20,8 @@ function openProd(id){
   const nivOpts = NIVELES.map(([v,l])=>`<option value="${v}" ${p&&p.nivel===v?"selected":""}>${esc(l)}</option>`).join("");
   buildModal(p?"Edit product":"New product", `
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
-      <div class="field"><label>SKU / código</label><input class="inp" id="p_sku" value="${p?esc(p.sku):""}"></div>
-      <div class="field"><label>Unidad</label><input class="inp" id="p_uni" value="${p?esc(p.unidad):"u"}" placeholder="u, pack, box, case..."></div>
+      <div class="field"><label>SKU / code</label><input class="inp" id="p_sku" value="${p?esc(p.sku):""}"></div>
+      <div class="field"><label>Unit</label><input class="inp" id="p_uni" value="${p?esc(p.unidad):"u"}" placeholder="u, pack, box, case..."></div>
       <div class="field" style="grid-column:1/3"><label>Name</label><input class="inp" id="p_nom" value="${p?esc(p.nombre):""}"></div>
       ${!p ? `<div class="field"><label>Initial stock</label><input class="inp num" id="p_stk" value="0"></div>
       <div class="field"><label>Society</label><select class="inp" id="p_store">${(allowedStores()).map(s=>`<option value="${s}" ${s===(effectiveStores()[0]||STORE_IDS[0])?"selected":""}>${esc(storeName(s))}</option>`).join("")}</select></div>`

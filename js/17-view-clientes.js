@@ -188,7 +188,7 @@ function renderLines(){
         if(!isC && l.productoId){
           // TASK 1: tope = stock − comprometido en OTRAS líneas del mismo documento
           const rem=dispRestante(l.productoId, i);
-          if(v>rem){ v=Math.max(0,rem); inp.value=v; toast(`Disponible para esta línea: ${qty(rem)} (ya comprometido en otras líneas)`,"warn"); }
+          if(v>rem){ v=Math.max(0,rem); inp.value=v; toast(`Available for this line: ${qty(rem)} (already committed on other lines)`,"warn"); }
         }
         l.cantidad=v;
         updateDispInfos();   // refresca "quedan" en todas las líneas del mismo producto

@@ -161,7 +161,7 @@ function filtrarDocs(tipo){
   out.sort((a,b)=>{
     const va=valOf(a), vb=valOf(b);
     if(typeof va==="number") return dir*(va-vb);
-    return dir*va.localeCompare(vb,"es",{numeric:true});
+    return dir*va.localeCompare(vb,"en",{numeric:true});
   });
   return out;
 }
