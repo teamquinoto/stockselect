@@ -18,7 +18,7 @@
    ============================================================ */
 let conjDraft = null;
 
-function nuevaConjLinea(){ return { key:uid(), productoId:"", sku:"", nombre:"", crear:false, aSelect:0, aTransito:0, costoUnit:0 }; }
+function nuevaConjLinea(){ return { key:uid(), productoId:"", sku:"", nombre:"", crear:false, aSelect:0, aTransito:0, costoUnit:0, precioSelect:0 }; }
 
 function openConjunta(pre){
   if(!isAdmin()){ toast("Only admins can load joint buys","warn"); return; }
@@ -34,7 +34,7 @@ function conjUnidadesNuestras(){ return conjDraft.lineas.reduce((a,l)=> a + (par
 function renderConjModal(){
   const cli = clienteById(conjDraft.clienteId);
   const body = `
-    <p class="hint" style="margin:0 0 12px">Load ONLY the units we keep as commission. The client's units are not our stock. Cost defaults to 0 (commission in kind). AR-bound units are born <b>in transit</b> and become Swan stock when received.</p>
+    <p class="hint" style="margin:0 0 12px">Load ONLY the units we keep as commission. <b>Cost</b> = what the unit cost YOU (0 = commission in kind). <b>Price US$</b> = optional sale price for Select; it's a different thing from cost and doesn't have to match. AR-bound units are born <b>in transit</b> and become Swan stock when received.</p>
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0;margin-bottom:12px">
       <div class="field" style="grid-column:1/3"><label>Client (one of the 12 locales) <span class="hint" style="font-weight:400">· optional</span></label>
         <button type="button" class="ppick-btn${cli?"":" placeholder"}" id="cj_cli">
@@ -103,15 +103,16 @@ function renderConjLines(){
           <span class="ppick-label">${l.crear?"＋ New product":(l.productoId?esc((prodById(l.productoId)||{}).nombre||"—"):"— pick product —")}</span><span class="ppick-caret">▾</span></button></div>
         ${newFields}
       </td>
-      <td style="width:78px"><input class="inp num" data-cjk="aSelect" data-cji="${i}" value="${l.aSelect}" title="Units kept in Select (USA)"></td>
-      <td style="width:78px"><input class="inp num" data-cjk="aTransito" data-cji="${i}" value="${l.aTransito}" title="Units bound for AR (born in transit)"></td>
-      <td style="width:96px"><input class="inp num" data-cjk="costoUnit" data-cji="${i}" value="${l.costoUnit}" title="Entry unit cost (0 = commission)"></td>
+      <td style="width:74px"><input class="inp num" data-cjk="aSelect" data-cji="${i}" value="${l.aSelect}" title="Units kept in Select (USA)"></td>
+      <td style="width:74px"><input class="inp num" data-cjk="aTransito" data-cji="${i}" value="${l.aTransito}" title="Units bound for AR (born in transit)"></td>
+      <td style="width:92px"><input class="inp num" data-cjk="costoUnit" data-cji="${i}" value="${l.costoUnit}" title="What it cost YOU to get the unit (0 = commission in kind)"></td>
+      <td style="width:100px"><input class="inp num" data-cjk="precioSelect" data-cji="${i}" value="${l.precioSelect||0}" title="Sale price in Select (US$). Optional. Sets the Select list price."></td>
       <td style="width:34px"><button class="btn ghost sm" data-cjdel="${i}" title="Remove">✕</button></td>
     </tr>`;
   }).join("");
   host.innerHTML = `<div class="table-scroll"><table class="line-tbl doc-tbl">
-    <colgroup><col><col style="width:82px"><col style="width:82px"><col style="width:100px"><col style="width:40px"></colgroup>
-    <thead><tr><th>Product</th><th class="r" title="Select · USA">Select</th><th class="r" title="Bound for AR (transit)">→ AR</th><th class="r">Unit cost</th><th></th></tr></thead>
+    <colgroup><col><col style="width:78px"><col style="width:78px"><col style="width:96px"><col style="width:104px"><col style="width:40px"></colgroup>
+    <thead><tr><th>Product</th><th class="r" title="Select · USA">Select</th><th class="r" title="Bound for AR (transit)">→ AR</th><th class="r" title="Entry cost (0 = commission)">Cost</th><th class="r" title="Sale price in Select (US$), optional">Price US$</th><th></th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 
   host.querySelectorAll("[data-cjpick]").forEach(b=> b.onclick=()=> openConjProductPicker(+b.dataset.cjpick, b));
@@ -119,7 +120,7 @@ function renderConjLines(){
     const i=+inp.dataset.cji, k=inp.dataset.cjk;
     inp.oninput=()=>{
       const l=conjDraft.lineas[i];
-      if(k==="aSelect"||k==="aTransito"||k==="costoUnit") l[k]=parseNum(inp.value);
+      if(k==="aSelect"||k==="aTransito"||k==="costoUnit"||k==="precioSelect") l[k]=parseNum(inp.value);
       else l[k]=inp.value;
       const t=document.getElementById("cjTot"); if(t) t.textContent=qty(conjUnidadesNuestras());
     };
@@ -191,7 +192,7 @@ function confirmConjunta(){
       p = prodById(l.productoId);
       if(!p){ toast("A line has no product assigned","warn"); return; }
     }
-    resolved.push({ prod:p, aSelect:aSel, aTransito:aTr, costoUnit:Math.max(0, parseNum(l.costoUnit)||0) });
+    resolved.push({ prod:p, aSelect:aSel, aTransito:aTr, costoUnit:Math.max(0, parseNum(l.costoUnit)||0), precioSelect:Math.max(0, parseNum(l.precioSelect)||0) });
   }
   if(!resolved.length){ toast("Add at least one unit to keep","warn"); return; }
 
@@ -222,6 +223,12 @@ function confirmConjunta(){
     }
     // último costo landed de referencia (sólo si cargaron un costo > 0)
     if(r.costoUnit>0){ p.costoNeto=r.costoUnit; p.costoHandling=0; p.costoFlete=0; p.ultimoCosto=r.costoUnit; }
+    // precio de venta de Select (US$), opcional: fija la lista del depósito Select
+    if(r.precioSelect>0){
+      if(!p.precioVentaPorTienda) p.precioVentaPorTienda={};
+      p.precioVentaPorTienda[STORE_IDS[0]] = r.precioSelect;
+      p.precioVenta = r.precioSelect;   // espejo
+    }
   });
 
   db.conjuntas.push(doc);
@@ -389,6 +396,22 @@ function viewConjunta(){
     </tr>`;
   }).join("") || `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:18px">No joint buys loaded yet.</td></tr>`;
 
+  // Movimientos entre depósitos (traspasos, comisión, recepciones y mermas) — para verlos de un vistazo.
+  const tipos = { "transfer-out":"→ sent", "transfer-in":"← received", "conjunta":"commission in", "merma":"write-off" };
+  const movs = (db.movimientos||[]).filter(m=> m.tipo in tipos)
+    .slice().sort((a,b)=> String(b.fecha||"").localeCompare(String(a.fecha||""))).slice(0,15);
+  const movRows = movs.map(m=>{
+    const p = prodById(m.productoId);
+    const up = (m.delta||0) >= 0;
+    return `<tr>
+      <td>${esc(fmtDate(m.fecha))}</td>
+      <td><span class="sku">${esc(m.sku||"—")}</span> ${esc((p&&p.nombre)||m.nombre||"—")}</td>
+      <td>${esc(storeName(m.store))}</td>
+      <td>${esc(m.ref||tipos[m.tipo]||"")}</td>
+      <td class="r num" style="color:${up?'var(--up)':'var(--alert)'}">${up?"+":"−"}${qty(Math.abs(m.delta||m.cantidad||0))}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px">No transfers yet.</td></tr>`;
+
   return `
   <div class="phead"><div><h2>Joint buy &amp; transit</h2><p class="sub">Commission-in-kind intake and the USA → transit → AR flow.</p></div>
     <div style="display:flex;gap:8px"><button class="btn" data-enviar-transito>Send to transit</button><button class="btn up" data-new-conj>＋ New joint buy</button></div>
@@ -400,14 +423,21 @@ function viewConjunta(){
   </div>
 
   <div class="panel" style="margin-bottom:18px">
-    <div class="phead" style="padding:0 0 10px"><h3 style="font-size:14px">In transit → receive in AR</h3></div>
+    <div class="phead"><h3>In transit → receive in AR</h3></div>
     <div class="table-scroll"><table>
       <thead><tr><th>Product</th><th class="r">In transit</th><th class="r">Value</th><th></th></tr></thead>
       <tbody>${trRows}</tbody></table></div>
   </div>
 
+  <div class="panel" style="margin-bottom:18px">
+    <div class="phead"><h3>Recent movements between deposits</h3></div>
+    <div class="table-scroll"><table>
+      <thead><tr><th>Date</th><th>Product</th><th>Deposit</th><th>Movement</th><th class="r">Units</th></tr></thead>
+      <tbody>${movRows}</tbody></table></div>
+  </div>
+
   <div class="panel">
-    <div class="phead" style="padding:0 0 10px"><h3 style="font-size:14px">History</h3></div>
+    <div class="phead"><h3>History</h3></div>
     <div class="table-scroll"><table>
       <thead><tr><th>Date</th><th>Client</th><th>Ref</th><th class="c">Order</th><th class="r">Select</th><th class="r">→ AR</th><th></th></tr></thead>
       <tbody>${histRows}</tbody></table></div>
