@@ -26,6 +26,7 @@ Orden (tal cual está en el index):
 11. `js/20-modal-producto.js` — alta/edición de producto
 12. `js/21-modal-documento.js` — editor de factura (líneas) + ajuste de inventario + combobox de producto + alta de cliente
 13. `js/17-view-clientes.js` — clientes (listado/edición/borrado) + revertir/copiar/ver documentos
+13b. `js/18-view-conjunta.js` — **compra conjunta** (ingreso de comisión en especie) + vista de **tránsito** (recibir en AR / enviar a tránsito)
 14. `js/30-pdf.js` — PDF de factura + lista de precios
 15. `js/31-export-pnl.js` — export de P&L a Excel
 16. `js/32-importar-pdf.js` — importar factura desde PDF
@@ -64,10 +65,24 @@ sumalo a la lista `REQ` del guard (una función testigo por archivo).
 
 ## Service worker / cache (PWA)
 
-`sw.js` está en **v48**. Los `.js` y `.css` son *network-first*: al editar y subir,
+`sw.js` está en **v52**. Los `.js` y `.css` son *network-first*: al editar y subir,
 el cambio se ve al toque online; offline queda la última copia cacheada. Sólo si
-querés refrescar el respaldo **offline** conviene subir el número de cache
-(`mayor-stock-v48` → `v49`) al final del `sw.js`.
+querés refrescar el respaldo **offline** conviene subir el número de cache al final
+del `sw.js`. Cuando agregás un `.js` nuevo, sumalo también a la lista `ASSETS`.
+
+## Modelo de depósitos (importante)
+
+Los **STORES** ya no son "sociedades con pool único de venta". Ahora son
+**depósitos físicos reales**: `select` (Select · USA) y `swan` (Swan · AR). La
+**venta ELIGE depósito** y el costo (COGS) sale del FIFO de *ese* depósito — el
+stock de AR no se vende desde USA y viceversa.
+
+Además hay un **bucket de tránsito** (`__transito`, fuera de `STORE_IDS`, igual
+que la bóveda `__inv`): mercadería rumbo AR que **no es vendible** hasta recibirse
+en Swan. Se ve en la vista *Joint/Transit* y en la ficha del producto, pero no
+infla el stock vendible ni la valuación. La **compra conjunta** (comisión en
+especie) carga sólo lo nuestro: unas unidades en Select y otras que **nacen en
+tránsito** y pasan a Swan al recibirse (`transferStock`).
 
 ## Pendiente
 

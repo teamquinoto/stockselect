@@ -12,7 +12,7 @@
    ACTUALIZACIÓN CONTROLADA: no auto-activamos con skipWaiting; cuando hay
    versión nueva el SW queda "waiting" y la app muestra el botón "Update".
    ============================================================ */
-const CACHE = "mayor-stock-v51";   // v51: nueva gama de color Indigo (claro + oscuro)
+const CACHE = "mayor-stock-v52";   // v52: depositos Select/Swan + transito + compra conjunta
 
 const ASSETS = [
   "./",
@@ -37,6 +37,7 @@ const ASSETS = [
   "./js/20-modal-producto.js",
   "./js/21-modal-documento.js",
   "./js/17-view-clientes.js",
+  "./js/18-view-conjunta.js",
   "./js/30-pdf.js",
   "./js/31-export-pnl.js",
   "./js/32-importar-pdf.js",
