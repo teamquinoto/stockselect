@@ -65,7 +65,7 @@ sumalo a la lista `REQ` del guard (una función testigo por archivo).
 
 ## Service worker / cache (PWA)
 
-`sw.js` está en **v52**. Los `.js` y `.css` son *network-first*: al editar y subir,
+`sw.js` está en **v53**. Los `.js` y `.css` son *network-first*: al editar y subir,
 el cambio se ve al toque online; offline queda la última copia cacheada. Sólo si
 querés refrescar el respaldo **offline** conviene subir el número de cache al final
 del `sw.js`. Cuando agregás un `.js` nuevo, sumalo también a la lista `ASSETS`.
@@ -87,3 +87,27 @@ tránsito** y pasan a Swan al recibirse (`transferStock`).
 ## Pendiente
 
 - Conectar el Worker de Cloudflare (la URL del servidor está en `js/01-core.js`).
+
+## Monedas (multi-moneda USD / ARS)
+
+Cada **depósito** factura y valúa en su moneda: `select` en **USD**, `swan` en
+**ARS** (el tránsito rumbo AR se valúa en USD hasta recibirse en Swan). Las capas
+FIFO no llevan etiqueta de moneda: la moneda la define el depósito donde vive la
+capa, así que alcanza con `storeCcy(store)`.
+
+El **tipo de cambio** (`db.config.tc`, ARS por 1 US$) es **manual** y hoy único.
+La **moneda de reporte** (`db.config.reportCcy`, default **USD**) se elige en
+Configuración o con el toggle **Report in US$/AR$** de la barra superior, y es la
+que usan los consolidados (dashboard, análisis, P&L, valuación): cada monto se
+convierte a esa moneda con `convertCcy()`. Las vistas *deposit-scoped* (venta,
+factura, ficha, tránsito) muestran la moneda nativa.
+
+Helpers clave en `01-core.js`: `storeCcy`, `tc`, `reportCcy`, `convertCcy`,
+`money(n, ccy)`, `moneyStore(n, store)`, `moneyRep(n, fromCcy)`. Los costos
+adicionales de una venta pueden cargarse cada uno en su moneda (ej. venta en US$
+con horas hombre en $) y se convierten al calcular el margen neto y el P&L.
+
+**Pendiente conocido** (charlado con Juan): el TC único va a desactualizar
+valuaciones históricas; más adelante conviene congelar el TC por operación /
+tener TC por fecha. Los campos *mirror* `precioVenta` / `ultimoCosto` no tienen
+moneda propia (son referencias rápidas): el precio/costo real es por depósito.

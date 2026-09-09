@@ -12,7 +12,7 @@
    ACTUALIZACIÓN CONTROLADA: no auto-activamos con skipWaiting; cuando hay
    versión nueva el SW queda "waiting" y la app muestra el botón "Update".
    ============================================================ */
-const CACHE = "mayor-stock-v52";   // v52: depositos Select/Swan + transito + compra conjunta
+const CACHE = "mayor-stock-v53";   // v53: multi-moneda (USD/ARS) + TC + moneda de reporte
 
 const ASSETS = [
   "./",
