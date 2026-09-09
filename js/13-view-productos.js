@@ -50,8 +50,12 @@ function renderProdRows(){
     // en la fila de tránsito no tiene sentido el checkbox de selección
     const chk = selMode ? (isT ? `<td class="c"></td>` : `<td class="c" data-nofic><input type="checkbox" class="selchk" data-selp="${p.id}" ${selProd.has(p.id)?"checked":""}></td>`) : "";
     const flag = isT ? ' <span class="inv-badge transit">⋯ in transit</span>' : (esBloqueado(p) ? ' <span class="pill blocked">blocked</span>' : "");
-    const cost = isT ? (transitoEnFoco(p)>0 ? round2(transitoValorEnFoco(p)/transitoEnFoco(p)) : (p.ultimoCosto||0)) : (p.ultimoCosto||0);
+    const cost = isT ? (transitoEnFoco(p)>0 ? round2(transitoValorEnFoco(p)/transitoEnFoco(p)) : 0) : (stockEnFoco(p)>0 ? round2(valorFifoEnFoco(p)/stockEnFoco(p)) : 0);
     const perStore = sociedadColsCells(p, isT);
+    const foco = effectiveStores();
+    const priceCell = isT ? "—" : (foco.length===1
+      ? (((p.precioVentaPorTienda&&p.precioVentaPorTienda[foco[0]])||0)>0 ? money(p.precioVentaPorTienda[foco[0]], storeCcy(foco[0])) : "—")
+      : "—");   // consolidado: el precio varía por depósito y moneda -> ver por depósito
     return `<tr data-ficha="${p.id}" class="${isT?'row-transit':''}" style="cursor:pointer">
       ${chk}
       <td><span class="sku">${esc(p.sku||"—")}</span></td>
@@ -60,7 +64,7 @@ function renderProdRows(){
       ${perStore}
       <td class="r ${cls}">${stockDisplay(p,units)}</td>
       <td class="r num">${money(cost)}</td>
-      <td class="r num">${isT?"—":moneyOpt(p.precioVenta)}</td>
+      <td class="r num">${priceCell}</td>
       <td class="r"><button class="btn ghost sm" data-editp="${p.id}">Edit</button></td>
     </tr>`;
   }).join("") || `<tr><td colspan="${cols}" style="text-align:center;color:var(--muted);padding:22px">No product matches the filters.</td></tr>`;

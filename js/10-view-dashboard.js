@@ -267,7 +267,7 @@ function renderDashRows(){
     const isT = kind==="transit";
     const units = isT ? transitoEnFoco(p) : stockEnFoco(p);
     const val   = isT ? transitoValorEnFoco(p) : valorFifoEnFoco(p);
-    const costo = isT ? (transitoEnFoco(p)>0 ? round2(transitoValorEnFoco(p)/transitoEnFoco(p)) : (p.ultimoCosto||0)) : (p.ultimoCosto||0);
+    const costo = isT ? (transitoEnFoco(p)>0 ? round2(transitoValorEnFoco(p)/transitoEnFoco(p)) : 0) : (stockEnFoco(p)>0 ? round2(valorFifoEnFoco(p)/stockEnFoco(p)) : 0);
     let cls="stock-cell";
     if(isT) cls+=" transit";
     else { if(units<0) cls+=" neg"; else if(units===0) cls+=" zero"; else if(bajoStock(p)) cls+=" low"; }

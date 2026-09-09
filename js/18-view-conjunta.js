@@ -240,7 +240,7 @@ function openRecibirTransito(prodId){
   if(held<=0){ toast("Nothing in transit for this product","warn"); return; }
   const swan = STORE_IDS[1] || STORE_IDS[0];
   const body = `
-    <p class="hint" style="margin:0 0 12px">In transit: <b>${qty(held)}</b> u · valued ${money(transValor(p))}. Receiving moves them into <b>${esc(storeName(swan))}</b> stock (sellable). Add an import cost per unit only if <b>we</b> pay it (default 0 — the client does).</p>
+    <p class="hint" style="margin:0 0 12px">In transit: <b>${qty(held)}</b> u · valued ${money(transValor(p), "USD")}. Receiving moves them into <b>${esc(storeName(swan))}</b> stock (sellable). Add an import cost per unit only if <b>we</b> pay it (default 0 — the client does).</p>
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
       <div class="field"><label>Units to receive</label><input class="inp num" id="rt_q" value="${held}"></div>
       <div class="field"><label>Import cost per unit <span class="hint" style="font-weight:400">· optional</span></label><input class="inp num" id="rt_c" value="0"></div>
@@ -371,7 +371,7 @@ function viewConjunta(){
   const trRows = enTransito.map(p=>`<tr>
       <td><span class="sku">${esc(p.sku||"—")}</span> ${esc(p.nombre)}</td>
       <td class="r num">${qty(transUnits(p))}</td>
-      <td class="r num">${money(transValor(p))}</td>
+      <td class="r num">${money(transValor(p), "USD")}</td>
       <td class="r" style="white-space:nowrap"><button class="btn up sm" data-recib="${p.id}">Receive in AR ▾</button> <button class="btn ghost sm" data-merma="${p.id}" title="Write-off (loss)" style="color:var(--alert)">✕</button></td>
     </tr>`).join("") || `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:18px">Nothing in transit right now.</td></tr>`;
 
@@ -395,7 +395,7 @@ function viewConjunta(){
   </div>
   <div class="kpis" style="grid-template-columns:repeat(3,1fr);margin-bottom:18px">
     <div class="kpi"><div class="lbl">In transit to AR</div><div class="val">${qty(unidadesEnTransitoAR())}</div><div class="sub">units on the way</div></div>
-    <div class="kpi"><div class="lbl">Transit value</div><div class="val">${money(valorEnTransitoAR())}</div><div class="sub">at entry cost</div></div>
+    <div class="kpi"><div class="lbl">Transit value</div><div class="val">${money(valorEnTransitoAR(), "USD")}</div><div class="sub">at entry cost</div></div>
     <div class="kpi"><div class="lbl">Joint buys</div><div class="val">${qty((db.conjuntas||[]).length)}</div><div class="sub">loaded</div></div>
   </div>
 

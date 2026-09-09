@@ -52,7 +52,12 @@ function viewDatos(){
   <div class="panel">
     <div class="phead"><h3>Settings</h3></div>
     <div class="grid-form" style="grid-template-columns:1fr 1fr">
-      <div class="field"><label>Currency symbol</label><input class="inp" id="cfgMon" value="${esc(db.config.moneda)}" maxlength="4"></div>
+      <div class="field"><label>Exchange rate <span class="hint" style="font-weight:400">· ARS per US$1</span></label><input class="inp num" id="cfgTC" value="${esc(String(db.config.tc||1000))}"></div>
+      <div class="field"><label>Report currency <span class="hint" style="font-weight:400">· consolidated views</span></label>
+        <select class="inp" id="cfgRep">
+          <option value="USD" ${reportCcy()==="USD"?"selected":""}>US$ · Dollars</option>
+          <option value="ARS" ${reportCcy()==="ARS"?"selected":""}>AR$ · Pesos</option>
+        </select></div>
       <div class="field"><label>Starting invoice #</label><input class="inp num" id="cfgFac" value="${esc(String(db.config.facturaInicio||101))}"></div>
       ${isAdmin()?`<div class="field"><label>Default commission (% of margin)</label><input class="inp num" id="cfgComm" value="${esc(String(round2((db.config.commissionRate||0)*100)))}"></div>
       <div class="field" style="justify-content:flex-end"><p class="hint" style="font-size:11.5px;margin:0 0 8px">Default for new sellers. Each seller can override it below. Existing sales keep the rate they were booked at.</p></div>`:""}
@@ -142,7 +147,8 @@ function wire(){
   const imp=m.querySelector("[data-import-json]"); if(imp) imp.onclick=importJSON;
   const rst=m.querySelector("[data-reset]"); if(rst) rst.onclick=resetAll;
   m.querySelectorAll("[data-savecfg]").forEach(cfg=> cfg.onclick=()=>{
-    db.config.moneda = (document.getElementById("cfgMon").value||"$").trim()||"$";
+    const tcEl=document.getElementById("cfgTC"); if(tcEl){ const t=parseNum(tcEl.value); if(t>0) db.config.tc=t; }
+    const repEl=document.getElementById("cfgRep"); if(repEl){ db.config.reportCcy = repEl.value==="ARS"?"ARS":"USD"; }
     const fi=parseInt(document.getElementById("cfgFac").value,10); if(!isNaN(fi)&&fi>0) db.config.facturaInicio=fi;
     const commEl=document.getElementById("cfgComm");   // sólo lo renderiza el admin
     if(commEl){ const pct=parseNum(commEl.value); if(!isNaN(pct)) db.config.commissionRate = Math.min(1, Math.max(0, round2(pct)/100)); }

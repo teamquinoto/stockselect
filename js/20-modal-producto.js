@@ -94,7 +94,8 @@ function openProd(id){
   function pintarMargen(){
     const pv=parseNum($("p_pv").value), c=totalCosto();
     const mg = pv>0 ? (pv-c)/pv*100 : 0;
-    $("p_mgReal").textContent = pv>0 ? `Real margin: ${nf0.format(mg)}% on revenue · ${money(pv-c)} per unit` : "Enter a price to see the real margin.";
+    const mgCcy = storeCcy((document.getElementById("p_store")||{}).value || (effectiveStores()[0]||STORE_IDS[0]));
+    $("p_mgReal").textContent = pv>0 ? `Real margin: ${nf0.format(mg)}% on revenue · ${money(pv-c, mgCcy)} per unit` : "Enter a price to see the real margin.";
   }
   function syncMarkup(from){
     const c=totalCosto();

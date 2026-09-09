@@ -32,8 +32,8 @@ const SESKEY = "gstock_session";  // { user, token, space, role, store }
    Swan en Argentina. La venta ELIGE depósito: lo que está en AR no se puede
    vender desde USA y viceversa (el costo sale del FIFO de ESE depósito). */
 const STORES = [
-  { id:"select", name:"Select · USA" },
-  { id:"swan",   name:"Swan · AR"   }
+  { id:"select", name:"Select · USA", ccy:"USD" },
+  { id:"swan",   name:"Swan · AR",    ccy:"ARS" }
 ];
 const STORE_IDS = STORES.map(s=>s.id);
 /* Investment vault = a hidden pseudo-store. Stock and FIFO cost layers moved
@@ -56,6 +56,36 @@ function isStore(id){ return STORE_IDS.includes(id); }
    propio en las transferencias, para que el saldo corrido del producto siga
    espejando el stock vendible (criterio de auditoría). */
 function isBucket(id){ return id===INV_STORE || id===TRANSITO_STORE; }
+
+/* ============================================================
+   MONEDAS
+   ------------------------------------------------------------
+   Cada depósito factura/valúa en SU moneda: Select en USD, Swan en ARS.
+   Las capas FIFO no llevan etiqueta de moneda: la moneda la define el
+   depósito donde vive la capa (por eso alcanza con storeCcy). El tránsito
+   viene del lado US => USD (se convierte a ARS recién al recibirse en Swan).
+   El TC es MANUAL (pesos por 1 USD) y hoy es único; se ajustará más adelante.
+   La moneda de REPORTE (para consolidar dashboard/análisis/P&L) es elegible;
+   por defecto USD.
+   ============================================================ */
+const MONEDAS = { USD:{ sym:"US$" }, ARS:{ sym:"AR$" } };
+function monedaSym(ccy){ return (MONEDAS[ccy]||{}).sym || (ccy||"$"); }
+function storeCcy(store){
+  if(store===TRANSITO_STORE) return "USD";       // tránsito rumbo AR nace del lado US
+  if(store===INV_STORE) return "USD";            // bóveda: se valúa en USD (simplificación; revisar si guarda ARS)
+  const s = STORES.find(x=>x.id===store);
+  return (s && s.ccy) || "USD";
+}
+function tc(){ const v = parseFloat(db.config && db.config.tc); return (v && v>0) ? v : 1; }   // ARS por 1 USD
+function reportCcy(){ return (db.config && db.config.reportCcy==="ARS") ? "ARS" : "USD"; }
+/* Convierte un monto de una moneda a otra con el TC vigente. */
+function convertCcy(monto, from, to){
+  monto = +monto || 0;
+  if(!from || !to || from===to) return monto;
+  if(from==="USD" && to==="ARS") return monto * tc();
+  if(from==="ARS" && to==="USD") return monto / tc();
+  return monto;
+}
 
 const ROLES = { ADMIN:"admin", SELLER:"seller" };
 function currentRole(){ return (session && session.role) || ROLES.ADMIN; }  // Local mode (no session) = full access
@@ -133,6 +163,8 @@ function boxesCaseDefault(cat){ return BOXES_POR_CASE[cat] || 6; }
 function migrate(d){
   d.config = d.config || {};
   if(d.config.moneda==null) d.config.moneda = "$";
+  if(d.config.tc==null || !(parseFloat(d.config.tc)>0)) d.config.tc = 1000;   // ARS por 1 USD (manual, editable)
+  if(d.config.reportCcy!=="ARS" && d.config.reportCcy!=="USD") d.config.reportCcy = "USD";   // moneda de reporte (default USD)
   if(d.config.facturaInicio==null) d.config.facturaInicio = 101;   // numeración US
   if(d.config.emisor==null) d.config.emisor = { nombre:"", direccion:"", email:"", tel:"" };
   if(d.config.commissionRate==null) d.config.commissionRate = 0.10;  // tasa por defecto para vendedores nuevos (0.10 = 10%)
@@ -300,7 +332,7 @@ function transitoValorDe(p, store){
   return round2(v);
 }
 function transitoEnFoco(p){ return effectiveStores().reduce((a,s)=> a + transitoDe(p,s), 0); }
-function transitoValorEnFoco(p){ return round2(effectiveStores().reduce((a,s)=> a + transitoValorDe(p,s), 0)); }
+function transitoValorEnFoco(p){ const rep=reportCcy(); return round2(effectiveStores().reduce((a,s)=> a + convertCcy(transitoValorDe(p,s), storeCcy(s), rep), 0)); }
 /* Total de unidades en tránsito bajo el foco actual (para el KPI del panel). */
 function unidadesEnTransito(){ return productosVendibles().reduce((a,p)=> a + transitoEnFoco(p), 0); }
 
@@ -560,12 +592,18 @@ function hideLogin(){
 /* ---------- Formato ---------- */
 const nf0 = new Intl.NumberFormat("es-AR",{maximumFractionDigits:2});
 const nf2 = new Intl.NumberFormat("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2});
-const money = n => db.config.moneda + "\u00A0" + nf2.format(n||0);
+/* money(n, ccy): formatea con el símbolo de la moneda indicada. Si no se pasa
+   moneda, usa la de REPORTE (por defecto USD). Los montos consolidados llegan
+   ya convertidos a la moneda de reporte; los deposit-scoped pasan su ccy. */
+const money = (n, ccy) => monedaSym(ccy || reportCcy()) + "\u00A0" + nf2.format(n||0);
+/* Atajos: en la moneda NATIVA de un depósito / convertido a la de reporte. */
+const moneyStore = (n, store) => money(n, storeCcy(store));
+const moneyRep = (n, fromCcy) => money(convertCcy(n, fromCcy||reportCcy(), reportCcy()), reportCcy());
 const qty = n => nf0.format(n||0);
 /* money() pero con guión cuando el valor es 0 / nulo. Lo usamos en precios de
    venta opcionales: si no hay precio cargado mostramos "—" en vez de "USD 0,00".
    El \u00A0 (espacio duro) ya deja el símbolo separado del número: "USD 92,10". */
-const moneyOpt = (n, dash="—") => ((n||0) > 0 ? money(n) : dash);
+const moneyOpt = (n, dash="—", ccy) => ((n||0) > 0 ? money(n, ccy) : dash);
 
 /* ---------- Fechas unificadas (puntos 2 y 11) ----------
    normISO: cualquier formato (ISO datetime, dd/mm/yyyy, 01-Jul-2026) -> "YYYY-MM-DD".
@@ -651,11 +689,17 @@ function skuEnUso(sku, exceptId){
 }
 /* FIFO valuation of the sellable stock in the stores currently in focus.
    Sums the actual cost layers, not stock×lastcost. Excludes the vault. */
+/* Valor FIFO de un producto en el FOCO de tienda, convertido a moneda de REPORTE
+   (cada depósito aporta su valor en su moneda nativa y se lleva a la de reporte). */
 function valorFifoEnFoco(p){
-  return effectiveStores().reduce((a,s)=> a + fifoLayers(p,s).reduce((x,L)=>x+L.cantidad*L.costoUnit,0), 0);
+  const rep = reportCcy();
+  return round2(effectiveStores().reduce((a,s)=>{
+    const v = fifoLayers(p,s).reduce((x,L)=>x+L.cantidad*L.costoUnit,0);
+    return a + convertCcy(v, storeCcy(s), rep);
+  }, 0));
 }
 function valorizacion(){
-  return productosVendibles().reduce((a,p)=> a + valorFifoEnFoco(p), 0);
+  return round2(productosVendibles().reduce((a,p)=> a + valorFifoEnFoco(p), 0));
 }
 function unidadesTotales(){ return productosVendibles().reduce((a,p)=> a + stockEnFoco(p), 0); }
 /* Reposición sobre el POOL ÚNICO: el stock es uno solo, así que las alertas de

@@ -34,7 +34,7 @@ function openFicha(id){
       <td class="num">${fecha}</td>
       <td>${pill}${m.store?` <span class="pill" style="opacity:.7">${esc(storeName(m.store))}</span>`:""}</td>
       <td class="r delta ${isAdj?'flat':(up?'up':'down')}">${up?'+':'−'}${qty(Math.abs(signed))}</td>
-      <td class="r num">${money(m.valorUnit)}</td>
+      <td class="r num">${money(m.valorUnit, storeCcy(m.store))}</td>
       <td class="r num" style="font-weight:600">${qty(bal)}</td>
       <td>${origen}</td>
     </tr>`;
@@ -55,7 +55,7 @@ function openFicha(id){
   const body = `
     <div class="kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:18px">
       <div class="kpi"><div class="lbl">Total stock</div><div class="val" style="color:${totalStock<0?'var(--alert)':'inherit'}">${qty(totalStock)}</div><div class="sub">${esc(perStore)}</div></div>
-      <div class="kpi"><div class="lbl">Last cost</div><div class="val">${money(p.ultimoCosto)}</div><div class="sub">FIFO valued ${money(valorFifoTotal(p))}</div></div>
+      <div class="kpi"><div class="lbl">Avg cost (on hand)</div><div class="val">${money(stockTotalP(p)>0?round2(valorFifoTotal(p)/stockTotalP(p)):0)}</div><div class="sub">FIFO valued ${money(valorFifoTotal(p))}</div></div>
       <div class="kpi"><div class="lbl">List price</div><div class="val">${moneyOpt(p.precioVenta)}</div><div class="sub">${p.precioVenta>0?`margin ${nf0.format(margenPct)}%`:'no price'}${badge}</div></div>
       <div class="kpi"><div class="lbl">Bought / Sold</div><div class="val" style="font-size:20px"><span class="delta up">${qty(totComp)}</span> / <span class="delta down">${qty(totVend)}</span></div><div class="sub">lifetime</div></div>
     </div>
@@ -85,7 +85,7 @@ function openFicha(id){
     const [t,i]=b.dataset.fdoc.split(":"); verDoc(t,i);
   });
 }
-function valorFifoTotal(p){ return STORE_IDS.reduce((a,s)=> a + fifoLayers(p,s).reduce((x,L)=>x+L.cantidad*L.costoUnit,0), 0); }
+function valorFifoTotal(p){ const rep=reportCcy(); return round2(STORE_IDS.reduce((a,s)=> a + convertCcy(fifoLayers(p,s).reduce((x,L)=>x+L.cantidad*L.costoUnit,0), storeCcy(s), rep), 0)); }
 
 /* Point 4: pick quantities per store when moving stock to the vault
    (all · part of each store · one store only). */
@@ -133,7 +133,7 @@ function openReturnFromInvestment(id){
   if(held<=0){ toast("Nothing held in the vault","warn"); return; }
   const opts = STORE_IDS.map(s=>`<option value="${s}">${esc(storeName(s))}</option>`).join("");
   const body = `
-    <p class="hint" style="margin:0 0 12px">Held in vault: <b>${qty(held)}</b> u · valued ${money(invValor(p))}. Returning puts the units back as sellable stock (at their original cost) and logs an <b>in</b> movement.</p>
+    <p class="hint" style="margin:0 0 12px">Held in vault: <b>${qty(held)}</b> u · valued ${money(invValor(p), "USD")}. Returning puts the units back as sellable stock (at their original cost) and logs an <b>in</b> movement.</p>
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
       <div class="field"><label>Destination store</label><select class="inp" id="inv_ret_store">${opts}</select></div>
       <div class="field"><label>Quantity</label><input class="inp num" id="inv_ret_q" value="${held}"></div>

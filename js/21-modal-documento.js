@@ -129,7 +129,7 @@ function renderDocModal(){
       {label: editing?"Save changes" : (isC?"Confirm purchase (+stock)":"Confirm sale (−stock)"),cls:isC?"btn up":"btn down",act:confirmDoc}
     ],
     "wide doc",
-    `<div class="totrow"><span style="color:var(--muted)">Document total</span><span class="num" id="docTotal">${money(docTotal())}</span></div>`
+    `<div class="totrow"><span style="color:var(--muted)">Document total</span><span class="num" id="docTotal">${money(docTotal(), storeCcy(draft.tipo==="compra"?draft.store:draft.storeVenta))}</span></div>`
   );
   renderLines();
   const dst=document.getElementById("d_store"); if(dst) dst.onchange=e=>{ draft.store=e.target.value; };
@@ -168,8 +168,9 @@ function docTotal(){
 function pintarProrateo(){
   const h=document.getElementById("d_proHint"); if(!h) return;
   const u=unidadesDoc(), extra=(draft.handling||0)+(draft.flete||0);
+  const cc=storeCcy(draft.store);
   h.textContent = (extra>0 && u>0)
-    ? `${money(extra)} split across ${qty(u)} u = ${money(extra/u)} per unit, added to each product cost.`
+    ? `${money(extra, cc)} split across ${qty(u)} u = ${money(extra/u, cc)} per unit, added to each product cost.`
     : "Enter handling/freight; it prorates per unit on confirm.";
   refreshTotal();
 }
@@ -182,8 +183,11 @@ function pintarProrateo(){
    es una ESTIMACIÓN en vivo (usa el costo FIFO de referencia de cada línea);
    el número exacto queda congelado en la factura al confirmar.
    ============================================================ */
-function nuevaLineaCosto(){ return { key:uid(), tipo:"envio", nota:"", monto:0, horas:0, valorHora:0 }; }
-function costosDraftTotal(){ return (draft.costosExtra||[]).reduce((a,c)=> a + (parseNum(c.monto)||0), 0); }
+function ventaCcy(){ return storeCcy(draft.storeVenta || STORE_IDS[0]); }
+function nuevaLineaCosto(){ return { key:uid(), tipo:"envio", nota:"", monto:0, horas:0, valorHora:0, ccy:ventaCcy() }; }
+/* Total de costos convertido a la moneda de la VENTA (cada costo puede venir en
+   su propia moneda: p.ej. una venta en US$ con horas hombre pagadas en $). */
+function costosDraftTotal(){ const sc=ventaCcy(); return (draft.costosExtra||[]).reduce((a,c)=> a + convertCcy(parseNum(c.monto)||0, c.ccy||sc, sc), 0); }
 function draftGrossMargin(){ return (draft.lineas||[]).reduce((a,l)=> a + ((parseNum(l.precio)||0)-(l.costoRef||0))*(parseNum(l.cantidad)||0), 0); }
 function draftCommRate(){
   if(draft.vendedorId){ const v=vendedorById(draft.vendedorId); if(v&&v.rate!=null) return v.rate; }
@@ -191,43 +195,47 @@ function draftCommRate(){
 }
 function refreshNet(){
   const box=document.getElementById("netBox"); if(!box) return;
+  const sc=ventaCcy();
   const gm=round2(draftGrossMargin()), rate=draftCommRate(), comm=round2(gm*rate), cost=round2(costosDraftTotal()), net=round2(gm-comm-cost);
   box.innerHTML = `
-    <div class="totrow"><span style="color:var(--muted)">Gross margin (est.)</span><span class="num">${money(gm)}</span></div>
-    <div class="totrow"><span style="color:var(--muted)">− Seller commission (${nf0.format(rate*100)}%)</span><span class="num">${money(comm)}</span></div>
-    <div class="totrow"><span style="color:var(--muted)">− Selling costs</span><span class="num">${money(cost)}</span></div>
-    <div class="totrow" style="font-weight:700"><span>Net margin (est.)</span><span class="num" style="color:${net<0?'var(--alert)':'var(--up)'}">${money(net)}</span></div>`;
+    <div class="totrow"><span style="color:var(--muted)">Gross margin (est.)</span><span class="num">${money(gm, sc)}</span></div>
+    <div class="totrow"><span style="color:var(--muted)">− Seller commission (${nf0.format(rate*100)}%)</span><span class="num">${money(comm, sc)}</span></div>
+    <div class="totrow"><span style="color:var(--muted)">− Selling costs</span><span class="num">${money(cost, sc)}</span></div>
+    <div class="totrow" style="font-weight:700"><span>Net margin (est.)</span><span class="num" style="color:${net<0?'var(--alert)':'var(--up)'}">${money(net, sc)}</span></div>`;
 }
 function renderCostos(){
   const host=document.getElementById("costHost"); if(!host) return;
   draft.costosExtra = draft.costosExtra || [];
+  const ccyOpts = c => Object.keys(MONEDAS).map(k=>`<option value="${k}" ${((c.ccy||ventaCcy())===k)?"selected":""}>${monedaSym(k)}</option>`).join("");
   const rows = draft.costosExtra.map((c,i)=>{
     const isLabor = c.tipo==="labor";
     const midCells = isLabor
-      ? `<td style="width:70px"><input class="inp num" data-ck="horas" data-ci="${i}" value="${c.horas||0}" placeholder="hs" title="Hours"></td>
-         <td style="width:86px"><input class="inp num" data-ck="valorHora" data-ci="${i}" value="${c.valorHora||0}" placeholder="$/h" title="Rate per hour"></td>
-         <td class="r num" data-csub="${i}" style="width:86px;color:var(--muted)">${money((parseNum(c.horas)||0)*(parseNum(c.valorHora)||0))}</td>`
+      ? `<td style="width:64px"><input class="inp num" data-ck="horas" data-ci="${i}" value="${c.horas||0}" placeholder="hs" title="Hours"></td>
+         <td style="width:78px"><input class="inp num" data-ck="valorHora" data-ci="${i}" value="${c.valorHora||0}" placeholder="/h" title="Rate per hour"></td>
+         <td class="r num" data-csub="${i}" style="width:92px;color:var(--muted)">${money((parseNum(c.horas)||0)*(parseNum(c.valorHora)||0), c.ccy||ventaCcy())}</td>`
       : `<td colspan="2"><input class="inp" data-ck="nota" data-ci="${i}" value="${esc(c.nota||"")}" placeholder="note (optional)"></td>
-         <td style="width:86px"><input class="inp num" data-ck="monto" data-ci="${i}" value="${c.monto||0}"></td>`;
+         <td style="width:92px"><input class="inp num" data-ck="monto" data-ci="${i}" value="${c.monto||0}"></td>`;
     return `<tr>
-      <td style="width:168px"><select class="inp" data-ck="tipo" data-ci="${i}">${COSTO_TIPOS.map(t=>`<option value="${t.id}" ${t.id===c.tipo?"selected":""}>${esc(t.label)}</option>`).join("")}</select></td>
+      <td style="width:150px"><select class="inp" data-ck="tipo" data-ci="${i}">${COSTO_TIPOS.map(t=>`<option value="${t.id}" ${t.id===c.tipo?"selected":""}>${esc(t.label)}</option>`).join("")}</select></td>
+      <td style="width:62px"><select class="inp" data-ck="ccy" data-ci="${i}">${ccyOpts(c)}</select></td>
       ${midCells}
-      <td style="width:30px"><button class="btn ghost sm" data-cdel="${i}" title="Remove">✕</button></td>
+      <td style="width:28px"><button class="btn ghost sm" data-cdel="${i}" title="Remove">✕</button></td>
     </tr>`;
   }).join("");
   host.innerHTML = draft.costosExtra.length
-    ? `<div class="table-scroll"><table class="line-tbl doc-tbl"><colgroup><col style="width:168px"><col><col><col style="width:86px"><col style="width:30px"></colgroup><tbody>${rows}</tbody></table></div>`
-    : `<p class="hint" style="margin:2px 0 0;font-size:12px">No selling costs yet — add shipping, man-hours, commission, etc.</p>`;
+    ? `<div class="table-scroll"><table class="line-tbl doc-tbl"><colgroup><col style="width:150px"><col style="width:62px"><col><col><col style="width:92px"><col style="width:28px"></colgroup><tbody>${rows}</tbody></table></div>`
+    : `<p class="hint" style="margin:2px 0 0;font-size:12px">No selling costs yet — add shipping, man-hours, commission, etc. Each can be in its own currency.</p>`;
   host.querySelectorAll("[data-ck]").forEach(inp=>{
     const i=+inp.dataset.ci, k=inp.dataset.ck;
     const handler=()=>{
       const c=draft.costosExtra[i]; if(!c) return;
       if(k==="tipo"){ c.tipo=inp.value; renderCostos(); return; }   // cambia la estructura de la fila
+      if(k==="ccy"){ c.ccy=inp.value; const sc=host.querySelector(`[data-csub="${i}"]`); if(sc) sc.textContent=money(c.monto||0, c.ccy); refreshNet(); return; }
       if(k==="nota"){ c.nota=inp.value; return; }
       c[k]=parseNum(inp.value);
       if(k==="horas"||k==="valorHora"){
         c.monto=round2((parseNum(c.horas)||0)*(parseNum(c.valorHora)||0));
-        const sc=host.querySelector(`[data-csub="${i}"]`); if(sc) sc.textContent=money(c.monto);
+        const sc=host.querySelector(`[data-csub="${i}"]`); if(sc) sc.textContent=money(c.monto, c.ccy||ventaCcy());
       }
       refreshNet();
     };
@@ -271,7 +279,7 @@ function renderAjuste(){
         <select class="inp" id="aj_prod">${opts}</select>
       </div>
       <div class="field"><label>Society</label>${storeSel}
-        ${p?`<div style="font-size:11.5px;color:var(--muted);margin-top:4px">In store: <b class="num">${stockActual}</b> · last cost ${money(p.ultimoCosto)}</div>`:""}
+        ${p?`<div style="font-size:11.5px;color:var(--muted);margin-top:4px">In store: <b class="num">${stockActual}</b> · last cost ${money(p.ultimoCosto, storeCcy(draft.tipo==="compra"?draft.store:draft.storeVenta))}</div>`:""}
       </div>
       <div class="field"><label>Adjustment type</label>
         <select class="inp" id="aj_modo">

@@ -137,21 +137,25 @@ function ventasFiltradas(){
   const desde = anFiltros.desde ? new Date(anFiltros.desde+"T00:00:00") : null;
   const hasta = anFiltros.hasta ? new Date(anFiltros.hasta+"T23:59:59") : null;
   const rows=[];
+  const rep = reportCcy();
   db.ventas.forEach(v=>{
-    // Análisis es admin-only: se ven todas las ventas (el stock es un pool único,
-    // la venta ya no está atada a una sociedad).
+    // Análisis es admin-only: se ven todas las ventas. Cada venta puede estar en
+    // una moneda distinta (Select USD / Swan ARS): convertimos a la moneda de
+    // reporte al armar la fila, así todos los agregados suman en una sola moneda.
     if(anFiltros.vend && (v.vendedorId||"")!==anFiltros.vend) return;
     if(anFiltros.pais && ((v.cliente&&v.cliente.pais)||"")!==anFiltros.pais) return;
     const f=new Date(v.fecha+"T12:00:00");
     if(desde && f<desde) return;
     if(hasta && f>hasta) return;
+    const sCcy = storeCcy(v.storeVenta||v.store||STORE_IDS[0]);
     v.lineas.forEach(l=>{
       const p=prodById(l.productoId);
       if(anFiltros.saga && (p? sagaDe(p): "")!==anFiltros.saga) return;
       if(anFiltros.idioma && (p? (p.idioma||""):"" )!==anFiltros.idioma) return;
       const cogs = l.cogs!=null ? l.cogs : (l.costo||0)*l.cantidad;
       rows.push({ fecha:normISO(v.fecha)||v.fecha, vendedor:saleVendedorNombre(v), vendedorId:v.vendedorId||"", productoId:l.productoId, nombre:l.nombre, sku:l.sku,
-        cantidad:l.cantidad, revenue:round2((l.precio||0)*l.cantidad), cogs:round2(cogs),
+        cantidad:l.cantidad, revenue:convertCcy(round2((l.precio||0)*l.cantidad), sCcy, rep), cogs:convertCcy(round2(cogs), sCcy, rep),
+        ccy:sCcy,
         consumed: (Array.isArray(l.consumed) && l.consumed.length) ? l.consumed : null,
         store: l.store || null,
         pais:(v.cliente&&v.cliente.pais)||"", saga:p?sagaDe(p):"", idioma:p?(p.idioma||""):"" });
@@ -192,11 +196,12 @@ function viewAnalisis(){
     e.units += units; e.cogs = round2(e.cogs + cogsv); e.revenue = round2(e.revenue + rev);
   };
   rows.forEach(r=>{
+    const rep2 = reportCcy();
     if(r.consumed){
       const lineUnits = r.cantidad || r.consumed.reduce((a,c)=>a+(c.cantidad||0),0);
       r.consumed.forEach(c=>{
-        const cCogs = round2((c.costoUnit||0)*(c.cantidad||0));
-        const cRev  = lineUnits>0 ? round2(r.revenue*((c.cantidad||0)/lineUnits)) : 0;
+        const cCogs = convertCcy(round2((c.costoUnit||0)*(c.cantidad||0)), r.ccy||rep2, rep2);   // costo en moneda de la venta -> reporte
+        const cRev  = lineUnits>0 ? round2(r.revenue*((c.cantidad||0)/lineUnits)) : 0;            // r.revenue ya está en reporte
         addSoc(c.sociedad, c.cantidad||0, cCogs, cRev);
       });
     } else {

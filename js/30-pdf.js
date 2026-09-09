@@ -8,11 +8,12 @@
    Usa jsPDF (UMD por CDN, cacheado por el SW para uso offline).
    ============================================================ */
 function pdfReady(){ return !!(window.jspdf && window.jspdf.jsPDF); }
-function pdfMoney(n){ return db.config.moneda + " " + nf2.format(n||0); }
+function pdfMoney(n, ccy){ return monedaSym(ccy || reportCcy()) + " " + nf2.format(n||0); }
 
 function generarInvoicePDF(id){
   if(!pdfReady()){ toast("Couldn't load the PDF generator (try once with internet)","warn"); return; }
   const d = db.ventas.find(v=>v.id===id); if(!d){ toast("Sale not found","warn"); return; }
+  const dCcy = storeCcy(d.storeVenta||d.store||STORE_IDS[0]);   // el invoice se emite en la moneda del depósito
   const cli = d.cliente || (d.clienteId?clienteById(d.clienteId):null);
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit:"pt", format:"letter" });
@@ -94,8 +95,8 @@ function generarInvoicePDF(id){
     doc.text(wrapped, cItem+6, tTop);
     setInk(INK);
     doc.text(qty(l.cantidad), cQty+wQty, tTop, {align:"right"});
-    doc.text(pdfMoney(l.precio), cUnit+wUnit, tTop, {align:"right"});
-    doc.setFont("helvetica","bold"); doc.text(pdfMoney(l.cantidad*l.precio), cAmt+wAmt, tTop, {align:"right"}); doc.setFont("helvetica","normal");
+    doc.text(pdfMoney(l.precio, dCcy), cUnit+wUnit, tTop, {align:"right"});
+    doc.setFont("helvetica","bold"); doc.text(pdfMoney(l.cantidad*l.precio, dCcy), cAmt+wAmt, tTop, {align:"right"}); doc.setFont("helvetica","normal");
     y += rowH;
     doc.setDrawColor(LINE[0],LINE[1],LINE[2]); doc.line(M, y-6, W-M, y-6);
   });
@@ -112,14 +113,14 @@ function generarInvoicePDF(id){
     doc.text(label, boxX, y); setInk(opts.bold?INK:INK);
     doc.text(val, W-M, y, {align:"right"}); y+= opts.big?22:16;
   };
-  line("Subtotal", pdfMoney(sub));
-  line("Shipping", d.envio && d.envio.tipo==="free" ? "Free" : pdfMoney(envio));
+  line("Subtotal", pdfMoney(sub, dCcy));
+  line("Shipping", d.envio && d.envio.tipo==="free" ? "Free" : pdfMoney(envio, dCcy));
   y+=4;
   doc.setDrawColor(ACC[0],ACC[1],ACC[2]); doc.setLineWidth(1.2); doc.line(boxX, y-8, W-M, y-8); doc.setLineWidth(1);
   y+=4;
   doc.setFillColor(ACC[0],ACC[1],ACC[2]);
   const total=(d.total!=null)?d.total:round2(sub+envio);
-  line("TOTAL", pdfMoney(total), {bold:true, big:true});
+  line("TOTAL", pdfMoney(total, dCcy), {bold:true, big:true});
 
   /* ---------- Footer ---------- */
   setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(8.5);

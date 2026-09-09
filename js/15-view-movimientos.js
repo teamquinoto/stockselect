@@ -123,7 +123,7 @@ function renderMovRows(){
       ${showStore?`<td>${esc(storeName(m.store))}</td>`:""}
       <td><span class="sku">${esc(m.sku||"—")}</span> ${esc(m.nombre)}</td>
       <td class="r delta ${deltaCls}">${up?'+':'−'}${qty(Math.abs(signed))}</td>
-      <td class="r num">${money(m.valorUnit)}</td>
+      <td class="r num">${money(m.valorUnit, storeCcy(m.store))}</td>
       <td class="num">${esc(m.ref||"—")}</td>
       <td class="r">${accion}</td>
     </tr>`;

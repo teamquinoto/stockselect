@@ -23,30 +23,34 @@ function exportPnL(desde, hasta){
   const perVend = {};                // vendedorId|"" -> {nombre, sales, cogs, commission}
   const ventasPeriodo = db.ventas.filter(inRange);
 
+  const rep = reportCcy();
   ventasPeriodo.forEach(v=>{
     const vid = v.vendedorId || "";
+    const sCcy = storeCcy(v.storeVenta||v.store||STORE_IDS[0]);
     const pv = perVend[vid] = perVend[vid] || { nombre: saleVendedorNombre(v), sales:0, cogs:0, commission:0 };
     (v.lineas||[]).forEach(l=>{
-      const rev = round2((l.precio||0)*l.cantidad);
-      const cogs = round2(l.cogs!=null ? l.cogs : (l.costo||0)*l.cantidad);
+      const rev = convertCcy(round2((l.precio||0)*l.cantidad), sCcy, rep);
+      const cogs = convertCcy(round2(l.cogs!=null ? l.cogs : (l.costo||0)*l.cantidad), sCcy, rep);
       consol.sales += rev; consol.cogs += cogs;
       pv.sales += rev; pv.cogs += cogs;
       const k = l.productoId||l.sku||l.nombre;
       const e = detail[k] = detail[k] || { sku:l.sku||"", nombre:l.nombre||"", units:0, revenue:0, cogs:0 };
       e.units += l.cantidad; e.revenue += rev; e.cogs += cogs;
     });
-    if(v.envio && v.envio.tipo==="monto") consol.shipping += round2(v.envio.monto||0);
-    pv.commission += saleCommission(v);
-    consol.commission += saleCommission(v);
-    (v.costosExtra||[]).forEach(c=>{ const k=(c.tipo in consol.costos)?c.tipo:"otro"; consol.costos[k] += round2(+c.monto||0); });
+    if(v.envio && v.envio.tipo==="monto") consol.shipping += convertCcy(round2(v.envio.monto||0), sCcy, rep);
+    const comm = convertCcy(saleCommission(v), sCcy, rep);
+    pv.commission += comm;
+    consol.commission += comm;
+    (v.costosExtra||[]).forEach(c=>{ const k=(c.tipo in consol.costos)?c.tipo:"otro"; consol.costos[k] += convertCcy(round2(+c.monto||0), c.ccy||sCcy, rep); });
   });
   consol.sales=round2(consol.sales); consol.shipping=round2(consol.shipping); consol.cogs=round2(consol.cogs);
   consol.commission=round2(consol.commission);
   Object.keys(consol.costos).forEach(k=> consol.costos[k]=round2(consol.costos[k]));
   const costosVentaTotal = round2(consol.commission + consol.costos.envio + consol.costos.labor + consol.costos.comision + consol.costos.otro);
 
-  // ---- Formatos de celda ----
-  const MFMT = '"$"#,##0.00;("$"#,##0.00)';
+  // ---- Formatos de celda (en la moneda de REPORTE) ----
+  const repSym = monedaSym(rep);
+  const MFMT = '"'+repSym+'\u00A0"#,##0.00;("'+repSym+'\u00A0"#,##0.00)';
   const PFMT = '0.0%';
   const setFmt = (ws, ref, z)=>{ const c=ws[ref]; if(c && typeof c.v==="number") c.z=z; };
 
@@ -60,6 +64,7 @@ function exportPnL(desde, hasta){
   const IS = [
     ["Income Statement (Preliminary)"],
     [period],
+    [`Amounts in ${rep} · exchange rate used: ${nf2.format(tc())} ARS per US$1`],
     [""],
     ["Concept", "Consolidated", "% of revenue"],
     ["Product sales", consol.sales, pct(consol.sales)],
@@ -92,11 +97,11 @@ function exportPnL(desde, hasta){
   ];
   const ws1 = XLSX.utils.aoa_to_sheet(IS);
   ws1["!cols"]=[{wch:46},{wch:16},{wch:13}];
-  ws1["!merges"]=[{s:{r:0,c:0},e:{r:0,c:2}},{s:{r:1,c:0},e:{r:1,c:2}}];
+  ws1["!merges"]=[{s:{r:0,c:0},e:{r:0,c:2}},{s:{r:1,c:0},e:{r:1,c:2}},{s:{r:2,c:0},e:{r:2,c:2}}];
   // Filas (1-based) con importe en B y % en C
-  [5,6,7,8,9,13,14,15,16,17,18,19,24].forEach(r=>{ setFmt(ws1, "B"+r, MFMT); setFmt(ws1, "C"+r, PFMT); });
+  [6,7,8,9,10,14,15,16,17,18,19,20,25].forEach(r=>{ setFmt(ws1, "B"+r, MFMT); setFmt(ws1, "C"+r, PFMT); });
   // Filas con % directo en B (márgenes)
-  [10,20].forEach(r=> setFmt(ws1, "B"+r, PFMT));
+  [11,21].forEach(r=> setFmt(ws1, "B"+r, PFMT));
   XLSX.utils.book_append_sheet(wb, ws1, "Income Statement");
 
   /* ---------- HOJA 2: By seller ---------- */

@@ -255,7 +255,7 @@ function showImportEditor(fname, parsed){
     <div class="banner ok">
       Detected <b>${items.length}</b> line(s) in <b>${esc(fname)}</b>${metaBits?` \u00B7 <span style="font-weight:400">${metaBits}</span>`:""} \u2014 review before confirming.
     </div>
-    ${meta.flete? `<div class="banner" style="white-space:normal">Detected a <b>freight/handling</b> charge of ${money(meta.flete)}. It's loaded in the purchase and will be <b>spread across all units</b> when you confirm (not added as stock).</div>`:""}
+    ${meta.flete? `<div class="banner" style="white-space:normal">Detected a <b>freight/handling</b> charge of ${money(meta.flete, "USD")}. It's loaded in the purchase and will be <b>spread across all units</b> when you confirm (not added as stock).</div>`:""}
     <p style="font-size:12px;color:var(--muted);margin:0 0 8px">
       <b>Cost</b> = what you pay (NET); updates last cost. <b>List price</b> = suggested selling price (MSRP). Not a sale — just your catalog price.
     </p>
