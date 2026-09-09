@@ -39,6 +39,7 @@ function openDoc(tipo, pre){
     } else if(draft.vendedorId===undefined){
       draft.vendedorId = "";   // admin arranca sin vendedor; lo elige en el combo
     }
+    if(!Array.isArray(draft.costosExtra)) draft.costosExtra = [];   // costos de venta (shipping/labor/etc.)
   }
   renderDocModal();
 }
@@ -112,7 +113,12 @@ function renderDocModal(){
         </select>
       </div>
       <div class="field"><label>Shipping cost</label><input class="inp num" id="d_envmonto" value="${draft.envio.monto||0}" ${draft.envio.tipo==="free"?"disabled":""}></div>
-    </div>`}
+    </div>
+    ${isAdmin()?`
+    <div class="phead" style="margin:16px 0 6px;padding:0"><h3 style="font-size:13px">Selling costs <span class="hint" style="font-weight:400">· eat into the sale margin, not the stock cost</span></h3></div>
+    <div id="costHost"></div>
+    <button class="btn sm" id="addCost" style="margin-top:8px">+ Add cost</button>
+    <div id="netBox" style="margin-top:12px"></div>`:""}`}
     <div id="docWarn"></div>
   `;
   const editing = !!draft.editingId;
@@ -143,6 +149,10 @@ function renderDocModal(){
     const et=document.getElementById("d_envtipo"), em=document.getElementById("d_envmonto");
     et.onchange=()=>{ draft.envio.tipo=et.value; em.disabled=(et.value==="free"); if(et.value==="free"){ draft.envio.monto=0; em.value=0; } refreshTotal(); };
     em.oninput=()=>{ draft.envio.monto=parseNum(em.value); refreshTotal(); };
+    if(isAdmin()){
+      renderCostos();
+      const ac=document.getElementById("addCost"); if(ac) ac.onclick=()=>{ (draft.costosExtra=draft.costosExtra||[]).push(nuevaLineaCosto()); renderCostos(); };
+    }
   }
 }
 /* Unidades totales del documento (para prorratear costos adicionales). */
@@ -162,6 +172,70 @@ function pintarProrateo(){
     ? `${money(extra)} split across ${qty(u)} u = ${money(extra/u)} per unit, added to each product cost.`
     : "Enter handling/freight; it prorates per unit on confirm.";
   refreshTotal();
+}
+
+/* ============================================================
+   COSTOS ADICIONALES POR VENTA (gastos de venta) — sólo admin
+   ------------------------------------------------------------
+   No se capitalizan al stock: van por debajo del margen bruto. "Horas hombre"
+   se carga como horas × valor-hora y el sistema multiplica. El recuadro de neto
+   es una ESTIMACIÓN en vivo (usa el costo FIFO de referencia de cada línea);
+   el número exacto queda congelado en la factura al confirmar.
+   ============================================================ */
+function nuevaLineaCosto(){ return { key:uid(), tipo:"envio", nota:"", monto:0, horas:0, valorHora:0 }; }
+function costosDraftTotal(){ return (draft.costosExtra||[]).reduce((a,c)=> a + (parseNum(c.monto)||0), 0); }
+function draftGrossMargin(){ return (draft.lineas||[]).reduce((a,l)=> a + ((parseNum(l.precio)||0)-(l.costoRef||0))*(parseNum(l.cantidad)||0), 0); }
+function draftCommRate(){
+  if(draft.vendedorId){ const v=vendedorById(draft.vendedorId); if(v&&v.rate!=null) return v.rate; }
+  return db.config.commissionRate||0;
+}
+function refreshNet(){
+  const box=document.getElementById("netBox"); if(!box) return;
+  const gm=round2(draftGrossMargin()), rate=draftCommRate(), comm=round2(gm*rate), cost=round2(costosDraftTotal()), net=round2(gm-comm-cost);
+  box.innerHTML = `
+    <div class="totrow"><span style="color:var(--muted)">Gross margin (est.)</span><span class="num">${money(gm)}</span></div>
+    <div class="totrow"><span style="color:var(--muted)">− Seller commission (${nf0.format(rate*100)}%)</span><span class="num">${money(comm)}</span></div>
+    <div class="totrow"><span style="color:var(--muted)">− Selling costs</span><span class="num">${money(cost)}</span></div>
+    <div class="totrow" style="font-weight:700"><span>Net margin (est.)</span><span class="num" style="color:${net<0?'var(--alert)':'var(--up)'}">${money(net)}</span></div>`;
+}
+function renderCostos(){
+  const host=document.getElementById("costHost"); if(!host) return;
+  draft.costosExtra = draft.costosExtra || [];
+  const rows = draft.costosExtra.map((c,i)=>{
+    const isLabor = c.tipo==="labor";
+    const midCells = isLabor
+      ? `<td style="width:70px"><input class="inp num" data-ck="horas" data-ci="${i}" value="${c.horas||0}" placeholder="hs" title="Hours"></td>
+         <td style="width:86px"><input class="inp num" data-ck="valorHora" data-ci="${i}" value="${c.valorHora||0}" placeholder="$/h" title="Rate per hour"></td>
+         <td class="r num" data-csub="${i}" style="width:86px;color:var(--muted)">${money((parseNum(c.horas)||0)*(parseNum(c.valorHora)||0))}</td>`
+      : `<td colspan="2"><input class="inp" data-ck="nota" data-ci="${i}" value="${esc(c.nota||"")}" placeholder="note (optional)"></td>
+         <td style="width:86px"><input class="inp num" data-ck="monto" data-ci="${i}" value="${c.monto||0}"></td>`;
+    return `<tr>
+      <td style="width:168px"><select class="inp" data-ck="tipo" data-ci="${i}">${COSTO_TIPOS.map(t=>`<option value="${t.id}" ${t.id===c.tipo?"selected":""}>${esc(t.label)}</option>`).join("")}</select></td>
+      ${midCells}
+      <td style="width:30px"><button class="btn ghost sm" data-cdel="${i}" title="Remove">✕</button></td>
+    </tr>`;
+  }).join("");
+  host.innerHTML = draft.costosExtra.length
+    ? `<div class="table-scroll"><table class="line-tbl doc-tbl"><colgroup><col style="width:168px"><col><col><col style="width:86px"><col style="width:30px"></colgroup><tbody>${rows}</tbody></table></div>`
+    : `<p class="hint" style="margin:2px 0 0;font-size:12px">No selling costs yet — add shipping, man-hours, commission, etc.</p>`;
+  host.querySelectorAll("[data-ck]").forEach(inp=>{
+    const i=+inp.dataset.ci, k=inp.dataset.ck;
+    const handler=()=>{
+      const c=draft.costosExtra[i]; if(!c) return;
+      if(k==="tipo"){ c.tipo=inp.value; renderCostos(); return; }   // cambia la estructura de la fila
+      if(k==="nota"){ c.nota=inp.value; return; }
+      c[k]=parseNum(inp.value);
+      if(k==="horas"||k==="valorHora"){
+        c.monto=round2((parseNum(c.horas)||0)*(parseNum(c.valorHora)||0));
+        const sc=host.querySelector(`[data-csub="${i}"]`); if(sc) sc.textContent=money(c.monto);
+      }
+      refreshNet();
+    };
+    inp.oninput = handler;
+    if(inp.tagName==="SELECT") inp.onchange = handler;
+  });
+  host.querySelectorAll("[data-cdel]").forEach(b=> b.onclick=()=>{ draft.costosExtra.splice(+b.dataset.cdel,1); renderCostos(); });
+  refreshNet();
 }
 
 /* ============================================================

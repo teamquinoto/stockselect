@@ -16,7 +16,10 @@ function openFicha(id){
     const isAdj = m.tipo==="ajuste";
     const signed = (m.delta!=null) ? m.delta : (m.tipo==="entrada"? m.cantidad : -m.cantidad);
     const up = signed>=0;
-    bal += signed;
+    // Los buckets (tránsito/bóveda) no son stock vendible: sus movimientos se muestran
+    // como fila informativa pero NO mueven el saldo corrido (que espeja lo vendible).
+    const esBucketMov = (typeof isBucket==="function") && isBucket(m.store);
+    if(!esBucketMov){ bal += signed; }
     serie.push(bal);
     const d=new Date(m.fecha);
     const fecha = d.toLocaleDateString("en-US") + " " + d.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit",hour12:false});

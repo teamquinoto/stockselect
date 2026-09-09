@@ -343,6 +343,23 @@ function saleCogs(d){
 function saleMargin(d){ return round2(saleRevenueProd(d) - saleCogs(d)); }
 function saleCommissionRate(d){ return (d && d.commissionRate!=null) ? d.commissionRate : (db.config.commissionRate||0); }
 function saleCommission(d){ return round2(saleMargin(d) * saleCommissionRate(d)); }
+/* ---- Costos adicionales POR VENTA (gastos de venta, NO se capitalizan al stock) ----
+   Van por debajo del margen bruto: envío/ShipStation, horas hombre (horas×tarifa),
+   comisión de venta manual (distinta de la comisión % del vendedor) y "otro".
+   El margen NETO = bruto − comisión del vendedor (%) − estos costos. */
+const COSTO_TIPOS = [
+  { id:"envio",    label:"Shipping / ShipStation" },
+  { id:"labor",    label:"Man-hours" },
+  { id:"comision", label:"Sales commission" },
+  { id:"otro",     label:"Other" }
+];
+function costoTipoLabel(id){ const t=COSTO_TIPOS.find(x=>x.id===id); return t?t.label:"Other"; }
+function saleCostosExtra(d){ return round2(((d&&d.costosExtra)||[]).reduce((a,c)=> a + (+c.monto||0), 0)); }
+function saleCostosPorTipo(d){
+  const acc={}; ((d&&d.costosExtra)||[]).forEach(c=>{ const k=c.tipo||"otro"; acc[k]=round2((acc[k]||0)+(+c.monto||0)); });
+  return acc;
+}
+function saleNetMargin(d){ return round2(saleMargin(d) - saleCommission(d) - saleCostosExtra(d)); }
 /* ---- Vendedores (perfiles a los que se atribuye la venta) ---- */
 function vendedores(){ return (db.config && Array.isArray(db.config.vendedores)) ? db.config.vendedores : []; }
 function vendedorById(id){ if(!id) return null; return vendedores().find(v=>v.id===id) || null; }

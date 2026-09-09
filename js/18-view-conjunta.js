@@ -299,6 +299,43 @@ function openEnviarTransito(){
   fillStores();
 }
 
+/* ---- Merma / write-off de tránsito: baja unidades del bucket por rotura, aduana,
+   extravío, etc. Consume FIFO del tránsito y deja un movimiento tipo "merma"
+   (store=tránsito) para trazar la pérdida. No pasa a ningún depósito vendible. ---- */
+function openMermaTransito(prodId){
+  if(!isAdmin()){ toast("Only admins can write off stock","warn"); return; }
+  const p = prodById(prodId); if(!p) return;
+  const held = transUnits(p);
+  if(held<=0){ toast("Nothing in transit for this product","warn"); return; }
+  const body = `
+    <p class="hint" style="margin:0 0 12px">In transit: <b>${qty(held)}</b> u. Write-off removes units that <b>won't arrive</b> (broken box, seized at customs, lost). They leave transit and do <b>not</b> become Swan stock.</p>
+    <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
+      <div class="field"><label>Units to write off</label><input class="inp num" id="mm_q" value="0"></div>
+      <div class="field"><label>Reason</label>
+        <select class="inp" id="mm_motivo">
+          <option value="broken">Broken in transit</option>
+          <option value="customs">Seized / held at customs</option>
+          <option value="lost">Lost</option>
+          <option value="other">Other</option>
+        </select></div>
+      <div class="field" style="grid-column:1/3"><label>Notes</label><input class="inp" id="mm_obs"></div>
+    </div>`;
+  buildModal("Write-off from transit", body, [
+    {label:"Cancel",cls:"btn",act:closeModal},
+    {label:"Write off",cls:"btn danger",act:()=>{
+      const q=Math.min(Math.max(0,parseNum(document.getElementById("mm_q").value)||0), transUnits(p));
+      if(q<=0){ toast("Enter a quantity","warn"); return; }
+      const motivo=document.getElementById("mm_motivo").value;
+      const obs=(document.getElementById("mm_obs").value||"").trim();
+      const { unit } = fifoConsumir(p, TRANSITO_STORE, q);            // consume FIFO del tránsito
+      p.stockPorTienda[TRANSITO_STORE] = round4(Math.max(0, transUnits(p) - q));
+      // movimiento de merma en el bucket (la ficha lo muestra pero no lo suma al saldo vendible)
+      moverStock(p, -q, unit, "merma", null, "Transit write-off · "+motivo, { store:TRANSITO_STORE, tipo:"merma", obs });
+      save(); closeModal(); toast(`Wrote off ${qty(q)} u from transit`, "warn"); render();
+    }}
+  ]);
+}
+
 function conjClienteNombre(d){
   if(d.cliente && d.cliente.nombre) return d.cliente.nombre + (d.cliente.empresa?` · ${d.cliente.empresa}`:"");
   const c = d.clienteId ? clienteById(d.clienteId) : null;
@@ -335,7 +372,7 @@ function viewConjunta(){
       <td><span class="sku">${esc(p.sku||"—")}</span> ${esc(p.nombre)}</td>
       <td class="r num">${qty(transUnits(p))}</td>
       <td class="r num">${money(transValor(p))}</td>
-      <td class="r"><button class="btn up sm" data-recib="${p.id}">Receive in AR ▾</button></td>
+      <td class="r" style="white-space:nowrap"><button class="btn up sm" data-recib="${p.id}">Receive in AR ▾</button> <button class="btn ghost sm" data-merma="${p.id}" title="Write-off (loss)" style="color:var(--alert)">✕</button></td>
     </tr>`).join("") || `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:18px">Nothing in transit right now.</td></tr>`;
 
   const hist = (db.conjuntas||[]).slice().sort((a,b)=> String(b.fecha||"").localeCompare(String(a.fecha||"")));
@@ -383,5 +420,6 @@ function wireConjunta(){
   const nb = m.querySelector("[data-new-conj]"); if(nb) nb.onclick=()=> openConjunta();
   const et = m.querySelector("[data-enviar-transito]"); if(et) et.onclick=()=> openEnviarTransito();
   m.querySelectorAll("[data-recib]").forEach(b=> b.onclick=()=> openRecibirTransito(b.dataset.recib));
+  m.querySelectorAll("[data-merma]").forEach(b=> b.onclick=()=> openMermaTransito(b.dataset.merma));
   m.querySelectorAll("[data-cjdel-doc]").forEach(b=> b.onclick=()=> deleteConjunta(b.dataset.cjdelDoc));
 }

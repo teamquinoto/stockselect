@@ -207,7 +207,7 @@ function renderLines(){
         const mg=host.querySelector(`[data-mg="${i}"]`);
         if(mg) mg.textContent = (l.precio>0) ? nf0.format((l.precio-l.costoRef)/l.precio*100)+"%" : "—";
       }
-      if(k==="cantidad"||k==="precio"||k==="margen"){ updateSubtotals(); refreshTotal(); }
+      if(k==="cantidad"||k==="precio"||k==="margen"){ updateSubtotals(); refreshTotal(); if(typeof refreshNet==="function") refreshNet(); }
     };
   });
   host.querySelectorAll("[data-del]").forEach(b=> b.onclick=()=>{
@@ -388,6 +388,10 @@ function confirmDoc(){
   }
   else {
     doc.storeVenta = storeVenta;   // depósito del que se despachó (para COGS y revert)
+    doc.costosExtra = (draft.costosExtra||[])
+      .filter(c=> (parseNum(c.monto)||0) > 0)
+      .map(c=>({ tipo:c.tipo||"otro", nota:(c.nota||"").trim(), monto:round2(parseNum(c.monto)||0),
+                 ...(c.tipo==="labor" ? { horas:parseNum(c.horas)||0, valorHora:parseNum(c.valorHora)||0 } : {}) }));
     doc.clienteId = draft.clienteId;
     doc.cliente = cli ? { nombre:cli.nombre, contacto:cli.contacto, empresa:cli.empresa, telefono:cli.telefono, email:cli.email, direccion:cli.direccion, ciudad:cli.ciudad, estado:cli.estado, zip:cli.zip, pais:cli.pais||"" } : null;  // snapshot for the invoice + country slicer
     doc.envio = { tipo:draft.envio.tipo, monto:envioMonto };
@@ -542,6 +546,7 @@ function editDoc(tipo,id){
   draft = {
     tipo, editingId:id, store:d.store||STORE_IDS[0], storeOrig:d.store||STORE_IDS[0],
     storeVenta: (tipo==="venta") ? (d.storeVenta||d.store||STORE_IDS[0]) : undefined,
+    costosExtra: (tipo==="venta") ? (d.costosExtra||[]).map(c=>({ key:uid(), tipo:c.tipo||"otro", nota:c.nota||"", monto:c.monto||0, horas:c.horas||0, valorHora:c.valorHora||0 })) : undefined,
     vendedorId: (tipo==="venta") ? (d.vendedorId||"") : "",
     contraparte:d.contraparte||"", fecha:normISO(d.fecha), numero:d.numero||"",
     clienteId:d.clienteId||"", envio: d.envio ? {tipo:d.envio.tipo, monto:d.envio.monto||0} : {tipo:"free",monto:0},
@@ -562,6 +567,7 @@ function copyDoc(tipo,id){
   draft = {
     tipo, editingId:null, store,
     storeVenta: (tipo==="venta") ? storeV : undefined,
+    costosExtra: (tipo==="venta") ? (d.costosExtra||[]).map(c=>({ key:uid(), tipo:c.tipo||"otro", nota:c.nota||"", monto:c.monto||0, horas:c.horas||0, valorHora:c.valorHora||0 })) : undefined,
     vendedorId: (tipo==="venta") ? (isSeller() ? (currentVendedorId()||"") : (d.vendedorId||"")) : "",
     contraparte: tipo==="compra"?(d.contraparte||""):"",
     fecha:new Date().toISOString().slice(0,10),
@@ -617,10 +623,16 @@ function verDoc(tipo,id){
       </span></div>` : "";
   // Punto 6: quién vendió (sólo ventas, sólo admin)
   const vendBlock = (!isC && isAdmin()) ? `<div class="totrow"><span style="color:var(--muted)">Sold by</span><span class="num">${esc(saleVendedorNombre(d))}</span></div>` : "";
-  // Punto 4: comisión (sólo ventas y sólo admin/master)
+  // Punto 4: comisión (sólo ventas y sólo admin/master) + costos de venta -> margen neto
+  const costLines = (!isC && isAdmin()) ? (d.costosExtra||[]).map(c=>{
+    const detalle = c.tipo==="labor" && c.horas ? ` <span style="color:var(--muted)">(${nf0.format(c.horas)}h × ${money(c.valorHora||0)})</span>` : (c.nota?` <span style="color:var(--muted)">· ${esc(c.nota)}</span>`:"");
+    return `<div class="totrow"><span style="color:var(--muted)">− ${esc(costoTipoLabel(c.tipo))}${detalle}</span><span class="num">${money(c.monto)}</span></div>`;
+  }).join("") : "";
   const commBlock = (!isC && isAdmin()) ? `
     <div class="totrow"><span style="color:var(--muted)">Margin (FIFO)</span><span class="num">${money(saleMargin(d))}</span></div>
-    <div class="totrow"><span style="color:var(--muted)">Commission (${nf0.format(saleCommissionRate(d)*100)}% of margin)</span><span class="num">${money(saleCommission(d))}</span></div>` : "";
+    <div class="totrow"><span style="color:var(--muted)">− Commission (${nf0.format(saleCommissionRate(d)*100)}% of margin)</span><span class="num">${money(saleCommission(d))}</span></div>
+    ${costLines}
+    <div class="totrow" style="font-weight:700;border-top:1px solid var(--line);margin-top:2px;padding-top:6px"><span>Net margin</span><span class="num" style="color:${saleNetMargin(d)<0?'var(--alert)':'var(--up)'}">${money(saleNetMargin(d))}</span></div>` : "";
   buildModal(`${isC?"Purchase":"Invoice"} ${esc(d.numero||"")}`.trim(), `
     <p style="margin:0 0 6px;color:var(--muted);font-size:14px">${esc(d.contraparte||"—")} · ${esc(fmtDate(d.fecha))}</p>
     ${cliBlock}

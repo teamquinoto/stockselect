@@ -18,7 +18,7 @@ function exportPnL(desde, hasta){
   const inRange = v=>{ const f=new Date((normISO(v.fecha)||v.fecha)+"T12:00:00"); if(d0&&f<d0) return false; if(d1&&f>d1) return false; return true; };
 
   // ---- Aggregations (consolidated) ----
-  const consol = { sales:0, shipping:0, cogs:0 };
+  const consol = { sales:0, shipping:0, cogs:0, commission:0, costos:{envio:0,labor:0,comision:0,otro:0} };
   const detail = {};                 // prodKey -> {sku,nombre,units,revenue,cogs}
   const perVend = {};                // vendedorId|"" -> {nombre, sales, cogs, commission}
   const ventasPeriodo = db.ventas.filter(inRange);
@@ -37,8 +37,13 @@ function exportPnL(desde, hasta){
     });
     if(v.envio && v.envio.tipo==="monto") consol.shipping += round2(v.envio.monto||0);
     pv.commission += saleCommission(v);
+    consol.commission += saleCommission(v);
+    (v.costosExtra||[]).forEach(c=>{ const k=(c.tipo in consol.costos)?c.tipo:"otro"; consol.costos[k] += round2(+c.monto||0); });
   });
   consol.sales=round2(consol.sales); consol.shipping=round2(consol.shipping); consol.cogs=round2(consol.cogs);
+  consol.commission=round2(consol.commission);
+  Object.keys(consol.costos).forEach(k=> consol.costos[k]=round2(consol.costos[k]));
+  const costosVentaTotal = round2(consol.commission + consol.costos.envio + consol.costos.labor + consol.costos.comision + consol.costos.otro);
 
   // ---- Formatos de celda ----
   const MFMT = '"$"#,##0.00;("$"#,##0.00)';
@@ -64,21 +69,34 @@ function exportPnL(desde, hasta){
     ["Gross profit", gp, pct(gp)],
     ["Gross margin %", (net>0?gp/net:0), ""],
     [""],
+    ["Selling costs", "", ""],
+    ["  Seller commissions", -consol.commission, pct(-consol.commission)],
+    ["  Shipping / ShipStation", -consol.costos.envio, pct(-consol.costos.envio)],
+    ["  Man-hours", -consol.costos.labor, pct(-consol.costos.labor)],
+    ["  Sales commission (manual)", -consol.costos.comision, pct(-consol.costos.comision)],
+    ["  Other", -consol.costos.otro, pct(-consol.costos.otro)],
+    ["Total selling costs", -costosVentaTotal, pct(-costosVentaTotal)],
+    ["Contribution margin (net)", round2(gp-costosVentaTotal), pct(round2(gp-costosVentaTotal))],
+    ["Contribution margin %", (net>0?round2(gp-costosVentaTotal)/net:0), ""],
+    [""],
     ["Operating expenses", "n/a", ""],
-    ["  (rent, payroll, marketing, fees — not tracked in this system)"],
-    ["Operating income", gp, pct(gp)],
+    ["  (rent, marketing, fixed payroll, fees — not tracked in this system)"],
+    ["Operating income", round2(gp-costosVentaTotal), pct(round2(gp-costosVentaTotal))],
     [""],
     ["Notes:"],
     ["• COGS uses the actual FIFO cost layers of the deposit each sale shipped from (not last cost)."],
     ["• Inbound freight/handling is capitalized into landed cost, so it is already inside COGS."],
     ["• Stock lives in real deposits (Select · USA / Swan · AR); a sale draws only from its chosen deposit."],
-    ["• Operating expenses are not captured here — plug them into your structure-cost model."],
+    ["• Selling costs (commission, shipping, man-hours, etc.) are charged per sale and sit below gross profit."],
+    ["• Operating expenses (structure) are not captured here — plug them into your cost model."],
   ];
   const ws1 = XLSX.utils.aoa_to_sheet(IS);
   ws1["!cols"]=[{wch:46},{wch:16},{wch:13}];
   ws1["!merges"]=[{s:{r:0,c:0},e:{r:0,c:2}},{s:{r:1,c:0},e:{r:1,c:2}}];
-  for(let r=4;r<=13;r++){ setFmt(ws1, "B"+(r+1), MFMT); setFmt(ws1, "C"+(r+1), PFMT); }
-  setFmt(ws1, "B10", PFMT);   // Gross margin %
+  // Filas (1-based) con importe en B y % en C
+  [5,6,7,8,9,13,14,15,16,17,18,19,24].forEach(r=>{ setFmt(ws1, "B"+r, MFMT); setFmt(ws1, "C"+r, PFMT); });
+  // Filas con % directo en B (márgenes)
+  [10,20].forEach(r=> setFmt(ws1, "B"+r, PFMT));
   XLSX.utils.book_append_sheet(wb, ws1, "Income Statement");
 
   /* ---------- HOJA 2: By seller ---------- */
