@@ -77,6 +77,7 @@ function render(){
   else if(view==="clientes") m.innerHTML = viewClientes();
   else if(view==="mov") m.innerHTML = isAdmin()? (bar+viewMov()) : viewDash();
   else if(view==="inv") m.innerHTML = isAdmin()? viewInversiones() : viewDash();
+  else if(view==="conjunta") m.innerHTML = isAdmin()? viewConjunta() : viewDash();
   else if(view==="datos") m.innerHTML = viewDatos();
   applyRoleUI();
   wireStoreBar();

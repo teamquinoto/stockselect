@@ -117,6 +117,7 @@ function wire(){
   wireDocFiltros();
   wireMovFiltros();
   wireClientes();
+  if(typeof wireConjunta==="function") wireConjunta();
   // Alerta de reposición (banner + tarjeta): click / Enter / Espacio -> maestro filtrado
   m.querySelectorAll("[data-goto-pedir]").forEach(el=>{
     el.style.cursor="pointer";

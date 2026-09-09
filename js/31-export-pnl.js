@@ -69,9 +69,9 @@ function exportPnL(desde, hasta){
     ["Operating income", gp, pct(gp)],
     [""],
     ["Notes:"],
-    ["• Stock is a single pool; COGS uses actual FIFO cost layers across societies (not last cost)."],
+    ["• COGS uses the actual FIFO cost layers of the deposit each sale shipped from (not last cost)."],
     ["• Inbound freight/handling is capitalized into landed cost, so it is already inside COGS."],
-    ["• Sales are not split by society (Akira/Silver): those only record who bought each lot."],
+    ["• Stock lives in real deposits (Select · USA / Swan · AR); a sale draws only from its chosen deposit."],
     ["• Operating expenses are not captured here — plug them into your structure-cost model."],
   ];
   const ws1 = XLSX.utils.aoa_to_sheet(IS);

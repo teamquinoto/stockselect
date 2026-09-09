@@ -28,8 +28,12 @@ function openDoc(tipo, pre){
       draft.store = (activeStore!=="all" && STORE_IDS.includes(activeStore)) ? activeStore : STORE_IDS[0];
     }
   } else {
-    // La venta NO elige sociedad (pool unificado). Elige VENDEDOR (para la comisión).
-    // Vendedor logueado => fijado a sí mismo. Admin => elige (o "— none —").
+    // La venta ELIGE DEPÓSITO (Select/Swan): el stock de AR no se vende desde USA.
+    // Default: el primer depósito que tenga algo de stock, o el primero.
+    if(!draft.storeVenta || !STORE_IDS.includes(draft.storeVenta)){
+      draft.storeVenta = STORE_IDS.find(s=> db.productos.some(p=> stockDe(p,s)>0)) || STORE_IDS[0];
+    }
+    // Y elige VENDEDOR (para la comisión). Vendedor logueado => fijado a sí mismo.
     if(isSeller()){
       draft.vendedorId = currentVendedorId() || "";
     } else if(draft.vendedorId===undefined){
@@ -61,18 +65,22 @@ function renderDocModal(){
       : `<div class="field" style="grid-column:1/3"><label>Society</label>
            <input class="inp" value="${esc(storeName(draft.store))}" disabled></div>`;
   } else {
-    // VENTA: no se elige sociedad (pool unificado). Se elige VENDEDOR (para la comisión).
+    // VENTA: elige DEPÓSITO (de dónde despacha; define el costo FIFO) + VENDEDOR (comisión).
+    const depSel = `<div class="field"><label>Deposit <span class="hint" style="font-weight:400">· ships from</span></label>
+        <select class="inp" id="d_storeventa">${allowSt.map(s=>`<option value="${s}" ${s===draft.storeVenta?"selected":""}>${esc(storeName(s))}</option>`).join("")}</select></div>`;
+    let vendSel;
     if(isSeller()){
-      topSel = `<div class="field" style="grid-column:1/3"><label>Seller</label>
+      vendSel = `<div class="field"><label>Seller</label>
            <input class="inp" value="${esc((session&&session.name)||vendedorNombre(draft.vendedorId))}" disabled></div>`;
     } else {
       const vends = vendedores();
-      topSel = `<div class="field" style="grid-column:1/3"><label>Seller <span class="hint" style="font-weight:400">· whose commission</span></label>
+      vendSel = `<div class="field"><label>Seller <span class="hint" style="font-weight:400">· whose commission</span></label>
            <select class="inp" id="d_vend">
              <option value="" ${!draft.vendedorId?"selected":""}>— none (house) —</option>
              ${vends.map(v=>`<option value="${esc(v.id)}" ${v.id===draft.vendedorId?"selected":""}>${esc(v.nombre)}</option>`).join("")}
            </select></div>`;
     }
+    topSel = depSel + vendSel;
   }
   const body = `
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0;margin-bottom:10px">${topSel}</div>
@@ -120,6 +128,7 @@ function renderDocModal(){
   renderLines();
   const dst=document.getElementById("d_store"); if(dst) dst.onchange=e=>{ draft.store=e.target.value; };
   const dvend=document.getElementById("d_vend"); if(dvend) dvend.onchange=e=>{ draft.vendedorId=e.target.value; };
+  const dsv=document.getElementById("d_storeventa"); if(dsv) dsv.onchange=e=>{ draft.storeVenta=e.target.value; renderDocModal(); };   // re-render: refresca disponibilidad y costos del depósito
   const cp=document.getElementById("d_cp"); if(cp) cp.oninput=e=>draft.contraparte=e.target.value;
   document.getElementById("d_fe").oninput=e=>draft.fecha=e.target.value;
   document.getElementById("d_nu").oninput=e=>draft.numero=e.target.value;
@@ -273,12 +282,16 @@ function totalLineas(arr){ return round2((arr||[]).reduce((a,x)=> a + round2((x.
    ============================================================ */
 function stockBaseVenta(prodId){
   const p = prodById(prodId); if(!p) return 0;
-  // La venta descuenta del POOL UNIFICADO (todas las sociedades), no de un local
-  let s = stockVendibleTotal(p) || 0;
-  // si estamos EDITando una venta, el stock "vuelve" antes de re-validar
-  if(draft && draft.editingId){
-    const old = (draft.tipo==="compra"?db.compras:db.ventas).find(x=>x.id===draft.editingId);
-    if(old) old.lineas.forEach(l=>{ if(l.productoId===prodId) s += (draft.tipo==="compra" ? -(l.cantidad||0) : (l.cantidad||0)); });
+  // La venta descuenta del DEPÓSITO elegido (Select o Swan), no del pool.
+  const store = (draft && draft.storeVenta) || STORE_IDS[0];
+  let s = stockDe(p, store) || 0;
+  // si estamos EDITando una venta del MISMO depósito, su stock "vuelve" antes de re-validar
+  if(draft && draft.editingId && draft.tipo!=="compra"){
+    const old = db.ventas.find(x=>x.id===draft.editingId);
+    if(old){
+      const oldStore = old.storeVenta || old.store || STORE_IDS[0];
+      if(oldStore===store) old.lineas.forEach(l=>{ if(l.productoId===prodId) s += (l.cantidad||0); });
+    }
   }
   return s;
 }
@@ -339,9 +352,10 @@ function pickerItemsHTML(i, q){
   const cur = draft.lineas[i].productoId;
   q = (q||"").trim().toLowerCase();
   const vstore = (draft && draft.store) || STORE_IDS[0];   // sólo relevante en COMPRA
-  // COMPRA: todos los productos. VENTA: los que tengan stock en el POOL unificado.
+  const vstoreVenta = (draft && draft.storeVenta) || STORE_IDS[0];   // depósito de la venta
+  // COMPRA: todos los productos. VENTA: los que tengan stock EN ESE DEPÓSITO.
   let lista = isC ? db.productos.slice()
-                  : db.productos.filter(p=> stockVendibleTotal(p)>0 || p.id===cur);
+                  : db.productos.filter(p=> stockDe(p, vstoreVenta)>0 || p.id===cur);
   // orden alfabético SIEMPRE (task 2), por nombre
   lista.sort((a,b)=> String(a.nombre||"").localeCompare(String(b.nombre||""),"es",{numeric:true}));
   if(q) lista = lista.filter(p=> ((p.nombre||"")+" "+(p.sku||"")).toLowerCase().includes(q));
@@ -353,8 +367,8 @@ function pickerItemsHTML(i, q){
     return `<button type="button" class="ppick-item${sel}" data-pick="${p.id}">${sku}<span class="pi-name" data-fullname="${esc(p.nombre)}">${esc(p.nombre)}</span>${disp}</button>`;
   }).join("");
   if(!lista.length){
-    const hayStock = db.productos.some(p=> isC ? true : stockVendibleTotal(p)>0);
-    html = `<div class="ppick-empty">${isC ? "No products match." : (hayStock?"No product with stock matches.":"No stock available to sell.")}</div>`;
+    const hayStock = db.productos.some(p=> isC ? true : stockDe(p, vstoreVenta)>0);
+    html = `<div class="ppick-empty">${isC ? "No products match." : (hayStock?"No product with stock matches.":`No stock to sell in ${esc(storeName(vstoreVenta))}.`)}</div>`;
   }
   if(isC) html += `<button type="button" class="ppick-item new" data-pick="__new">＋ Create new product…</button>`;
   return html;
@@ -434,9 +448,12 @@ function applyProdSelection(i, value){
   const p = prodById(value);
   if(p && isC && !l.precio){ l.precio = (p.costoNeto!=null?p.costoNeto:p.ultimoCosto); }
   if(p && !isC){
-    l.costoRef = p.ultimoCosto||0;
-    if(p.precioVenta>0){                          // trae el precio de lista y deriva el markup
-      l.precio = p.precioVenta;
+    const stv = draft.storeVenta || STORE_IDS[0];
+    // costo de referencia = costo FIFO de la próxima unidad EN ESE DEPÓSITO (mezcla real)
+    l.costoRef = fifoCostoPeek(p, stv, 1).unit || p.ultimoCosto || 0;
+    const precioDep = (p.precioVentaPorTienda && p.precioVentaPorTienda[stv]) || p.precioVenta || 0;
+    if(precioDep>0){                              // trae el precio de lista del depósito y deriva el markup
+      l.precio = precioDep;
       l.margen = l.costoRef>0 ? round2((l.precio/l.costoRef-1)*100) : 0;
     } else {
       l.margen = l.margen||0;

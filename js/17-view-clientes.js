@@ -244,6 +244,9 @@ function nuevoProductoBase(sku, nombre, precioVenta){
         estado:PRODUCT_STATES.SALE, idioma:"",
         stockPorTienda:{}, lotes:{}, precioVentaPorTienda:{} };
   STORE_IDS.forEach(s=>{ p.stockPorTienda[s]=0; p.lotes[s]=[]; p.precioVentaPorTienda[s]=precioVenta||0; });
+  // buckets no-vendibles (bóveda y tránsito), para no depender de una recarga/migración
+  p.stockPorTienda[INV_STORE]=0; p.lotes[INV_STORE]=[];
+  p.stockPorTienda[TRANSITO_STORE]=0; p.lotes[TRANSITO_STORE]=[];
   return p;
 }
 function confirmDoc(){
@@ -251,6 +254,7 @@ function confirmDoc(){
   // Punto 3: sólo el admin carga compras.
   if(isC && !puedeComprar()){ toast("Only admins can load purchases","warn"); return; }
   const store = draft.store || STORE_IDS[0];   // sólo relevante para COMPRA (sociedad que compra)
+  const storeVenta = draft.storeVenta || STORE_IDS[0];   // depósito desde el que se vende
   // Sale: require a customer before generating the invoice
   if(!isC && !clienteById(draft.clienteId)){
     toast("Pick (or create) a customer before generating the sale","warn"); return;
@@ -307,7 +311,7 @@ function confirmDoc(){
       if(soloEnVault(p)){ toast(`"${p.nombre}" is in the investment vault and can't be sold`,"warn"); return; }
       if(esBloqueado(p)){ toast(`"${p.nombre}" is blocked (best-offer). It needs admin approval before selling`,"warn"); return; }
     }
-    const costoSnap = isC ? l.precio : fifoCostoPeekGlobal(p, l.cantidad).unit;   // FIFO unit cost across the unified pool
+    const costoSnap = isC ? l.precio : fifoCostoPeek(p, storeVenta, l.cantidad).unit;   // FIFO unit cost in the chosen deposit
     resolved.push({ prod:p, cantidad:l.cantidad, precio:l.precio, costo:costoSnap });
   }
   if(!resolved.length){ toast("Add at least one valid line","warn"); return; }
@@ -339,17 +343,20 @@ function confirmDoc(){
   // Nunca stock negativo. Si estoy editando, el stock del doc original "vuelve" al
   // pool (revertMap) y se puede revalidar contra ese total.
   if(!isC){
+    // El descuento de stock de la venta original sólo "vuelve" si era del MISMO depósito.
+    const oldStoreV = oldDoc ? (oldDoc.storeVenta || oldDoc.store || STORE_IDS[0]) : null;
+    const oldSameStore = oldStoreV===storeVenta;
     const pedido={};
     resolved.forEach(r=>{ pedido[r.prod.id]=(pedido[r.prod.id]||0)+r.cantidad; });
     const faltantes=[];
     Object.keys(pedido).forEach(id=>{
       const p=prodById(id);
-      const eff = stockVendibleTotal(p) + (editing ? (revertMap[id]||0) : 0);
-      if(pedido[id]>eff) faltantes.push(`• ${p.nombre}: available ${qty(eff)}, you asked ${qty(pedido[id])}`);
+      const eff = stockDe(p, storeVenta) + (editing && oldSameStore ? (revertMap[id]||0) : 0);
+      if(pedido[id]>eff) faltantes.push(`• ${p.nombre}: available ${qty(eff)} in ${storeName(storeVenta)}, you asked ${qty(pedido[id])}`);
     });
     if(faltantes.length){
       toast("Not enough stock","warn");
-      alert("Can't sell more than the total stock on hand:\n\n"+faltantes.join("\n")+"\n\nAdjust the quantities. Stock can't go negative.");
+      alert(`Can't sell more than the stock on hand at ${storeName(storeVenta)}:\n\n`+faltantes.join("\n")+"\n\nAdjust the quantities or switch deposit. Stock can't go negative.");
       return;
     }
   }
@@ -380,6 +387,7 @@ function confirmDoc(){
     doc.status = (editing && oldDoc && oldDoc.status) ? oldDoc.status : INVOICE_STATUS.IN_TRANSIT;
   }
   else {
+    doc.storeVenta = storeVenta;   // depósito del que se despachó (para COGS y revert)
     doc.clienteId = draft.clienteId;
     doc.cliente = cli ? { nombre:cli.nombre, contacto:cli.contacto, empresa:cli.empresa, telefono:cli.telefono, email:cli.email, direccion:cli.direccion, ciudad:cli.ciudad, estado:cli.estado, zip:cli.zip, pais:cli.pais||"" } : null;  // snapshot for the invoice + country slicer
     doc.envio = { tipo:draft.envio.tipo, monto:envioMonto };
@@ -414,19 +422,14 @@ function confirmDoc(){
         r.prod.ultimoCosto = landed;        // last landed cost (reference only; COGS is FIFO)
       }
     } else {
-      // Venta desde el POOL UNIFICADO: consumo FIFO global por fecha, cruzando sociedades.
-      const res = fifoConsumirGlobal(r.prod, r.cantidad);
-      doc.lineas[idx].costo = res.unit;                              // costo FIFO unitario (mezcla real)
+      // Venta desde el DEPÓSITO elegido: consumo FIFO por fecha dentro de ESE depósito.
+      const res = fifoConsumir(r.prod, storeVenta, r.cantidad);
+      doc.lineas[idx].costo = res.unit;                              // costo FIFO unitario (mezcla real del depósito)
       doc.lineas[idx].cogs = res.cogs;                               // COGS total
-      doc.lineas[idx].consumed = res.consumed;                       // desglose por sociedad -> revert exacto
-      // Kardex: una línea por sociedad tocada, con su costo, para que el saldo por
-      // sociedad (procedencia) quede coherente. moverStock es quien decrementa el stock.
-      Object.keys(res.porSociedad).forEach(soc=>{
-        const t = res.porSociedad[soc];
-        const unit = t.cantidad>0 ? round2(t.cogs/t.cantidad) : res.unit;
-        moverStock(r.prod, -t.cantidad, unit, "venta", doc.id, refTxt, { store:soc });
-      });
+      doc.lineas[idx].consumed = res.consumed;                       // capas consumidas -> revert exacto (usa doc.storeVenta)
+      moverStock(r.prod, -r.cantidad, res.unit, "venta", doc.id, refTxt, { store:storeVenta });
       r.prod.precioVenta = r.precio;                                 // último precio de venta (mirror)
+      if(r.prod.precioVentaPorTienda) r.prod.precioVentaPorTienda[storeVenta] = r.precio;   // precio de lista del depósito
     }
   });
 
@@ -538,6 +541,7 @@ function editDoc(tipo,id){
   const d=list.find(x=>x.id===id); if(!d) return;
   draft = {
     tipo, editingId:id, store:d.store||STORE_IDS[0], storeOrig:d.store||STORE_IDS[0],
+    storeVenta: (tipo==="venta") ? (d.storeVenta||d.store||STORE_IDS[0]) : undefined,
     vendedorId: (tipo==="venta") ? (d.vendedorId||"") : "",
     contraparte:d.contraparte||"", fecha:normISO(d.fecha), numero:d.numero||"",
     clienteId:d.clienteId||"", envio: d.envio ? {tipo:d.envio.tipo, monto:d.envio.monto||0} : {tipo:"free",monto:0},
@@ -554,8 +558,10 @@ function copyDoc(tipo,id){
   const d=list.find(x=>x.id===id); if(!d) return;
   if(document.getElementById("scrim")) closeModal();
   const store = d.store||STORE_IDS[0];
+  const storeV = d.storeVenta||d.store||STORE_IDS[0];
   draft = {
     tipo, editingId:null, store,
+    storeVenta: (tipo==="venta") ? storeV : undefined,
     vendedorId: (tipo==="venta") ? (isSeller() ? (currentVendedorId()||"") : (d.vendedorId||"")) : "",
     contraparte: tipo==="compra"?(d.contraparte||""):"",
     fecha:new Date().toISOString().slice(0,10),
@@ -574,8 +580,8 @@ function copyDoc(tipo,id){
     const usado={};
     draft.lineas.forEach(l=>{
       const p=prodById(l.productoId); if(!p) return;
-      const disp=Math.max(0, stockVendibleTotal(p)-(usado[l.productoId]||0));
-      if(l.cantidad>disp){ recortes.push(`• ${p.nombre}: asked ${qty(l.cantidad)}, ${qty(disp)} in stock`); l.cantidad=disp; }
+      const disp=Math.max(0, stockDe(p, storeV)-(usado[l.productoId]||0));
+      if(l.cantidad>disp){ recortes.push(`• ${p.nombre}: asked ${qty(l.cantidad)}, ${qty(disp)} in ${storeName(storeV)}`); l.cantidad=disp; }
       usado[l.productoId]=(usado[l.productoId]||0)+l.cantidad;
     });
   }

@@ -28,9 +28,12 @@ const SESKEY = "gstock_session";  // { user, token, space, role, store }
    (executive hold, leaves the sellable inventory, admin-only vault).
    LANGUAGE: per-product tag JP | ESP.
    ============================================================ */
+/* DEPÓSITOS reales (entidades físicas donde vive el stock). Select en EEUU,
+   Swan en Argentina. La venta ELIGE depósito: lo que está en AR no se puede
+   vender desde USA y viceversa (el costo sale del FIFO de ESE depósito). */
 const STORES = [
-  { id:"akira",  name:"Akira"  },
-  { id:"silver", name:"Silver" }
+  { id:"select", name:"Select · USA" },
+  { id:"swan",   name:"Swan · AR"   }
 ];
 const STORE_IDS = STORES.map(s=>s.id);
 /* Investment vault = a hidden pseudo-store. Stock and FIFO cost layers moved
@@ -38,8 +41,21 @@ const STORE_IDS = STORES.map(s=>s.id);
    It's deliberately NOT part of STORE_IDS, so it never counts as sellable
    stock, never shows in selling views, and never inflates valuation. */
 const INV_STORE = "__inv";
-function storeName(id){ if(id===INV_STORE) return "Investment vault"; const s=STORES.find(x=>x.id===id); return s?s.name:(id||"—"); }
+/* Depósito de TRÁNSITO (mercadería rumbo AR, ya despachada pero no llegada).
+   Es un pseudo-depósito igual que la bóveda: tiene stock y capas FIFO propias
+   pero NO forma parte de STORE_IDS, así que nunca cuenta como vendible ni infla
+   la valuación. Se ve en la vista Joint/Transit y en la ficha del producto. */
+const TRANSITO_STORE = "__transito";
+function storeName(id){
+  if(id===INV_STORE) return "Investment vault";
+  if(id===TRANSITO_STORE) return "In transit (to AR)";
+  const s=STORES.find(x=>x.id===id); return s?s.name:(id||"—");
+}
 function isStore(id){ return STORE_IDS.includes(id); }
+/* ¿Es un bucket no-vendible (tránsito / bóveda)? Los buckets no dejan kardex
+   propio en las transferencias, para que el saldo corrido del producto siga
+   espejando el stock vendible (criterio de auditoría). */
+function isBucket(id){ return id===INV_STORE || id===TRANSITO_STORE; }
 
 const ROLES = { ADMIN:"admin", SELLER:"seller" };
 function currentRole(){ return (session && session.role) || ROLES.ADMIN; }  // Local mode (no session) = full access
@@ -47,7 +63,7 @@ function isAdmin(){ return currentRole()===ROLES.ADMIN; }
 function isSeller(){ return currentRole()===ROLES.SELLER; }
 /* Vistas reservadas al admin. Un vendedor NO carga compras, no manda a inversión,
    no ve análisis/comisiones globales ni la exportación de datos. Sólo vende. */
-const ADMIN_VIEWS = ["compras","inv","analisis","datos","mov"];
+const ADMIN_VIEWS = ["compras","inv","analisis","datos","mov","conjunta"];
 /* Capacidades gateadas por rol (punto 3). El modo Local (sin sesión) = admin. */
 function puedeComprar(){ return isAdmin(); }        // cargar compras / recibir facturas
 function puedeInvertir(){ return isAdmin(); }       // enviar / traer de la bóveda de inversión
@@ -188,6 +204,19 @@ function migrate(d){
     // --- Investment vault bucket (points 2 & 4) ---
     if(p.stockPorTienda[INV_STORE]==null) p.stockPorTienda[INV_STORE]=0;
     if(!Array.isArray(p.lotes[INV_STORE])) p.lotes[INV_STORE]=[];
+    // --- Transit bucket (mercadería rumbo AR; fuera del vendible, como el vault) ---
+    if(p.stockPorTienda[TRANSITO_STORE]==null) p.stockPorTienda[TRANSITO_STORE]=0;
+    if(!Array.isArray(p.lotes[TRANSITO_STORE])) p.lotes[TRANSITO_STORE]=[];
+    // Remapeo de sociedades LEGACY (base vieja Akira/Silver -> Select/Swan). Idempotente:
+    // una vez movido, la clave vieja deja de existir y no vuelve a correr. Preserva stock y capas.
+    [["akira",STORE_IDS[0]],["silver",STORE_IDS[1]]].forEach(([old,dest])=>{
+      if(!dest || old===dest) return;
+      if(p.stockPorTienda[old]!=null){
+        p.stockPorTienda[dest] = r2((p.stockPorTienda[dest]||0) + (p.stockPorTienda[old]||0));
+        if(Array.isArray(p.lotes[old])) p.lotes[dest] = (p.lotes[dest]||[]).concat(p.lotes[old]);
+        delete p.stockPorTienda[old]; delete p.lotes[old];
+      }
+    });
     // Legacy migration: products flagged estado==="investment" used to hold their
     // WHOLE stock as an investment. Move every store's units + FIFO layers into the
     // vault bucket (value preserved) and clear the flag. Idempotent: once the flag
@@ -211,6 +240,11 @@ function migrate(d){
     // keep p.stock as a DERIVED mirror (sum across stores) for backward-compat views
     p.stock = STORE_IDS.reduce((a,s)=> a + (p.stockPorTienda[s]||0), 0);
   });
+  // Remapeo legacy de la sociedad en documentos (akira->select, silver->swan).
+  const _remapSoc = s => s==="akira"?STORE_IDS[0] : (s==="silver"?STORE_IDS[1] : s);
+  (d.compras||[]).forEach(c=>{ if(c.store) c.store = _remapSoc(c.store); });
+  (d.ventas||[]).forEach(v=>{ if(v.store) v.store = _remapSoc(v.store); if(v.storeVenta) v.storeVenta = _remapSoc(v.storeVenta); });
+  d.conjuntas = d.conjuntas || [];   // compras conjuntas (ingreso de comisión en especie)
   d.clientes.forEach(c=>{ if(c.pais==null) c.pais = ""; });   // country of buyer (point 7 slicer)
   // Punto 11: normalizar fechas viejas mezcladas (ISO vs "01-Jul-2026") a YYYY-MM-DD
   [...(d.compras||[]), ...(d.ventas||[])].forEach(doc=>{ if(doc.fecha) doc.fecha = normISO(doc.fecha) || doc.fecha; });
@@ -340,6 +374,14 @@ function esInversion(p){ return invUnits(p) > 0; }
    These (and only these) are hidden from selling/reorder views. */
 function soloEnVault(p){ return invUnits(p) > 0 && stockTotalP(p) === 0; }
 function esBloqueado(p){ return p.estado===PRODUCT_STATES.BLOCKED; }
+/* ---- Transit bucket helpers (mercadería rumbo AR) ---- */
+function transUnits(p){ return stockDe(p, TRANSITO_STORE); }                 // unidades en tránsito
+function transLayers(p){ return (p.lotes && Array.isArray(p.lotes[TRANSITO_STORE])) ? p.lotes[TRANSITO_STORE] : []; }
+function transValor(p){ return round2(transLayers(p).reduce((a,L)=> a + L.cantidad*L.costoUnit, 0)); }
+function enTransitoAR(p){ return transUnits(p) > 0; }
+/* Total de unidades en tránsito rumbo AR (para el KPI de la vista Joint/Transit). */
+function unidadesEnTransitoAR(){ return db.productos.reduce((a,p)=> a + transUnits(p), 0); }
+function valorEnTransitoAR(){ return round2(db.productos.reduce((a,p)=> a + transValor(p), 0)); }
 /* products visible for normal SELLING views: hides only the fully-held items,
    and (for sellers) is later intersected with their store's stock. */
 function productosVendibles(){ return db.productos.filter(p=> !soloEnVault(p)); }

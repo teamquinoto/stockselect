@@ -43,7 +43,9 @@ function openFicha(id){
   const margenPct = p.precioVenta>0 ? (margen/p.precioVenta*100) : 0;
   const totalStock = stockTotalP(p);
   const held = invUnits(p);
+  const inTr = (typeof transUnits==="function") ? transUnits(p) : 0;
   const perStore = STORE_IDS.map(s=>`${storeName(s)}: <b>${qty(stockDe(p,s))}</b>`).join(" · ")
+    + (inTr>0 ? ` · <span style="color:var(--muted)">⋯ transit: <b>${qty(inTr)}</b></span>` : "")
     + (held>0 ? ` · <span style="color:var(--accent-ink)">◈ vault: <b>${qty(held)}</b></span>` : "");
   const badge = esInversion(p)?' <span class="pill inv">investment</span>':(esBloqueado(p)?' <span class="pill blocked">blocked</span>':'');
 

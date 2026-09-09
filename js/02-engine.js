@@ -207,3 +207,41 @@ function returnFromInvestment(prod, store, q, obs){
   return q;
 }
 
+/* ============================================================
+   TRANSFERENCIA GENÉRICA ENTRE DEPÓSITOS / BUCKETS
+   ------------------------------------------------------------
+   Mueve `cantidad` de `origen` a `destino` arrastrando el costo FIFO
+   EXACTO de cada capa consumida. En el tramo se puede SUMAR un costo por
+   unidad (`costoExtraUnit`): así la misma carta "vale más" al llegar a AR
+   si algún día se capitaliza flete/nacionalización. Hoy el default es 0
+   porque la importación la paga el cliente (dato de Juan).
+     · Depósitos VENDIBLES (select/swan): dejan kardex (entra/sale del vendible).
+     · BUCKETS (__transito/__inv): NO dejan kardex propio (igual que la bóveda),
+       para que el saldo corrido del producto siga espejando el stock vendible.
+       Su contenido se ve en las columnas/fichas de Transit y Vault.
+   Devuelve las unidades efectivamente movidas.
+   ============================================================ */
+function transferStock(prod, origen, destino, cantidad, costoExtraUnit, obs){
+  cantidad = Math.min(Math.max(0, +cantidad||0), stockDe(prod, origen));
+  if(cantidad<=0 || origen===destino) return 0;
+  costoExtraUnit = +costoExtraUnit || 0;
+  // consumo FIFO del origen (mutando las capas y sabiendo el costo exacto)
+  const { unit, consumed } = fifoConsumir(prod, origen, cantidad);
+  // --- salida del origen ---
+  if(isBucket(origen)){
+    prod.stockPorTienda[origen] = round4((prod.stockPorTienda[origen]||0) - cantidad);
+  } else {
+    moverStock(prod, -cantidad, unit, "transfer", null, "→ "+storeName(destino), { store:origen, tipo:"transfer-out", obs:obs||"" });
+  }
+  // --- entrada al destino: cada capa entra a su costo + el extra del tramo ---
+  consumed.forEach(c=>{ if(!c.synthetic) fifoLayers(prod, destino).push({ id:uid(), fecha:new Date().toISOString(), cantidad:c.cantidad, costoUnit:round2(c.costoUnit + costoExtraUnit), ref:"from "+storeName(origen) }); });
+  if(isBucket(destino)){
+    prod.stockPorTienda[destino] = round4((prod.stockPorTienda[destino]||0) + cantidad);
+  } else {
+    moverStock(prod, +cantidad, round2(unit + costoExtraUnit), "transfer", null, "← "+storeName(origen), { store:destino, tipo:"transfer-in", obs:obs||"" });
+    prod.ultimoCosto = round2(unit + costoExtraUnit);   // referencia: último costo landed en ese depósito
+  }
+  save();
+  return cantidad;
+}
+

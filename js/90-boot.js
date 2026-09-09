@@ -11,7 +11,7 @@
    en vez de dejar la app rota en silencio.
    ============================================================ */
 (function(){
-  var REQ = [["01-core.js","storeName"],["02-engine.js","fifoLayers"],["03-router.js","setView"],["10-view-dashboard.js","sagaDe"],["11-view-analisis.js","hbars"],["12-view-investments.js","viewInversiones"],["13-view-productos.js","viewProd"],["14-view-documentos.js","viewDocs"],["15-view-movimientos.js","viewMov"],["16-view-datos.js","viewDatos"],["20-modal-producto.js","openProd"],["21-modal-documento.js","openDoc"],["17-view-clientes.js","ventasDeCliente"],["30-pdf.js","pdfReady"],["31-export-pnl.js","exportPnL"],["32-importar-pdf.js","openImport"],["33-ficha-producto.js","openFicha"],["34-datos-io.js","exportJSON"],["22-ui-modales.js","buildModal"]];
+  var REQ = [["01-core.js","storeName"],["02-engine.js","fifoLayers"],["03-router.js","setView"],["10-view-dashboard.js","sagaDe"],["11-view-analisis.js","hbars"],["12-view-investments.js","viewInversiones"],["13-view-productos.js","viewProd"],["14-view-documentos.js","viewDocs"],["15-view-movimientos.js","viewMov"],["16-view-datos.js","viewDatos"],["20-modal-producto.js","openProd"],["21-modal-documento.js","openDoc"],["17-view-clientes.js","ventasDeCliente"],["18-view-conjunta.js","viewConjunta"],["30-pdf.js","pdfReady"],["31-export-pnl.js","exportPnL"],["32-importar-pdf.js","openImport"],["33-ficha-producto.js","openFicha"],["34-datos-io.js","exportJSON"],["22-ui-modales.js","buildModal"]];
   var faltan = REQ.filter(function(p){ return typeof window[p[1]] !== "function"; })
                   .map(function(p){ return p[0]; });
   if (faltan.length){
