@@ -413,8 +413,8 @@ function viewConjunta(){
   }).join("") || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px">No transfers yet.</td></tr>`;
 
   return `
-  <div class="phead"><div><h2>Joint buy &amp; transit</h2><p class="sub">Commission-in-kind intake and the USA → transit → AR flow.</p></div>
-    <div style="display:flex;gap:8px"><button class="btn" data-enviar-transito>Send to transit</button><button class="btn up" data-new-conj>＋ New joint buy</button></div>
+  <div class="head"><div class="title"><h2>Joint buy &amp; transit</h2><p>Commission-in-kind intake and the USA → transit → AR flow.</p></div>
+    <div class="actions"><button class="btn" data-enviar-transito>Send to transit</button><button class="btn up" data-new-conj>＋ New joint buy</button></div>
   </div>
   <div class="kpis" style="grid-template-columns:repeat(3,1fr);margin-bottom:18px">
     <div class="kpi"><div class="lbl">In transit to AR</div><div class="val">${qty(unidadesEnTransitoAR())}</div><div class="sub">units on the way</div></div>
