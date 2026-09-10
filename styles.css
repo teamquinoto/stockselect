@@ -750,3 +750,20 @@
   .main{padding:20px 16px 90px}
   .modal{max-width:none}
 }
+
+/* --- command center: houses (dashboard dual-pane) --- */
+.houses{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px}
+.house{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:var(--shadow)}
+.house .hh{display:flex;align-items:center;gap:9px;padding:13px 16px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.house .hh .flag{width:26px;height:22px;border-radius:6px;display:grid;place-items:center;font-family:var(--mono);font-size:11px;font-weight:700;color:#fff;background:var(--accent)}
+.house .hh .nm{font-weight:800;font-size:14.5px;letter-spacing:-.2px}
+.house .hh .cc{margin-left:auto;font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent-ink);background:var(--up-bg);padding:3px 9px;border-radius:6px}
+.house .hrow{display:flex;gap:14px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.house .hrow .stat{flex:1;min-width:0}
+.house .hrow .stat .l{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:600;margin-bottom:5px}
+.house .hrow .stat .v{font-family:var(--sans);font-size:19px;font-weight:800;letter-spacing:-.4px;font-variant-numeric:tabular-nums;line-height:1.1}
+.house .hlist{padding:8px 16px 14px}
+.house .hlist .li{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px dashed var(--line);font-size:12.5px}
+.house .hlist .li:last-child{border-bottom:0}
+.house .hlist .li .q{font-family:var(--mono);font-weight:700}
+@media (max-width:860px){ .houses{grid-template-columns:1fr} .kanban{grid-template-columns:1fr!important} .kanban .kcol{border-right:0;border-bottom:1px solid var(--line)} }
