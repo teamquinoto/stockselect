@@ -7,9 +7,30 @@
    Router de vistas
    ============================================================ */
 let view = "dash";
+/* Nav de dos niveles (ERP): cada vista pertenece a una sección de nivel 1. */
+const SECTION_OF = { dash:"op", ventas:"op", compras:"op", conjunta:"op", mov:"op",
+                     prod:"cat", clientes:"cat", analisis:"fin", inv:"fin", datos:"dat" };
+let activeSection = "op";
 document.querySelectorAll("#nav button, #navMob button").forEach(b=>{
   b.addEventListener("click", ()=> setView(b.dataset.view));
 });
+/* Nivel 1: al tocar una sección, mostramos sus vistas y saltamos a la primera visible. */
+function syncSectionUI(){
+  document.querySelectorAll('#navSections button[data-section]').forEach(b=>
+    b.classList.toggle("on", b.dataset.section===activeSection));
+  document.querySelectorAll('#nav button[data-view]').forEach(b=>
+    b.classList.toggle("hide-sec", b.dataset.section!==activeSection));
+}
+function wireSections(){
+  document.querySelectorAll('#navSections button[data-section]').forEach(b=> b.onclick=()=>{
+    activeSection = b.dataset.section; syncSectionUI();
+    const first = Array.prototype.slice.call(
+      document.querySelectorAll('#nav button[data-section="'+activeSection+'"]')
+    ).find(x=> x.style.display!=="none");
+    if(first) setView(first.dataset.view);
+  });
+}
+wireSections();
 // Búsqueda global: Cmd/Ctrl+K abre la command palette desde cualquier pantalla.
 document.addEventListener("keydown", (e)=>{
   if((e.metaKey||e.ctrlKey) && (e.key==="k"||e.key==="K")){ e.preventDefault(); if(typeof openCmdK==="function") openCmdK(); }
@@ -100,6 +121,8 @@ function render(){
   else if(view==="conjunta") m.innerHTML = isAdmin()? viewConjunta() : viewDash();
   else if(view==="datos") m.innerHTML = viewDatos();
   applyRoleUI();
+  activeSection = SECTION_OF[view] || activeSection;
+  syncSectionUI();
   wireStoreBar();
   wire();
   if(sameView){
