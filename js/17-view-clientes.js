@@ -117,8 +117,17 @@ function deleteCliente(id){
   save(); toast("Customer deleted","warn"); render();
 }
 
+/* ¿La compra en edición es de terceros? y ¿cuántas unidades de una línea son NUESTRAS
+   (las que entran a stock)? En propia (o venta) es la cantidad completa. */
+function draftEsTerceros(){ return !!(draft && draft.tipo==="compra" && draft.origen==="terceros"); }
+function lineaOurs(l){
+  const q = parseNum(l.cantidad)||0;
+  if(!draftEsTerceros()) return q;
+  return Math.min(Math.max(0, parseNum(l.aNuestro)||0), q);
+}
 function renderLines(){
   const isC = draft.tipo==="compra";
+  const terc = isC && draft.origen==="terceros";   // PUNTO 1: factura de terceros -> columna "Ours" por línea
   const docCcy = storeCcy(isC?draft.store:draft.storeVenta);
   const host = document.getElementById("lineHost");
   const rows = draft.lineas.map((l,i)=>{
@@ -129,6 +138,23 @@ function renderLines(){
           <input class="inp" placeholder="SKU" value="${esc(l.sku)}" data-k="sku" data-i="${i}" style="max-width:110px">
           <input class="inp" placeholder="New product name" value="${esc(l.nombre)}" data-k="nombre" data-i="${i}">
         </div>` : "";
+      if(terc){
+        const qtot = parseNum(l.cantidad)||0;
+        const ours = Math.min(Math.max(0, parseNum(l.aNuestro)||0), qtot);
+        const aTerc = Math.max(0, qtot - ours);
+        return `<tr>
+          <td style="min-width:200px">
+            <div class="ppick">${pickerBtn(l,i)}</div>
+            ${newFields}
+          </td>
+          <td style="width:74px"><input class="inp num" data-k="cantidad" data-i="${i}" value="${l.cantidad}" title="Total units of this SKU in the invoice"></td>
+          <td style="width:80px" class="col-ours"><input class="inp num" data-k="aNuestro" data-i="${i}" value="${ours}" title="Units you keep (enter stock). The rest travels to the owner."></td>
+          <td class="r num" style="width:66px;color:var(--muted)" data-terc="${i}" title="Units that keep travelling to the owner (tracked, not stock)">${qty(aTerc)}</td>
+          <td style="width:104px"><input class="inp num" data-k="precio" data-i="${i}" value="${l.precio}" title="Unit cost (reference for the third-party units; real cost for your units)"></td>
+          <td class="r num sub-cell" style="width:110px">${money(ours*l.precio, docCcy)}</td>
+          <td style="width:34px"><button class="btn ghost sm" data-del="${i}" title="Remove">✕</button></td>
+        </tr>`;
+      }
       return `<tr>
         <td style="min-width:220px">
           <div class="ppick">${pickerBtn(l,i)}</div>
@@ -164,10 +190,14 @@ function renderLines(){
 
   // colgroup: 1ª col (producto) sin ancho => absorbe el sobrante; el resto en px fijos.
   // Con table-layout:fixed esto define el ancho real de cada columna y evita el scroll horizontal.
-  const colgroup = isC
+  const colgroup = terc
+    ? `<colgroup><col><col style="width:82px"><col style="width:88px"><col style="width:70px"><col style="width:112px"><col style="width:118px"><col style="width:46px"></colgroup>`
+    : isC
     ? `<colgroup><col><col style="width:92px"><col style="width:134px"><col style="width:134px"><col style="width:46px"></colgroup>`
     : `<colgroup><col><col style="width:78px"><col style="width:96px"><col style="width:86px"><col style="width:94px"><col style="width:80px"><col style="width:112px"><col style="width:46px"></colgroup>`;
-  const thead = isC
+  const thead = terc
+    ? `<tr><th>Product</th><th class="r" title="Total in the invoice">Qty</th><th class="r" title="Units you keep (enter stock)">Ours</th><th class="r" title="Travels to the owner (tracked)">→ owner</th><th class="r">Unit cost</th><th class="r" title="Subtotal of your units">Subtotal</th><th></th></tr>`
+    : isC
     ? `<tr><th>Product</th><th class="r">Qty</th><th class="r">Unit cost</th><th class="r">Subtotal</th><th></th></tr>`
     : `<tr><th>Product</th><th class="r">Qty</th><th class="r">Cost</th><th class="r" title="Markup %">Mk&nbsp;%</th><th class="r" title="Unit price">Price</th><th class="r" title="Real margin on revenue">Mrg&nbsp;%</th><th class="r">Subtotal</th><th></th></tr>`;
   host.innerHTML = `<div class="table-scroll"><table class="line-tbl doc-tbl">
@@ -191,7 +221,14 @@ function renderLines(){
           if(v>rem){ v=Math.max(0,rem); inp.value=v; toast(`Available for this line: ${qty(rem)} (already committed on other lines)`,"warn"); }
         }
         l.cantidad=v;
+        if(terc){ refreshTercLinea(i, host); }   // re-clampa "Ours" y refresca "→ owner" al cambiar el total
         updateDispInfos();   // refresca "quedan" en todas las líneas del mismo producto
+      }
+      else if(k==="aNuestro"){
+        const q=parseNum(l.cantidad)||0;
+        let v=Math.min(Math.max(0,parseNum(inp.value)||0), q);
+        l.aNuestro=v;
+        refreshTercLinea(i, host);
       }
       else if(k==="precio"){
         l.precio=parseNum(inp.value);
@@ -236,8 +273,18 @@ function updateSubtotals(){
   host.querySelectorAll("tbody tr").forEach((tr,i)=>{
     const l=draft.lineas[i]; if(!l) return;
     const cell=tr.querySelector(".sub-cell");
-    if(cell) cell.textContent = money(l.cantidad*l.precio, docCcy);
+    if(cell) cell.textContent = money(lineaOurs(l)*l.precio, docCcy);
   });
+}
+/* Refresca, sin re-render (para no perder el foco del input), la celda "→ owner",
+   el valor clampeado de "Ours" y los totales de una línea de compra de terceros. */
+function refreshTercLinea(i, host){
+  host = host || document.getElementById("lineHost"); if(!host) return;
+  const l=draft.lineas[i]; if(!l) return;
+  const q=parseNum(l.cantidad)||0, ours=lineaOurs(l), aTerc=Math.max(0,q-ours);
+  const ownerCell=host.querySelector(`[data-terc="${i}"]`); if(ownerCell) ownerCell.textContent=qty(aTerc);
+  const inp=host.querySelector(`[data-k="aNuestro"][data-i="${i}"]`); if(inp && (parseNum(inp.value)||0)!==ours) inp.value=ours;
+  updateSubtotals(); refreshTotal();
 }
 function refreshTotal(){
   const docCcy = storeCcy(draft.tipo==="compra"?draft.store:draft.storeVenta);
@@ -269,6 +316,9 @@ function confirmDoc(){
   const isC = draft.tipo==="compra";
   // Punto 3: sólo el admin carga compras.
   if(isC && !puedeComprar()){ toast("Only admins can load purchases","warn"); return; }
+  // PUNTO 1 — factura de terceros: parte nuestra (a stock) + parte que sigue viaje al dueño
+  // (consignación, tracked). Va por su propio camino para no tocar el flujo de compra normal.
+  if(isC && draft.origen==="terceros"){ return confirmCompraTerceros(); }
   const store = draft.store || STORE_IDS[0];   // sólo relevante para COMPRA (sociedad que compra)
   const storeVenta = draft.storeVenta || STORE_IDS[0];   // depósito desde el que se vende
   // Sale: require a customer before generating the invoice
@@ -461,6 +511,106 @@ function confirmDoc(){
   const compraMsg = doc.status===INVOICE_STATUS.IN_TRANSIT ? `Purchase saved · ${uds} u in transit` : `Purchase saved · +${uds} u`;
   toast(editing ? `Document updated`
        : (isC?compraMsg : `Sale recorded · −${uds} u`), isC?"up":"down");
+  render();
+}
+
+/* ============================================================
+   PUNTO 1 — CONFIRMAR COMPRA DE TERCEROS
+   ------------------------------------------------------------
+   Una sola entrada de compra para todo. Si la factura es de terceros, cada
+   línea se parte en:
+     · Ours  -> unidades que nos quedamos: entran como una COMPRA normal (nacen
+                EN TRÁNSITO en la sociedad elegida; entran a stock al marcarlas
+                "recibidas", igual que cualquier compra).
+     · resto -> sigue viaje al DUEÑO: nace como CONSIGNACIÓN (tracked US→AR→
+                entregado). NO toca stock, ni FIFO, ni valuación, ni P&L.
+   Si ninguna unidad es nuestra, no se crea compra: sólo consignaciones.
+   ============================================================ */
+function confirmCompraTerceros(){
+  if(!puedeComprar()){ toast("Only admins can load purchases","warn"); return; }
+  if(draft.editingId){ toast("Editing a third-party invoice isn't supported yet — delete it and reload","warn"); return; }
+  const store = draft.store || STORE_IDS[0];
+
+  const resolved = [];
+  let hayTercero = false;
+  for(const l of draft.lineas){
+    const qtot = Math.max(0, parseNum(l.cantidad)||0);
+    if(qtot<=0) continue;
+    const ours  = Math.min(Math.max(0, parseNum(l.aNuestro)||0), qtot);
+    const aTerc = Math.max(0, qtot - ours);
+    if(ours<=0 && aTerc<=0) continue;
+    let p=null;
+    if(l.crear){
+      const dup = skuEnUso(l.sku, null);            // si el SKU ya existe, lo adoptamos (no duplicamos)
+      if(dup) p = dup;
+      else {
+        if(!(l.nombre||"").trim()){ toast("A new product is missing its name","warn"); return; }
+        p = nuevoProductoBase(l.sku, l.nombre, l.precioVentaSugerido||0);
+        db.productos.push(p);
+      }
+    } else {
+      p = prodById(l.productoId);
+      if(!p){ toast("A line has no product assigned","warn"); return; }
+    }
+    if(aTerc>0) hayTercero = true;
+    resolved.push({ prod:p, qtot, ours, aTerc, precio:Math.max(0, parseNum(l.precio)||0) });
+  }
+  if(!resolved.length){ toast("Add at least one valid line","warn"); return; }
+  if(hayTercero && !clienteById(draft.terceroId)){ toast("Pick the owner of the third-party units","warn"); return; }
+
+  const ownerId   = draft.terceroId || null;
+  const ownerName = ownerId ? ((clienteById(ownerId)||{}).nombre || "") : "";
+  const numero    = (draft.numero||"").trim();
+  const fechaISO  = normISO(draft.fecha) || new Date().toISOString().slice(0,10);
+
+  // --- Unidades NUESTRAS -> compra normal (nace en tránsito, no mueve stock aún) ---
+  const oursLines = resolved.filter(r=> r.ours>0);
+  let compraDoc = null;
+  if(oursLines.length){
+    const udsOurs = oursLines.reduce((a,r)=>a+r.ours,0);
+    const handPU  = udsOurs>0 ? (draft.handling||0)/udsOurs : 0;
+    const fletePU = udsOurs>0 ? (draft.flete||0)/udsOurs : 0;
+    const subtotal = round2(oursLines.reduce((a,r)=> a + round2(r.ours*r.precio), 0));
+    compraDoc = {
+      id: uid(), tipo:"compra", origen:"terceros",
+      terceroId: ownerId, terceroNombre: ownerName,
+      contraparte:(draft.contraparte||"").trim(),
+      fecha: fechaISO, numero,
+      store, handling:draft.handling||0, flete:draft.flete||0,
+      status: INVOICE_STATUS.IN_TRANSIT,
+      lineas: oursLines.map(r=>({
+        productoId:r.prod.id, sku:r.prod.sku, nombre:r.prod.nombre,
+        cantidad:r.ours, precio:r.precio, costo:r.precio,
+        neto:r.precio, handling:round2(handPU), flete:round2(fletePU),
+        costoTotal:round2(r.precio + handPU + fletePU)
+      })),
+      subtotal, total: round2(subtotal + (draft.handling||0) + (draft.flete||0))
+    };
+    db.compras.push(compraDoc);
+  }
+
+  // --- Unidades de TERCEROS -> consignaciones (tracked, nacen en tránsito) ---
+  let udsTerc = 0;
+  resolved.forEach(r=>{
+    if(r.aTerc>0 && ownerId){
+      udsTerc += r.aTerc;
+      crearConsignacion({
+        conjuntaId: compraDoc ? compraDoc.id : null,
+        envioRef: numero, fecha: fechaISO, terceroId: ownerId,
+        productoId:r.prod.id, sku:r.prod.sku, nombre:r.prod.nombre,
+        cantidad:r.aTerc, costoUnit:r.precio,
+        obs: "Third-party invoice" + (numero?(" "+numero):"")
+      });
+    }
+  });
+
+  draft.editingId=null;
+  save(); closeModal();
+  const udsOurs = oursLines.reduce((a,r)=>a+r.ours,0);
+  const parts = [];
+  if(udsOurs>0) parts.push(`+${qty(udsOurs)} u to stock (in transit)`);
+  if(udsTerc>0) parts.push(`${qty(udsTerc)} u tracked for ${ownerName||"owner"}`);
+  toast("Third-party invoice saved · " + (parts.join(" · ")||"nothing to load"), "up");
   render();
 }
 

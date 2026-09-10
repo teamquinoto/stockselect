@@ -600,27 +600,23 @@ function viewConjunta(){
     </tr>`;
   }).join("") || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px">No transfers yet.</td></tr>`;
 
+  const inTransit3 = activas.filter(cs=>cs.estado===CONSIGN_ESTADOS.TRANSITO).reduce((a,cs)=>a+cs.cantidad,0);
+  const inAR3      = activas.filter(cs=>cs.estado===CONSIGN_ESTADOS.AR).reduce((a,cs)=>a+cs.cantidad,0);
+  const hayHist    = (db.conjuntas||[]).length>0;   // sólo mostramos el histórico legacy si hay algo
+
   return `
-  <div class="head"><div class="title"><h2>Joint buy &amp; transit</h2><p>Commission-in-kind intake, the USA → transit → AR flow, and third-party tracking.</p></div>
-    <div class="actions"><button class="btn" data-enviar-transito>Send to transit</button><button class="btn up" data-new-conj>＋ New joint buy</button></div>
+  <div class="head"><div class="title"><h2>Third-party monitor</h2><p>Third-party merchandise in our hands and where it is (US transit → AR → delivered). It's only tracked — never our stock, valuation or P&amp;L. New third-party units come in from <b>Purchases</b> (invoice type = Third-party).</p></div>
+    <div class="actions"><button class="btn" data-enviar-transito title="Move our own stock USA → AR">Send our stock to transit</button></div>
   </div>
   <div class="kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:18px">
-    <div class="kpi"><div class="lbl">Ours in transit to AR</div><div class="val">${qty(unidadesEnTransitoAR())}</div><div class="sub">sellable once received</div></div>
-    <div class="kpi"><div class="lbl">Transit value (ours)</div><div class="val">${money(valorEnTransitoAR(), "USD")}</div><div class="sub">at entry cost</div></div>
-    <div class="kpi"><div class="lbl">Third-party tracked</div><div class="val">${qty(ajActivas)}</div><div class="sub">not ours · in flow</div></div>
-    <div class="kpi"><div class="lbl">Joint buys</div><div class="val">${qty((db.conjuntas||[]).length)}</div><div class="sub">loaded</div></div>
+    <div class="kpi"><div class="lbl">3rd-party · in transit</div><div class="val">${qty(inTransit3)}</div><div class="sub">US → AR</div></div>
+    <div class="kpi"><div class="lbl">3rd-party · in AR to deliver</div><div class="val">${qty(inAR3)}</div><div class="sub">in our hands, in AR</div></div>
+    <div class="kpi"><div class="lbl">3rd-party · total held</div><div class="val">${qty(ajActivas)}</div><div class="sub">not ours · in flow</div></div>
+    <div class="kpi"><div class="lbl">Ours · in transit to AR</div><div class="val">${qty(unidadesEnTransitoAR())}</div><div class="sub">${money(valorEnTransitoAR(),"USD")} · sellable once received</div></div>
   </div>
 
   <div class="panel" style="margin-bottom:18px">
-    <div class="phead"><h3>Ours · pipeline to AR</h3><span class="hint">receiving moves units into Swan (sellable)</span></div>
-    <div class="kanban" style="grid-template-columns:1fr 1fr">
-      <div class="kcol"><div class="kct">In transit → AR <span class="kn">${enTransito.length}</span></div>${kOurTransit}</div>
-      <div class="kcol"><div class="kct">Received in Swan <span class="kn">${recibidosSwan.length}</span></div>${kOurReceived}</div>
-    </div>
-  </div>
-
-  <div class="panel" style="margin-bottom:18px">
-    <div class="phead"><h3>Third-party · tracking board (not ours)</h3><p class="hint" style="margin:2px 0 0">US → AR → delivery. Never enters sellable stock.</p></div>
+    <div class="phead"><h3>Third-party we're holding — by location</h3><p class="hint" style="margin:2px 0 0">Receive in AR when it lands; mark delivered when it changes hands. Never enters sellable stock.</p></div>
     <div class="kanban">
       <div class="kcol"><div class="kct">In transit (US→AR) <span class="kn">${activas.filter(cs=>cs.estado===CONSIGN_ESTADOS.TRANSITO).length}</span></div>${kCsTransit}</div>
       <div class="kcol"><div class="kct">In AR · to deliver <span class="kn">${activas.filter(cs=>cs.estado===CONSIGN_ESTADOS.AR).length}</span></div>${kCsAR}</div>
@@ -629,25 +625,33 @@ function viewConjunta(){
   </div>
 
   <div class="panel" style="margin-bottom:18px">
-    <div class="phead"><h3>Third-party · by owner</h3></div>
+    <div class="phead"><h3>Third-party · by owner</h3><span class="hint">who owns it and where</span></div>
     <div class="table-scroll"><table>
       <thead><tr><th>Owner</th><th class="r">In transit</th><th class="r">In AR</th><th class="r">Delivered</th><th class="r">Total</th></tr></thead>
       <tbody>${resRows}</tbody></table></div>
   </div>
 
   <div class="panel" style="margin-bottom:18px">
+    <div class="phead"><h3>Ours · pipeline to AR</h3><span class="hint">our own stock moving USA → AR · receiving makes it sellable</span></div>
+    <div class="kanban" style="grid-template-columns:1fr 1fr">
+      <div class="kcol"><div class="kct">In transit → AR <span class="kn">${enTransito.length}</span></div>${kOurTransit}</div>
+      <div class="kcol"><div class="kct">Received <span class="kn">${recibidosSwan.length}</span></div>${kOurReceived}</div>
+    </div>
+  </div>
+
+  <div class="panel"${hayHist?' style="margin-bottom:18px"':''}>
     <div class="phead"><h3>Recent movements between deposits</h3></div>
     <div class="table-scroll"><table>
       <thead><tr><th>Date</th><th>Product</th><th>Deposit</th><th>Movement</th><th class="r">Units</th></tr></thead>
       <tbody>${movRows}</tbody></table></div>
   </div>
 
-  <div class="panel">
-    <div class="phead"><h3>History</h3></div>
+  ${hayHist?`<div class="panel">
+    <div class="phead"><h3>Legacy joint buys</h3><span class="hint">old flow · read-only history</span></div>
     <div class="table-scroll"><table>
       <thead><tr><th>Date</th><th>Client</th><th>Ref</th><th class="c">Order</th><th class="r">Swan</th><th class="r">→ AR</th><th class="r">3rd-party</th><th></th></tr></thead>
       <tbody>${histRows}</tbody></table></div>
-  </div>`;
+  </div>`:""}`;
 }
 
 /* ---- Recibir consignación (ajeno) en AR: en_transito → en_ar, con courier opcional ---- */

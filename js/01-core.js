@@ -759,7 +759,26 @@ function unidadesTotales(){ return productosVendibles().reduce((a,p)=> a + stock
    alerta: se despacha del pool común (FIFO cruza sociedades). */
 function bajoStock(p){ const s=stockTotalP(p); return p.puntoRepedido>0 && s>0 && s <= p.puntoRepedido; }
 function sinStock(p){ return stockTotalP(p) <= 0; }
-function necesitaPedido(p){ return !soloEnVault(p) && (sinStock(p) || bajoStock(p)); }
+/* Total de unidades en tránsito de compra (no recibidas) sumando TODAS las sociedades. */
+function transitoTotalP(p){ return STORE_IDS.reduce((a,s)=> a + transitoDe(p,s), 0); }
+/* ¿Es un producto que realmente stockeamos (candidato a "reponer")?
+   Un SKU recién creado que nunca fue nuestro stock —recién importado y todavía en
+   tránsito, o que sólo existe como mercadería de terceros/consignación— NO es un
+   "sin stock" a reponer: nunca tuvo stock. Sólo cuenta si: tiene punto de repedido,
+   hoy tiene stock, alguna vez fue costeado (ultimoCosto>0) o figura en una compra ya
+   recibida. Así se evita la falsa alerta "out of stock" al cargar una factura nueva. */
+function esProductoStockeable(p){
+  if(p.puntoRepedido>0) return true;
+  if(stockTotalP(p)>0) return true;
+  if((p.ultimoCosto||0)>0) return true;
+  return (db.compras||[]).some(c=> c.status===INVOICE_STATUS.RECEIVED && (c.lineas||[]).some(l=> l.productoId===p.id));
+}
+function necesitaPedido(p){
+  if(soloEnVault(p)) return false;
+  if(transitoTotalP(p) > 0) return false;    // ya viene en camino (compra en tránsito) -> no es "a reponer"
+  if(!esProductoStockeable(p)) return false; // nunca fue stock nuestro (recién creado / sólo tránsito / sólo terceros)
+  return sinStock(p) || bajoStock(p);
+}
 
 /* ============================================================
    Numeración CORRELATIVA de facturas de VENTA

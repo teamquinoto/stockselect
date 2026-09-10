@@ -27,6 +27,11 @@ function openDoc(tipo, pre){
     if(!draft.store || !STORE_IDS.includes(draft.store)){
       draft.store = (activeStore!=="all" && STORE_IDS.includes(activeStore)) ? activeStore : STORE_IDS[0];
     }
+    // Origen de la factura: "propia" (todo entra a stock) o "terceros" (parte nuestra + parte
+    // que sigue viaje al dueño). Viene pre-cargado desde el import; si no, default propia.
+    if(draft.origen!=="terceros" && draft.origen!=="propia") draft.origen = "propia";
+    if(draft.terceroId===undefined) draft.terceroId = "";
+    draft.lineas.forEach(l=>{ if(l.aNuestro==null) l.aNuestro = 0; });
   } else {
     // La venta ELIGE DEPÓSITO (Select/Swan): el stock de AR no se vende desde USA.
     // Default: el último depósito usado (si aún es válido), o el primero con stock.
@@ -46,7 +51,7 @@ function openDoc(tipo, pre){
   }
   renderDocModal();
 }
-function blankLine(){ return { key:uid(), productoId:"", sku:"", nombre:"", cantidad:1, precio:0, precioVentaSugerido:0, crear:false, margen:0, costoRef:0 }; }
+function blankLine(){ return { key:uid(), productoId:"", sku:"", nombre:"", cantidad:1, precio:0, precioVentaSugerido:0, crear:false, margen:0, costoRef:0, aNuestro:0 }; }
 
 function renderDocModal(){
   const isC = draft.tipo==="compra";
@@ -60,6 +65,28 @@ function renderDocModal(){
       ${cli?`<div class="hint" style="font-size:11px;margin-top:4px">${esc(clienteDireccion(cli)||cli.email||"")}</div>`:""}
     </div>`;
   const allowSt = allowedStores();
+  // PUNTO 1 — barra "Invoice type" (propia / terceros). En terceros aparece el dueño.
+  let origenBar = "";
+  if(isC){
+    const terc = draft.origen==="terceros";
+    const owner = draft.terceroId ? clienteById(draft.terceroId) : null;
+    origenBar = `
+      <div class="origen-bar">
+        <div class="field">
+          <label>Invoice type</label>
+          <div class="seg" id="d_origen">
+            <button type="button" data-origen="propia" class="${!terc?"on":""}">Own (all to stock)</button>
+            <button type="button" data-origen="terceros" class="${terc?"on":""}">Third-party</button>
+          </div>
+        </div>
+        ${terc?`<div class="field" style="min-width:240px;flex:1">
+          <label>Owner <span class="hint" style="font-weight:400">· whose the units in transit belong to</span></label>
+          <button type="button" class="ppick-btn${owner?"":" placeholder"}" id="d_owner" style="width:100%">
+            <span class="ppick-label">${owner?esc(clienteLinea(owner)):"— pick owner (client / local) —"}</span><span class="ppick-caret">▾</span>
+          </button></div>`:""}
+      </div>
+      ${terc?`<p class="hint" style="margin:-4px 0 12px;font-size:12px">Third-party invoice: set <b>Ours</b> on each line for the units you keep (they enter stock like a normal purchase). The rest keeps travelling to the owner and is only <b>tracked</b> — it never touches your stock, valuation or P&amp;L.</p>`:""}`;
+  }
   let topSel;
   if(isC){
     // COMPRA: elegir la sociedad que compra (procedencia del lote).
@@ -87,6 +114,7 @@ function renderDocModal(){
     topSel = depSel + vendSel;
   }
   const body = `
+    ${isC?origenBar:""}
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0;margin-bottom:10px">${topSel}</div>
     ${isC?`<div class="banner ok" style="justify-content:space-between;align-items:center">
       <span>Got the invoice as PDF? Import it and I'll fill the lines.</span>
@@ -135,6 +163,15 @@ function renderDocModal(){
     `<div class="totrow"><span style="color:var(--muted)">Document total</span><span class="num" id="docTotal">${money(docTotal(), storeCcy(draft.tipo==="compra"?draft.store:draft.storeVenta))}</span></div>`
   );
   renderLines();
+  const dOr=document.getElementById("d_origen");
+  if(dOr) dOr.querySelectorAll("[data-origen]").forEach(b=> b.onclick=()=>{
+    if(draft.origen===b.dataset.origen) return;
+    draft.origen=b.dataset.origen;
+    if(draft.origen==="propia") draft.terceroId="";                 // al volver a propia, se olvida el dueño
+    if(draft.origen==="terceros") draft.lineas.forEach(l=>{ if(l.aNuestro==null) l.aNuestro=0; });
+    renderDocModal();
+  });
+  const dOw=document.getElementById("d_owner"); if(dOw) dOw.onclick=(e)=> openDocOwnerPicker(e.currentTarget);
   const dst=document.getElementById("d_store"); if(dst) dst.onchange=e=>{ draft.store=e.target.value; };
   const dvend=document.getElementById("d_vend"); if(dvend) dvend.onchange=e=>{ draft.vendedorId=e.target.value; };
   const dsv=document.getElementById("d_storeventa"); if(dsv) dsv.onchange=e=>{ draft.storeVenta=e.target.value; renderDocModal(); };   // re-render: refresca disponibilidad y costos del depósito
@@ -164,9 +201,15 @@ function unidadesDoc(){ return draft.lineas.reduce((a,l)=> a + (parseNum(l.canti
    suma al total facturado por el proveedor si vino aparte, pero acá lo sumamos
    para reflejar el desembolso total. */
 function docTotal(){
-  const base = totalLineas(draft.lineas);
-  if(draft.tipo==="compra") return round2(base + (draft.handling||0) + (draft.flete||0));
-  return round2(base + (draft.envio && draft.envio.tipo==="monto" ? (draft.envio.monto||0) : 0));
+  if(draft.tipo==="compra"){
+    // En factura de terceros el "desembolso" nuestro es sólo por las unidades que nos
+    // quedamos (Ours). En propia, la cantidad completa de cada línea.
+    const base = draft.origen==="terceros"
+      ? round2((draft.lineas||[]).reduce((a,l)=> a + round2((lineaOurs(l))*(l.precio||0)), 0))
+      : totalLineas(draft.lineas);
+    return round2(base + (draft.handling||0) + (draft.flete||0));
+  }
+  return round2(totalLineas(draft.lineas) + (draft.envio && draft.envio.tipo==="monto" ? (draft.envio.monto||0) : 0));
 }
 function pintarProrateo(){
   const h=document.getElementById("d_proHint"); if(!h) return;
@@ -622,6 +665,39 @@ function openClientePicker(anchor){
   setTimeout(()=>{ document.addEventListener("mousedown", onPickerOutside, true); document.addEventListener("keydown", onPickerKey, true); }, 0);
   search.focus();
 }
+/* Picker del DUEÑO (tercero) de una compra de terceros. Igual estilo que el de
+   cliente, pero setea draft.terceroId. Permite crear un cliente nuevo al vuelo. */
+function openDocOwnerPicker(anchor){
+  closeProductPicker();
+  _pickerAnchor = anchor; anchor.classList.add("open");
+  const pop = document.createElement("div"); pop.className="ppick-pop";
+  pop.innerHTML = `<input class="inp ppick-search" placeholder="Search owner (client / local)…" autocomplete="off" spellcheck="false"><div class="ppick-list"></div>`;
+  document.body.appendChild(pop);
+  const search = pop.querySelector(".ppick-search"), listEl = pop.querySelector(".ppick-list");
+  const paint=(q)=>{
+    q=(q||"").trim().toLowerCase();
+    let lista = db.clientes.slice().sort((a,b)=>String(a.nombre||"").localeCompare(String(b.nombre||""),"en"));
+    if(q) lista = lista.filter(c=> ((c.nombre||"")+" "+(c.empresa||"")+" "+(c.email||"")).toLowerCase().includes(q));
+    let html = lista.map(c=>`<button type="button" class="ppick-item${c.id===draft.terceroId?" active":""}" data-pickowner="${c.id}">
+      <span class="pi-name">${esc(c.nombre)}${c.empresa?` · ${esc(c.empresa)}`:""}</span></button>`).join("");
+    if(!lista.length) html = `<div class="ppick-empty">No clients match.</div>`;
+    html += `<button type="button" class="ppick-item new" data-pickowner="__new">＋ Add new client…</button>`;
+    listEl.innerHTML = html;
+    listEl.querySelectorAll("[data-pickowner]").forEach(it=> it.onclick=()=>{
+      const v=it.dataset.pickowner; closeProductPicker();
+      if(v==="__new") openClienteForm(null, search.value.trim());   // al guardar setea draft.clienteId; lo copiamos abajo
+      else { draft.terceroId=v; renderDocModal(); }
+    });
+  };
+  paint("");
+  search.oninput=()=>paint(search.value);
+  positionPicker(pop, anchor);
+  window.addEventListener("scroll", repositionPicker, true);
+  window.addEventListener("resize", closeProductPicker);
+  setTimeout(()=>{ document.addEventListener("mousedown", onPickerOutside, true); document.addEventListener("keydown", onPickerKey, true); }, 0);
+  search.focus();
+}
+
 /* Alta de cliente. Reemplaza el modal de venta; al guardar, vuelve con
    renderDocModal() (el draft persiste en memoria). */
 function openClienteForm(id, nombrePre){
@@ -657,6 +733,7 @@ function saveCliente(id){
   if(id){ Object.assign(clienteById(id), campos); }
   else { const nc=Object.assign({id:uid()}, campos); db.clientes.push(nc); cid=nc.id; }
   draft.clienteId=cid;
+  if(draft.tipo==="compra") draft.terceroId=cid;   // en compras el cliente elegido es el DUEÑO (terceros)
   save(); toast("Customer saved"); renderDocModal();
 }
 
