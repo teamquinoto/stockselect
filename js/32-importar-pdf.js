@@ -351,9 +351,24 @@ function openImportOwnerPicker(anchor){
     if(q) lista=lista.filter(c=> ((c.nombre||"")+" "+(c.empresa||"")).toLowerCase().includes(q));
     let html=lista.map(c=>`<button type="button" class="ppick-item${c.id===importOwner?" active":""}" data-pio="${c.id}">
       <span class="pi-name">${esc(c.nombre)}${c.empresa?` · ${esc(c.empresa)}`:""}</span></button>`).join("");
-    if(!lista.length) html=`<div class="ppick-empty">No clients yet. Add them under Customers.</div>`;
+    if(!lista.length) html=`<div class="ppick-empty">No clients yet — create one below.</div>`;
+    // + Crear al vuelo: un owner (cliente/local) sólo necesita nombre. Se enriquece luego en Customers.
+    const q2=(search.value||"").trim();
+    html+=`<button type="button" class="ppick-item new" data-pio="__new">＋ Create ${q2?`“${esc(q2)}”`:"new owner…"}</button>`;
     listEl.innerHTML=html;
-    listEl.querySelectorAll("[data-pio]").forEach(it=> it.onclick=()=>{ importOwner=it.dataset.pio; closeProductPicker(); paintImportOrigen(); });
+    listEl.querySelectorAll("[data-pio]").forEach(it=> it.onclick=()=>{
+      const v=it.dataset.pio;
+      if(v==="__new"){
+        const nombre=(search.value||"").trim();
+        if(!nombre){ toast("Type the owner's name first","warn"); search.focus(); return; }
+        const nc={ id:uid(), nombre, contacto:"", empresa:"", telefono:"", email:"", direccion:"", ciudad:"", estado:"", zip:"", pais:"" };
+        db.clientes.push(nc); save();
+        importOwner=nc.id; closeProductPicker(); paintImportOrigen();
+        toast("Owner created · "+nombre);
+        return;
+      }
+      importOwner=v; closeProductPicker(); paintImportOrigen();
+    });
   };
   paint("");
   search.oninput=()=>paint(search.value);
