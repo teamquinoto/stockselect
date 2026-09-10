@@ -13,6 +13,7 @@ function viewProd(){
     <div class="title"><h2>Products</h2><p>Item master. Cost updates with each purchase (last landed cost); COGS is FIFO.</p></div>
     <div class="actions">
       ${total?`<button class="btn" id="btnExpPrecios">⤓ Price list</button>`:""}
+      ${(total&&isAdmin())?`<button class="btn" id="btnLanded" title="Landed cost buildup per product (US → BA → store)">⤓ Landed cost</button>`:""}
       ${(total&&isAdmin())?`<button class="btn" id="btnSel">${selMode?ICO.x+"Cancel":ICO.select+"Select"}</button>`:""}
       ${puedeEditarProductos()?`<button class="btn primary" data-newp>+ New product</button>`:""}
     </div>
@@ -92,6 +93,8 @@ function refreshSelbar(){
   if(all){ const vis=filtrarProds(prodFiltros); all.checked = vis.length>0 && vis.every(p=>selProd.has(p.id)); }
 }
 function wireProd(){
+  const lc=document.getElementById("btnLanded");
+  if(lc) lc.onclick=()=> generarLandedCostPDF();
   const exp=document.getElementById("btnExpPrecios");
   if(exp) exp.onclick=()=>{
     const base = (selMode && selProd.size) ? db.productos.filter(p=>selProd.has(p.id)) : filtrarProds(prodFiltros);

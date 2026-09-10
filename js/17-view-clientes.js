@@ -660,7 +660,7 @@ function receiveInvoice(doc){
   doc.lineas.forEach(l=>{
     const p = prodById(l.productoId); if(!p) return;
     const landed = (l.costoTotal!=null) ? l.costoTotal : round2((l.neto!=null?l.neto:l.precio||0) + (l.handling||0) + (l.flete||0));
-    fifoEntrada(p, store, l.cantidad, landed, refTxt, doc.id);
+    fifoEntrada(p, store, l.cantidad, landed, refTxt, doc.id, { us: landed, intl:0, arg:0 });
     moverStock(p, +l.cantidad, landed, "compra", doc.id, refTxt, { store });
     if(l.neto!=null){ p.costoNeto=l.neto; p.costoHandling=l.handling||0; p.costoFlete=l.flete||0; }
     p.ultimoCosto = landed;

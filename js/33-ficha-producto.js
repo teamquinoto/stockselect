@@ -60,6 +60,15 @@ function openFicha(id){
       <div class="kpi"><div class="lbl">Bought / Sold</div><div class="val" style="font-size:20px"><span class="delta up">${qty(totComp)}</span> / <span class="delta down">${qty(totVend)}</span></div><div class="sub">lifetime</div></div>
     </div>
 
+    ${(()=>{ const b=landedBuildup(p); return (b.intl>0||b.arg>0) ? `<div class="panel" style="box-shadow:none;margin-bottom:16px">
+      <div class="phead"><h3>Landed cost buildup</h3><span class="hint">per unit, on hand · US → Buenos Aires → store</span></div>
+      <div style="padding:10px 14px;display:flex;gap:18px;flex-wrap:wrap;align-items:baseline">
+        <span>US cost <b>${money(b.us)}</b></span><span style="color:var(--muted)">+</span>
+        <span>Intl freight <b>${money(b.intl)}</b></span><span style="color:var(--muted)">+</span>
+        <span>Arg freight <b>${money(b.arg)}</b></span><span style="color:var(--muted)">=</span>
+        <span>Landed <b style="color:var(--accent-ink)">${money(b.total)}</b></span>
+      </div></div>` : ""; })()}
+
     ${serie.length>2 ? `<div class="panel" style="box-shadow:none;margin-bottom:16px">
       <div class="phead"><h3>Stock evolution</h3><span class="hint">${movs.length} movements</span></div>
       <div style="padding:12px 14px 6px">${sparkline(serie)}</div>

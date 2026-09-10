@@ -421,6 +421,22 @@ function saleVendedorNombre(d){
   return "—";
 }
 function stockTotalP(p){ return STORE_IDS.reduce((a,s)=> a + stockDe(p,s), 0); }   // sellable only, excludes __inv
+/* Desglose del costo landed por unidad (US → +Intl → +Arg = Total), promediado
+   sobre el stock EN MANO (depósitos vendibles + tránsito). Capas viejas sin
+   desglose se cuentan como 100% "US" (fallback), así nunca rompe. */
+function landedBuildup(p){
+  const stores = STORE_IDS.concat([TRANSITO_STORE]);
+  let u=0, us=0, intl=0, arg=0;
+  stores.forEach(s=> (p.lotes && Array.isArray(p.lotes[s]) ? p.lotes[s] : []).forEach(L=>{
+    const q=L.cantidad||0; if(q<=0) return;
+    const d = L.d || { us:(L.costoUnit||0), intl:0, arg:0 };
+    u+=q; us+=q*(d.us||0); intl+=q*(d.intl||0); arg+=q*(d.arg||0);
+  }));
+  const per = u>0 ? { us:round2(us/u), intl:round2(intl/u), arg:round2(arg/u) } : { us:0, intl:0, arg:0 };
+  per.total = round2(per.us + per.intl + per.arg);
+  per.units = u;
+  return per;
+}
 function recalcStockMirror(p){ p.stock = stockTotalP(p); }
 
 /* ---- Investment vault helpers (quantity-based, points 2 & 4) ---- */

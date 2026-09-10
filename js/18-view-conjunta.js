@@ -404,7 +404,7 @@ function openRecibirTransito(prodId){
       const c = q>0 ? round2(cTot/q) : 0;                                           // prorrateo por unidad
       const obs=(document.getElementById("rt_obs").value||"").trim();
       if(q<=0){ toast("Enter a quantity","warn"); return; }
-      const done = transferStock(p, TRANSITO_STORE, destino, q, c, obs);
+      const done = transferStock(p, TRANSITO_STORE, destino, q, c, obs, "arg");
       if(done>0){ closeModal(); toast(`Delivered ${qty(done)} u into ${storeName(destino)}${cTot>0?` · +${money(c,"USD")}/u landed`:""}`, "up"); render(); }
     }}
   ]);
@@ -438,7 +438,7 @@ function openEnviarTransito(){
       if(q<=0){ toast("Enter a quantity (deposit may be empty)","warn"); return; }
       const costTot=Math.max(0,parseNum(document.getElementById("et_cost").value)||0);   // intl freight + wire fees (total)
       const costPU = q>0 ? round2(costTot/q) : 0;                                          // prorrateo por unidad
-      const done = transferStock(p, st, TRANSITO_STORE, q, costPU, obs);
+      const done = transferStock(p, st, TRANSITO_STORE, q, costPU, obs, "intl");
       if(done>0){ closeModal(); toast(`Sent ${qty(done)} u to transit${costTot>0?` · +${money(costPU,"USD")}/u landed`:""}`, "up"); render(); }
     }}
   ]);

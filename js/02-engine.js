@@ -16,8 +16,10 @@ function fifoLayers(prod, store){
   return prod.lotes[store];
 }
 /* Add a purchase layer (landed unit cost already includes prorated handling+freight). */
-function fifoEntrada(prod, store, cantidad, costoUnit, ref, refId){
-  fifoLayers(prod, store).push({ id:uid(), fecha:new Date().toISOString(), cantidad:+cantidad, costoUnit:round2(costoUnit), ref:ref||"", refId:refId||null });
+function fifoEntrada(prod, store, cantidad, costoUnit, ref, refId, desg){
+  const L = { id:uid(), fecha:new Date().toISOString(), cantidad:+cantidad, costoUnit:round2(costoUnit), ref:ref||"", refId:refId||null };
+  if(desg) L.d = { us:round2(desg.us||0), intl:round2(desg.intl||0), arg:round2(desg.arg||0) };   // desglose landed por puerta
+  fifoLayers(prod, store).push(L);
 }
 /* Remove (or shrink) the layer(s) a given purchase created, when reverting it. */
 function fifoQuitarCompra(prod, store, refId){
@@ -45,7 +47,7 @@ function fifoConsumir(prod, store, cantidad){
     const L = layers[0];
     const take = Math.min(L.cantidad, need);
     cogs += take * L.costoUnit;
-    consumed.push({ costoUnit:L.costoUnit, cantidad:take });
+    consumed.push({ costoUnit:L.costoUnit, cantidad:take, d:L.d });
     L.cantidad = round4(L.cantidad - take);
     need -= take;
     if(L.cantidad<=0.00001) layers.shift();
@@ -222,24 +224,33 @@ function returnFromInvestment(prod, store, q, obs){
        Su contenido se ve en las columnas/fichas de Transit y Vault.
    Devuelve las unidades efectivamente movidas.
    ============================================================ */
-function transferStock(prod, origen, destino, cantidad, costoExtraUnit, obs){
+function transferStock(prod, origen, destino, cantidad, costoExtraUnit, obs, legLabel){
   cantidad = Math.min(Math.max(0, +cantidad||0), stockDe(prod, origen));
   if(cantidad<=0 || origen===destino) return 0;
   costoExtraUnit = +costoExtraUnit || 0;
+  const legTxt = costoExtraUnit>0 ? ` · +${round2(costoExtraUnit)}/u leg cost` : "";   // costo capitalizado del tramo, visible en el kardex
   // consumo FIFO del origen (mutando las capas y sabiendo el costo exacto)
   const { unit, consumed } = fifoConsumir(prod, origen, cantidad);
   // --- salida del origen ---
   if(isBucket(origen)){
     prod.stockPorTienda[origen] = round4((prod.stockPorTienda[origen]||0) - cantidad);
   } else {
-    moverStock(prod, -cantidad, unit, "transfer", null, "→ "+storeName(destino), { store:origen, tipo:"transfer-out", obs:obs||"" });
+    moverStock(prod, -cantidad, unit, "transfer", null, "→ "+storeName(destino)+legTxt, { store:origen, tipo:"transfer-out", obs:obs||"" });
   }
-  // --- entrada al destino: cada capa entra a su costo + el extra del tramo ---
-  consumed.forEach(c=>{ if(!c.synthetic) fifoLayers(prod, destino).push({ id:uid(), fecha:new Date().toISOString(), cantidad:c.cantidad, costoUnit:round2(c.costoUnit + costoExtraUnit), ref:"from "+storeName(origen) }); });
+  // --- entrada al destino: cada capa entra a su costo + el extra del tramo, arrastrando el desglose ---
+  consumed.forEach(c=>{
+    if(c.synthetic) return;
+    const base = c.d || { us:c.costoUnit, intl:0, arg:0 };   // legacy sin desglose: todo es "us"
+    const nd = { us:base.us||0, intl:base.intl||0, arg:base.arg||0 };
+    if(legLabel==="intl")      nd.intl = round2(nd.intl + costoExtraUnit);
+    else if(legLabel==="arg")  nd.arg  = round2(nd.arg  + costoExtraUnit);
+    else                       nd.us   = round2(nd.us   + costoExtraUnit);
+    fifoLayers(prod, destino).push({ id:uid(), fecha:new Date().toISOString(), cantidad:c.cantidad, costoUnit:round2(c.costoUnit + costoExtraUnit), d:nd, ref:"from "+storeName(origen)+legTxt });
+  });
   if(isBucket(destino)){
     prod.stockPorTienda[destino] = round4((prod.stockPorTienda[destino]||0) + cantidad);
   } else {
-    moverStock(prod, +cantidad, round2(unit + costoExtraUnit), "transfer", null, "← "+storeName(origen), { store:destino, tipo:"transfer-in", obs:obs||"" });
+    moverStock(prod, +cantidad, round2(unit + costoExtraUnit), "transfer", null, "← "+storeName(origen)+legTxt, { store:destino, tipo:"transfer-in", obs:obs||"" });
     prod.ultimoCosto = round2(unit + costoExtraUnit);   // referencia: último costo landed en ese depósito
   }
   save();

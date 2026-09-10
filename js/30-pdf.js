@@ -272,3 +272,91 @@ function exportListaPrecios(prods){
   toast(`Price list exported · ${clean.length} products${dropped>0?` (${dropped} blocked/investment excluded)`:""}`);
 }
 
+
+/* ============================================================
+   LANDED COST BUILDUP (PDF) — desglose por producto, puerta por puerta
+   US cost (compra) → +Intl (Miami→BA) → +Arg (BA→tienda) = Landed.
+   Promedio ponderado sobre el stock EN MANO (vendible + tránsito).
+   Sólo referencia de costos (no es factura). Montos en USD.
+   ============================================================ */
+function generarLandedCostPDF(){
+  if(!pdfReady()){ toast("Couldn't load the PDF generator (try once with internet)","warn"); return; }
+  const prods = db.productos
+    .map(p=>({ p, b:landedBuildup(p) }))
+    .filter(x=> x.b.units>0)
+    .sort((a,b)=> String(a.p.nombre||"").localeCompare(String(b.p.nombre||""),"en"));
+  if(!prods.length){ toast("No stock on hand to report","warn"); return; }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:"pt", format:"letter" });
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 40;
+  const em = db.config.emisor||{};
+  const INK=[26,26,26], MUT=[120,120,120], LINE=[228,225,220], ACC=[124,58,237], ZEBRA=[248,247,245];
+  const setInk=c=>doc.setTextColor(c[0],c[1],c[2]);
+
+  /* Header band */
+  doc.setFillColor(ACC[0],ACC[1],ACC[2]); doc.rect(0,0,W,92,"F");
+  doc.setTextColor(255,255,255);
+  doc.setFont("helvetica","bold"); doc.setFontSize(18);
+  doc.text(em.nombre || "Stock Select", M, 40);
+  doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
+  doc.text("Landed cost buildup · US → Buenos Aires → store (per unit, USD)", M, 58);
+  doc.setFont("helvetica","bold"); doc.setFontSize(15);
+  doc.text("LANDED COST", W-M, 38, {align:"right"});
+  doc.setFont("helvetica","normal"); doc.setFontSize(9);
+  doc.text(fmtDate(new Date().toISOString()), W-M, 56, {align:"right"});
+
+  let y=118;
+  setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
+  doc.text("Weighted average over stock on hand (sellable + in transit). Reference cost only — not a commercial document.", M, y);
+  y+=20;
+
+  /* Columnas */
+  const cItem=M;
+  const cUn  = W-M-330, cUs=W-M-250, cIn=W-M-180, cAr=W-M-110, cTot=W-M;
+  const drawHead=(yy)=>{
+    doc.setFillColor(ACC[0],ACC[1],ACC[2]); doc.rect(M, yy-13, W-2*M, 22, "F");
+    doc.setTextColor(255,255,255); doc.setFont("helvetica","bold"); doc.setFontSize(8.5);
+    doc.text("PRODUCT", cItem+6, yy+2);
+    doc.text("UNITS", cUn, yy+2, {align:"right"});
+    doc.text("US COST", cUs, yy+2, {align:"right"});
+    doc.text("+ INTL", cIn, yy+2, {align:"right"});
+    doc.text("+ ARG", cAr, yy+2, {align:"right"});
+    doc.text("LANDED", cTot, yy+2, {align:"right"});
+    return yy+22;
+  };
+  y = drawHead(y);
+
+  let zebra=false, tU=0, sUs=0, sIn=0, sAr=0, sTot=0;
+  prods.forEach(({p,b})=>{
+    if(y > H-70){ doc.addPage(); y=60; y=drawHead(y); zebra=false; }
+    if(zebra){ doc.setFillColor(ZEBRA[0],ZEBRA[1],ZEBRA[2]); doc.rect(M, y-11, W-2*M, 18, "F"); }
+    zebra=!zebra;
+    const nom = (p.sku?`[${p.sku}] `:"")+(p.nombre||"");
+    const nomTrim = nom.length>52 ? nom.slice(0,51)+"…" : nom;
+    setInk(INK); doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
+    doc.text(nomTrim, cItem+6, y+1);
+    doc.text(String(b.units), cUn, y+1, {align:"right"});
+    setInk(MUT);
+    doc.text(pdfMoney(b.us,"USD"), cUs, y+1, {align:"right"});
+    doc.text(b.intl>0?pdfMoney(b.intl,"USD"):"—", cIn, y+1, {align:"right"});
+    doc.text(b.arg>0?pdfMoney(b.arg,"USD"):"—", cAr, y+1, {align:"right"});
+    setInk(INK); doc.setFont("helvetica","bold");
+    doc.text(pdfMoney(b.total,"USD"), cTot, y+1, {align:"right"});
+    y+=18;
+    tU+=b.units; sUs+=b.us*b.units; sIn+=b.intl*b.units; sAr+=b.arg*b.units; sTot+=b.total*b.units;
+  });
+
+  /* Totales (valor total del inventario por puerta) */
+  y+=6; doc.setDrawColor(ACC[0],ACC[1],ACC[2]); doc.setLineWidth(1.1); doc.line(M, y-8, W-M, y-8); doc.setLineWidth(1);
+  setInk(INK); doc.setFont("helvetica","bold"); doc.setFontSize(9);
+  doc.text("On-hand value by gate", cItem+6, y+6);
+  doc.text(String(round2(tU)), cUn, y+6, {align:"right"});
+  doc.text(pdfMoney(round2(sUs),"USD"), cUs, y+6, {align:"right"});
+  doc.text(pdfMoney(round2(sIn),"USD"), cIn, y+6, {align:"right"});
+  doc.text(pdfMoney(round2(sAr),"USD"), cAr, y+6, {align:"right"});
+  doc.text(pdfMoney(round2(sTot),"USD"), cTot, y+6, {align:"right"});
+
+  doc.save("landed-cost-"+new Date().toISOString().slice(0,10)+".pdf");
+  toast("Landed cost PDF downloaded");
+}
