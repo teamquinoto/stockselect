@@ -1,7 +1,7 @@
 {
   "name": "Stock Select",
   "short_name": "Select",
-  "description": "Consola de stock cross-border: Select (USA) y Swan (AR), tránsito y multi-moneda. Importá facturas en PDF y seguí cada movimiento, sincronizado entre dispositivos.",
+  "description": "Cross-border stock console: Select (USA) and Swan (AR), transit and multi-currency. Import PDF invoices and track every movement, synced across devices.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
