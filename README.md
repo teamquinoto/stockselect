@@ -18,12 +18,20 @@ Dos **buckets** (NO vendibles, no cuentan como stock ni inflan valuación):
 - **`__transito`** — mercadería en viaje US → AR. Nace del lado US (USD).
 - **`__inv`** — bóveda de inversión: stock apartado con trazabilidad de costo, fuera del pool de venta.
 
-### Flujo físico y costos
-`Invoice → Swan/Miami → (tránsito) → Select/AR`
+### Flujo físico y acumulación de costos (las "puertas")
+`Invoice → Swan/Miami → Tránsito/Buenos Aires → Entregado (Select/AR)`
+
+El **operador** (la empresa dueña de la app) **paga la importación y compra en USA**; en Argentina **le cobra a SUS clientes** (las tiendas). Por eso el costo del producto **se va engrosando en cada tramo** y se **capitaliza al costo landed**:
+
+| Puerta | Tramo | Costo que se suma |
+|---|---|---|
+| 1 | Invoice → Swan (Miami) | Product Cost + **US Freight** (neto + handling + flete de la compra) |
+| 2 | Swan → Tránsito (Buenos Aires) | **Intl Freight + Wire Fees** (en *Send to transit*, total prorrateado) |
+| 3 | Tránsito → **Entregado** (Select/AR) | **Arg Freight + local costs** (en *Deliver in AR*, total prorrateado) |
 
 - La **compra nace "in transit"** y **recién impacta stock/FIFO al marcarla "received"**. Por eso se puede vender desde Swan y desde Select, pero **no** mientras está en el bucket de tránsito.
-- El **costo landed** de la compra prorratea **handling + flete** sobre las unidades (primer `$` del diagrama: Product Cost + US Freight).
-- `transferStock(origen, destino, cantidad, costoExtraUnit)` mueve entre depósitos/buckets arrastrando el **costo FIFO exacto** de cada capa y permite **sumar un costo por tramo** (`costoExtraUnit`). **Hoy el default es 0**: los tramos International Freight + Wire Fees y Arg Freight + Arg Costs **los paga el cliente** (ver *Extra charges* abajo), no se capitalizan al COGS.
+- `transferStock(origen, destino, cantidad, costoExtraUnit)` arrastra el **costo FIFO exacto** de cada capa y **suma el costo del tramo por unidad**, capitalizándolo (la misma carta "vale más" al avanzar). El operador carga el total del tramo y la app lo prorratea.
+- Además del costo capitalizado, en la **venta** se pueden agregar **cargos on-top** que el cliente paga aparte (ver más abajo). Son cosas distintas: el costo engrosa el COGS; el cargo on-top es lo que el operador refactura.
 
 ---
 
@@ -50,7 +58,7 @@ Una compra puede ser **`propia`** (todo entra a stock) o **`terceros`**. En terc
 ## Ventas: shipping, extra charges y margen
 
 - **Customer shipping**: free o monto fijo.
-- **Extra charges (on-top, facturados al cliente)**: lista simple concepto + monto que **suma al total que paga el cliente** (flete intl, wire fees, nacionalización, markup de servicio…). Aparece en el detalle y en el **PDF** de la factura. Como es plata que el cliente paga, **suma al margen neto**. Pensado para el flujo en que el cliente **anticipa** todo y **cobra en AR**.
+- **Extra charges (on-top, facturados al cliente)**: lista simple concepto + monto que **suma al total que paga el cliente** (flete intl, wire fees, nacionalización, markup de servicio…). Aparece en el detalle y en el **PDF** de la factura. Como es plata que el cliente paga, **suma al margen neto**. Encaja con el flujo real: el **operador anticipa** toda la plata (compra + importación) y **cobra en Argentina** a las tiendas.
 - **Selling costs** (admin): envío/ShipStation, horas-hombre, comisión manual, otro. **Restan** del margen (no se capitalizan al stock).
 - **Comisión del vendedor**: `% sobre el margen`, congelada por venta.
 - **Margen neto** = margen FIFO − comisión − selling costs **+ extra charges**.
