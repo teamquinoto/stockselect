@@ -12,7 +12,7 @@
    ACTUALIZACIÓN CONTROLADA: no auto-activamos con skipWaiting; cuando hay
    versión nueva el SW queda "waiting" y la app muestra el botón "Update".
    ============================================================ */
-const CACHE = "mayor-stock-v53";   // v53: multi-moneda (USD/ARS) + TC + moneda de reporte
+const CACHE = "mayor-stock-v54";   // v54: venta con teclado, undo 5s, Cmd+K, foco/scroll global
 
 const ASSETS = [
   "./",

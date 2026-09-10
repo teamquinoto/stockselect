@@ -267,6 +267,7 @@
   .ppick-item{display:flex;align-items:center;gap:7px;width:100%;text-align:left;background:none;border:0;
     border-radius:8px;padding:8px 10px;font-size:13.5px;color:var(--text);line-height:1.35}
   .ppick-item:hover,.ppick-item.active{background:var(--surface-2)}
+  .ppick-item.kbd-active{background:var(--accent-weak,var(--surface-2));box-shadow:inset 2px 0 0 var(--accent)}
   .ppick-item .pi-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .ppick-item .pi-disp{font-family:var(--mono);font-size:11.5px;color:var(--muted);flex-shrink:0}
   .ppick-item.new{color:var(--accent);font-weight:600;border-top:1px solid var(--line);border-radius:0;margin-top:2px}
@@ -634,3 +635,16 @@
   .cdate-ico{position:absolute;right:9px;top:50%;transform:translateY(-50%);pointer-events:none;
     color:var(--muted);display:flex}
   .cdate-ico svg{width:15px;height:15px}
+
+/* ---- Command palette (Cmd/Ctrl+K) ---- */
+.cmdk-ov{position:fixed;inset:0;z-index:210;background:rgba(20,26,34,.5);display:flex;align-items:flex-start;justify-content:center;padding:12vh 16px 16px}
+.cmdk-box{width:100%;max-width:560px;background:var(--surface);border:1px solid var(--line-strong);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.35);overflow:hidden;display:flex;flex-direction:column;max-height:70vh}
+.cmdk-input{width:100%;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--text);padding:16px 18px;font-size:16px;outline:none}
+.cmdk-list{overflow:auto;padding:6px}
+.cmdk-empty{padding:20px 18px;color:var(--muted);font-size:13.5px;text-align:center}
+.cmdk-item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;border-radius:9px;padding:9px 12px;cursor:pointer;color:var(--text);font:inherit}
+.cmdk-item.on{background:var(--surface-2)}
+.cmdk-item .cmdk-kind{flex-shrink:0;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:2px 7px;min-width:64px;text-align:center}
+.cmdk-item.on .cmdk-kind{background:var(--surface)}
+.cmdk-item .cmdk-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cmdk-item .cmdk-sub{flex-shrink:0;color:var(--muted);font-size:12px;font-family:var(--mono)}
