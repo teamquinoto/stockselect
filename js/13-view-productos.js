@@ -122,10 +122,14 @@ function deleteSelProd(){
   let msg=`Delete ${prods.length} product(s) from the master?`;
   if(conStock) msg+=`\n\n⚠ ${conStock} have non-zero stock: deleting them removes those units from the valuation.`;
   if(conMovs) msg+=`\n\n⚠ ${conMovs} have kardex movements. History stays (name and SKU), but you won't be able to open their card.`;
-  msg+="\n\nThis can't be undone.";
+  msg+="\n\nYou'll have 5 seconds to undo.";
   if(!confirm(msg)) return;
-  db.productos = db.productos.filter(p=>!selProd.has(p.id));
-  selProd.clear(); selMode=false;
-  save(); toast(`${prods.length} product(s) deleted`, "warn"); render();
+  const n = prods.length;
+  withUndo(`${n} product(s) deleted`, ()=>{
+    db.productos = db.productos.filter(p=>!selProd.has(p.id));
+    selProd.clear(); selMode=false;
+    save();
+  });
+  render();
 }
 

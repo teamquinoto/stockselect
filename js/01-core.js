@@ -664,6 +664,49 @@ function toast(msg, kind="up"){
   setTimeout(()=> el.remove(), 3000);
 }
 
+/* ============================================================
+   UNDO (deshacer de 5 segundos)
+   ------------------------------------------------------------
+   withUndo(label, fn): saca una foto de la base ANTES de la acción, ejecuta la
+   acción y muestra un toast con botón "Undo" por 5s. Si se toca, restaura la foto.
+   Restaura MUTANDO db in-place (no reasigna) para no romper referencias globales.
+   ============================================================ */
+let _undoSnap = null;
+function withUndo(label, fn){
+  try { _undoSnap = JSON.parse(JSON.stringify(db)); } catch(_){ _undoSnap = null; }
+  fn();
+  if(_undoSnap) toastUndo(label);
+}
+function doUndo(){
+  if(!_undoSnap) return;
+  const s = _undoSnap; _undoSnap = null;
+  Object.keys(db).forEach(k=>{ if(!(k in s)) delete db[k]; });   // borra claves nuevas
+  Object.assign(db, s);                                          // repone el estado anterior
+  save();
+  if(typeof render==="function") render();
+  toast("Restored");
+}
+function toastUndo(label){
+  const cont = document.getElementById("toasts"); if(!cont){ toast(label,"warn"); return; }
+  const el = document.createElement("div");
+  el.className = "toast warn";
+  el.style.display = "flex"; el.style.alignItems = "center"; el.style.gap = "10px";
+  const span = document.createElement("span"); span.textContent = label;
+  const btn = document.createElement("button");
+  btn.textContent = "Undo";
+  btn.style.cssText = "background:transparent;border:1px solid currentColor;border-radius:6px;padding:2px 9px;color:inherit;cursor:pointer;font:inherit;font-weight:600";
+  el.appendChild(span); el.appendChild(btn);
+  cont.appendChild(el);
+  const kill = ()=>{ el.style.opacity="0"; el.style.transform="translateY(8px)"; setTimeout(()=>el.remove(),400); };
+  const t = setTimeout(()=>{ _undoSnap=null; kill(); }, 5000);
+  btn.onclick = ()=>{ clearTimeout(t); doUndo(); kill(); };
+}
+
+/* Recordar el contexto de la última venta (depósito + vendedor) para pre-cargarlo. */
+function rememberVenta(store, vend){ try{ localStorage.setItem("ss_lastVentaStore", store||""); localStorage.setItem("ss_lastVentaVend", vend||""); }catch(_){} }
+function lastVentaStore(){ try{ return localStorage.getItem("ss_lastVentaStore")||""; }catch(_){ return ""; } }
+function lastVentaVend(){ try{ return localStorage.getItem("ss_lastVentaVend")||""; }catch(_){ return ""; } }
+
 /* ---------- Helpers de stock ---------- */
 function prodById(id){ return db.productos.find(p=>p.id===id); }
 function clienteById(id){ return db.clientes.find(c=>c.id===id); }

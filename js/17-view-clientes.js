@@ -210,6 +210,19 @@ function renderLines(){
       }
       if(k==="cantidad"||k==="precio"||k==="margen"){ updateSubtotals(); refreshTotal(); if(typeof refreshNet==="function") refreshNet(); }
     };
+    if(!isC && k==="cantidad"){
+      // Flujo continuo tipo caja: Enter en Cantidad agrega una línea nueva y abre su picker.
+      inp.addEventListener("keydown",(e)=>{
+        if(e.key==="Enter"){
+          e.preventDefault();
+          draft.lineas.push(blankLine());
+          renderLines(); refreshTotal();
+          const newIdx = draft.lineas.length-1;
+          const pk = document.querySelector(`#lineHost [data-ppick="${newIdx}"]`);
+          if(pk) openProductPicker(newIdx, pk);
+        }
+      });
+    }
   });
   host.querySelectorAll("[data-del]").forEach(b=> b.onclick=()=>{
     draft.lineas.splice(+b.dataset.del,1);
@@ -441,6 +454,7 @@ function confirmDoc(){
   });
 
   (isC?db.compras:db.ventas).push(doc);
+  if(!isC) rememberVenta(storeVenta, doc.vendedorId||"");   // pre-cargar contexto en la próxima venta
   draft.editingId=null;
   save(); closeModal();
   const uds=qty(doc.lineas.reduce((a,l)=>a+l.cantidad,0));
@@ -539,9 +553,9 @@ function deleteDoc(tipo,id){
     ? `Delete this purchase?\n\n${qty(items)} u are REMOVED from ${storeName(d.store)} stock and its FIFO layer is dropped.`
     : `Delete this sale?\n\n${qty(items)} u are RETURNED to stock (back into their FIFO layers).`;
   if(!confirm(msg)) return;
-  revertDoc(d); save();
+  withUndo("Document deleted", ()=>{ revertDoc(d); save(); });
   if(document.getElementById("scrim")) closeModal();
-  toast("Document deleted","warn"); render();
+  render();
 }
 function editDoc(tipo,id){
   const list = tipo==="compra"?db.compras:db.ventas;

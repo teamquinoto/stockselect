@@ -305,3 +305,66 @@ function closeModal(){
   } else { runFieldEnhancers(); startObserver(); }
 })();
 
+
+/* ============================================================
+   COMMAND PALETTE (Cmd/Ctrl+K) — búsqueda global
+   ------------------------------------------------------------
+   Busca productos, clientes y documentos (ventas/compras) desde cualquier
+   pantalla y salta directo: producto -> ficha, cliente -> vista Customers,
+   documento -> ver factura. Navegable 100% con teclado (↑↓ Enter Esc).
+   ============================================================ */
+let _cmdkOpen = false;
+function openCmdK(){
+  if(_cmdkOpen) return;
+  _cmdkOpen = true;
+  const ov = document.createElement("div");
+  ov.id = "cmdk-ov"; ov.className = "cmdk-ov";
+  ov.innerHTML = `<div class="cmdk-box">
+      <input class="cmdk-input" placeholder="Search products, customers, invoices…" autocomplete="off" spellcheck="false">
+      <div class="cmdk-list"></div>
+    </div>`;
+  document.body.appendChild(ov);
+  const input = ov.querySelector(".cmdk-input");
+  const list  = ov.querySelector(".cmdk-list");
+  let results = [], active = 0;
+
+  const close = ()=>{ _cmdkOpen=false; document.removeEventListener("keydown", onKey, true); ov.remove(); };
+  const hl = ()=>{ list.querySelectorAll(".cmdk-item").forEach((it,idx)=> it.classList.toggle("on", idx===active)); const el=list.querySelector(".cmdk-item.on"); if(el) el.scrollIntoView({block:"nearest"}); };
+  const paint = ()=>{
+    if(!results.length){ list.innerHTML = `<div class="cmdk-empty">${input.value.trim()?"No matches":"Type to search products, customers, invoices"}</div>`; return; }
+    list.innerHTML = results.map((r,idx)=>`<button class="cmdk-item${idx===active?" on":""}" data-idx="${idx}">
+        <span class="cmdk-kind">${esc(r.kind)}</span>
+        <span class="cmdk-label">${esc(r.label)}</span>
+        ${r.sub?`<span class="cmdk-sub">${esc(r.sub)}</span>`:""}</button>`).join("");
+    list.querySelectorAll(".cmdk-item").forEach(it=>{
+      it.onclick = ()=> results[+it.dataset.idx].action();
+      it.onmousemove = ()=>{ const idx=+it.dataset.idx; if(active!==idx){ active=idx; hl(); } };
+    });
+  };
+  const build = (q)=>{
+    q = (q||"").trim().toLowerCase();
+    results = [];
+    if(q){
+      db.productos.filter(p=> ((p.nombre||"")+" "+(p.sku||"")).toLowerCase().includes(q)).slice(0,6)
+        .forEach(p=> results.push({ kind:"Product", label:p.nombre||"—", sub:p.sku||"", action:()=>{ close(); if(typeof openFicha==="function") openFicha(p.id); } }));
+      db.clientes.filter(c=> ((c.nombre||"")+" "+(c.empresa||"")).toLowerCase().includes(q)).slice(0,5)
+        .forEach(c=> results.push({ kind:"Customer", label:c.nombre||"—", sub:c.empresa||"", action:()=>{ close(); if(typeof cliFiltro!=="undefined") cliFiltro=c.nombre||""; setView("clientes"); } }));
+      const docs = [];
+      (db.ventas||[]).forEach(d=> docs.push(["venta",d]));
+      (db.compras||[]).forEach(d=> docs.push(["compra",d]));
+      docs.filter(([t,d])=> ((d.numero||"")+" "+((d.cliente&&d.cliente.nombre)||d.contraparte||"")).toLowerCase().includes(q)).slice(0,6)
+        .forEach(([t,d])=> results.push({ kind: t==="venta"?"Sale":"Purchase", label:(d.numero||"—")+" · "+((d.cliente&&d.cliente.nombre)||d.contraparte||"—"), sub: fmtDate(d.fecha), action:()=>{ close(); verDoc(t, d.id); } }));
+    }
+    active = 0; paint();
+  };
+  const onKey = (e)=>{
+    if(e.key==="Escape"){ e.preventDefault(); e.stopPropagation(); close(); }
+    else if(e.key==="ArrowDown"){ e.preventDefault(); if(results.length){ active=Math.min(active+1, results.length-1); hl(); } }
+    else if(e.key==="ArrowUp"){ e.preventDefault(); if(results.length){ active=Math.max(active-1, 0); hl(); } }
+    else if(e.key==="Enter"){ e.preventDefault(); if(results[active]) results[active].action(); }
+  };
+  input.oninput = ()=> build(input.value);
+  ov.onmousedown = (e)=>{ if(e.target===ov) close(); };
+  document.addEventListener("keydown", onKey, true);
+  build(""); input.focus();
+}

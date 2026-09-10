@@ -29,15 +29,18 @@ function openDoc(tipo, pre){
     }
   } else {
     // La venta ELIGE DEPÓSITO (Select/Swan): el stock de AR no se vende desde USA.
-    // Default: el primer depósito que tenga algo de stock, o el primero.
+    // Default: el último depósito usado (si aún es válido), o el primero con stock.
     if(!draft.storeVenta || !STORE_IDS.includes(draft.storeVenta)){
-      draft.storeVenta = STORE_IDS.find(s=> db.productos.some(p=> stockDe(p,s)>0)) || STORE_IDS[0];
+      const last = lastVentaStore();
+      draft.storeVenta = STORE_IDS.includes(last) ? last : (STORE_IDS.find(s=> db.productos.some(p=> stockDe(p,s)>0)) || STORE_IDS[0]);
     }
-    // Y elige VENDEDOR (para la comisión). Vendedor logueado => fijado a sí mismo.
+    // Y elige VENDEDOR (para la comisión). Vendedor logueado => fijado a sí mismo;
+    // admin => arranca con el último vendedor usado (si sigue existiendo).
     if(isSeller()){
       draft.vendedorId = currentVendedorId() || "";
     } else if(draft.vendedorId===undefined){
-      draft.vendedorId = "";   // admin arranca sin vendedor; lo elige en el combo
+      const lv = lastVentaVend();
+      draft.vendedorId = (lv && vendedorById(lv)) ? lv : "";
     }
     if(!Array.isArray(draft.costosExtra)) draft.costosExtra = [];   // costos de venta (shipping/labor/etc.)
   }
@@ -508,18 +511,58 @@ function openProductPicker(i, anchor){
   document.body.appendChild(pop);
   const search = pop.querySelector(".ppick-search");
   const listEl = pop.querySelector(".ppick-list");
+  let items = [];        // botones visibles actuales
+  let active = 0;        // índice resaltado (navegación con flechas)
+  const highlight = ()=>{
+    items.forEach((it,idx)=> it.classList.toggle("kbd-active", idx===active));
+    const el = items[active]; if(el) el.scrollIntoView({block:"nearest"});
+  };
   const paint = (q)=>{
     listEl.innerHTML = pickerItemsHTML(i, q);
-    listEl.querySelectorAll("[data-pick]").forEach(it=> it.onclick=()=>{ const v=it.dataset.pick; closeProductPicker(); applyProdSelection(i, v); });
-    wireNameTips(listEl);   // hover sobre un producto de la lista => nombre completo antes de elegirlo
+    items = Array.from(listEl.querySelectorAll("[data-pick]"));
+    active = 0;
+    items.forEach((it,idx)=>{
+      it.onclick = ()=>{ selectProductForLine(i, it.dataset.pick); };
+      it.onmousemove = ()=>{ if(active!==idx){ active=idx; highlight(); } };
+    });
+    highlight();
+    wireNameTips(listEl);
   };
   paint("");
   search.oninput = ()=> paint(search.value);
+  // Teclado: ↑↓ mueven el resaltado, Enter elige, Esc lo maneja onPickerKey.
+  search.addEventListener("keydown", (e)=>{
+    if(e.key==="ArrowDown"){ e.preventDefault(); if(items.length){ active=Math.min(active+1, items.length-1); highlight(); } }
+    else if(e.key==="ArrowUp"){ e.preventDefault(); if(items.length){ active=Math.max(active-1, 0); highlight(); } }
+    else if(e.key==="Enter"){ e.preventDefault(); const el=items[active]; if(el){ selectProductForLine(i, el.dataset.pick); } }
+  });
   positionPicker(pop, anchor);
   window.addEventListener("scroll", repositionPicker, true);
   window.addEventListener("resize", closeProductPicker);
   setTimeout(()=>{ document.addEventListener("mousedown", onPickerOutside, true); document.addEventListener("keydown", onPickerKey, true); }, 0);
   search.focus();
+}
+
+/* Elegir un producto para la línea i: cierra el picker, SUMA si el producto ya
+   está en otra línea (como una caja registradora), y deja el foco en Cantidad. */
+function selectProductForLine(i, value){
+  closeProductPicker();
+  if(value==="__new"){ applyProdSelection(i, value); return; }
+  const dupIdx = draft.lineas.findIndex((l,idx)=> idx!==i && !l.crear && l.productoId===value);
+  if(dupIdx>=0){
+    const add = parseNum(draft.lineas[i].cantidad)||1;
+    draft.lineas[dupIdx].cantidad = (parseNum(draft.lineas[dupIdx].cantidad)||0) + add;
+    draft.lineas.splice(i,1);                                  // descarta la línea recién agregada
+    const target = dupIdx > i ? dupIdx-1 : dupIdx;             // reindexar tras el splice
+    renderLines(); refreshTotal();
+    focusCantidad(target);
+    return;
+  }
+  applyProdSelection(i, value);
+  focusCantidad(i);
+}
+function focusCantidad(i){
+  setTimeout(()=>{ const el=document.querySelector(`#lineHost [data-k="cantidad"][data-i="${i}"]`); if(el){ el.focus(); if(el.select) el.select(); } }, 0);
 }
 /* Aplica la selección de producto en una línea (usado por el combobox). */
 function applyProdSelection(i, value){

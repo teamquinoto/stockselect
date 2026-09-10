@@ -10,6 +10,10 @@ let view = "dash";
 document.querySelectorAll("#nav button, #navMob button").forEach(b=>{
   b.addEventListener("click", ()=> setView(b.dataset.view));
 });
+// Búsqueda global: Cmd/Ctrl+K abre la command palette desde cualquier pantalla.
+document.addEventListener("keydown", (e)=>{
+  if((e.metaKey||e.ctrlKey) && (e.key==="k"||e.key==="K")){ e.preventDefault(); if(typeof openCmdK==="function") openCmdK(); }
+});
 function setView(v){
   // gate: admin-only views (purchases, investment, analysis, data) fall back to dashboard for sellers
   if(!isAdmin() && ADMIN_VIEWS.includes(v)) v="dash";
@@ -67,8 +71,19 @@ function applyRoleUI(){
     el.style.color = admin ? "var(--accent-ink, var(--accent))" : "var(--up)";
   });
 }
+let _lastRenderView = null;
 function render(){
   const m = document.getElementById("main");
+  // Preservar foco/scroll SÓLO cuando es un re-render de la MISMA vista (filtro/orden),
+  // no cuando se cambia de pestaña (ahí queremos ir arriba, como siempre).
+  const sameView = (view === _lastRenderView);
+  let fId=null, selS=null, selE=null, sy=0, mSt=0;
+  if(sameView){
+    const ae = document.activeElement;
+    if(ae && ae.id){ fId = ae.id; if(ae.selectionStart!=null){ selS=ae.selectionStart; selE=ae.selectionEnd; } }
+    sy = window.scrollY || window.pageYOffset || 0;
+    mSt = m ? m.scrollTop : 0;
+  }
   // El foco de sociedad (activeStore) sólo vive en Productos/Compras. En cualquier
   // otra vista el stock es un pool único: forzamos consolidado para que ni la tabla
   // de stock, ni las columnas, ni los conteos arrastren un foco de tienda latente.
@@ -87,5 +102,11 @@ function render(){
   applyRoleUI();
   wireStoreBar();
   wire();
+  if(sameView){
+    if(fId){ const el=document.getElementById(fId); if(el){ try{ el.focus({preventScroll:true}); }catch(_){ try{el.focus();}catch(__){} } if(selS!=null && el.setSelectionRange){ try{ el.setSelectionRange(selS,selE); }catch(_){} } } }
+    if(sy) window.scrollTo(0, sy);
+    if(mSt && m) m.scrollTop = mSt;
+  }
+  _lastRenderView = view;
 }
 

@@ -334,11 +334,14 @@ function openMermaTransito(prodId){
       if(q<=0){ toast("Enter a quantity","warn"); return; }
       const motivo=document.getElementById("mm_motivo").value;
       const obs=(document.getElementById("mm_obs").value||"").trim();
-      const { unit } = fifoConsumir(p, TRANSITO_STORE, q);            // consume FIFO del tránsito
-      p.stockPorTienda[TRANSITO_STORE] = round4(Math.max(0, transUnits(p) - q));
-      // movimiento de merma en el bucket (la ficha lo muestra pero no lo suma al saldo vendible)
-      moverStock(p, -q, unit, "merma", null, "Transit write-off · "+motivo, { store:TRANSITO_STORE, tipo:"merma", obs });
-      save(); closeModal(); toast(`Wrote off ${qty(q)} u from transit`, "warn"); render();
+      withUndo(`Wrote off ${qty(q)} u from transit`, ()=>{
+        const { unit } = fifoConsumir(p, TRANSITO_STORE, q);            // consume FIFO del tránsito
+        p.stockPorTienda[TRANSITO_STORE] = round4(Math.max(0, transUnits(p) - q));
+        // movimiento de merma en el bucket (la ficha lo muestra pero no lo suma al saldo vendible)
+        moverStock(p, -q, unit, "merma", null, "Transit write-off · "+motivo, { store:TRANSITO_STORE, tipo:"merma", obs });
+        save();
+      });
+      closeModal(); render();
     }}
   ]);
 }
@@ -352,6 +355,7 @@ function conjClienteNombre(d){
 function deleteConjunta(id){
   const d = db.conjuntas.find(x=>x.id===id); if(!d) return;
   if(!confirm("Delete this joint buy?\n\nStock added by it (Select + transit) will be reverted where still available. Units already received in AR or sold are NOT rolled back.")) return;
+  withUndo("Joint buy deleted", ()=>{
   d.lineas.forEach(l=>{
     const p = prodById(l.productoId); if(!p) return;
     // revertir Select: quitar la capa FIFO de esta conjunta y bajar stock (clamp a 0)
@@ -369,7 +373,9 @@ function deleteConjunta(id){
   });
   db.movimientos = db.movimientos.filter(m=> m.refId!==id);
   const i = db.conjuntas.findIndex(x=>x.id===id); if(i>=0) db.conjuntas.splice(i,1);
-  save(); toast("Joint buy deleted","warn"); render();
+  save();
+  });
+  render();
 }
 
 function viewConjunta(){
