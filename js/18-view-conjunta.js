@@ -390,21 +390,22 @@ function openRecibirTransito(prodId){
   if(held<=0){ toast("Nothing in transit for this product","warn"); return; }
   const destino = STORE_IDS[1] || STORE_IDS[0];   // depósito de AR (destino del tránsito)
   const body = `
-    <p class="hint" style="margin:0 0 12px">In transit: <b>${qty(held)}</b> u · valued ${money(transValor(p), "USD")}. Receiving moves them into <b>${esc(storeName(destino))}</b> stock (sellable). Add an import cost per unit only if <b>we</b> pay it (default 0 — the client does).</p>
+    <p class="hint" style="margin:0 0 12px">In transit (Buenos Aires): <b>${qty(held)}</b> u · valued ${money(transValor(p), "USD")}. Receiving moves them into <b>${esc(storeName(destino))}</b> stock (sellable). The <b>operator pays</b> the Argentine leg (freight + nationalization + local costs) and it's <b>capitalized into the landed cost</b>.</p>
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
       <div class="field"><label>Units to receive</label><input class="inp num" id="rt_q" value="${held}"></div>
-      <div class="field"><label>Import cost per unit <span class="hint" style="font-weight:400">· optional</span></label><input class="inp num" id="rt_c" value="0"></div>
+      <div class="field"><label>Arg freight + local costs <span class="hint" style="font-weight:400">· total, optional — spread across the units</span></label><input class="inp num" id="rt_c" value="0"></div>
       <div class="field" style="grid-column:1/3"><label>Notes</label><input class="inp" id="rt_obs" placeholder="e.g. shipment #, nationalization ref"></div>
     </div>`;
   buildModal("Receive in AR ("+esc(storeName(destino))+")", body, [
     {label:"Cancel",cls:"btn",act:closeModal},
     {label:"Receive into "+storeName(destino),cls:"btn up",act:()=>{
       const q=Math.min(Math.max(0,parseNum(document.getElementById("rt_q").value)||0), transUnits(p));
-      const c=Math.max(0,parseNum(document.getElementById("rt_c").value)||0);
+      const cTot=Math.max(0,parseNum(document.getElementById("rt_c").value)||0);   // arg freight + local costs (total)
+      const c = q>0 ? round2(cTot/q) : 0;                                           // prorrateo por unidad
       const obs=(document.getElementById("rt_obs").value||"").trim();
       if(q<=0){ toast("Enter a quantity","warn"); return; }
       const done = transferStock(p, TRANSITO_STORE, destino, q, c, obs);
-      if(done>0){ closeModal(); toast(`Received ${qty(done)} u into ${storeName(destino)}`, "up"); render(); }
+      if(done>0){ closeModal(); toast(`Received ${qty(done)} u into ${storeName(destino)}${cTot>0?` · +${money(c,"USD")}/u landed`:""}`, "up"); render(); }
     }}
   ]);
 }
@@ -418,11 +419,12 @@ function openEnviarTransito(){
   if(!prods.length){ toast("No sellable stock to send to transit","warn"); return; }
   const prodOpts = prods.map(p=>`<option value="${p.id}">${esc(p.sku?("["+p.sku+"] "):"")}${esc(p.nombre)}</option>`).join("");
   const body = `
-    <p class="hint" style="margin:0 0 12px">Move sellable units into transit (e.g. sending Swan (USA) stock to AR). They leave the sellable stock and become Select (AR) stock when received.</p>
+    <p class="hint" style="margin:0 0 12px">Move sellable units into transit (Swan/USA → Buenos Aires). They leave sellable stock and become Select (AR) stock when received. The <b>operator pays</b> the leg cost — it's <b>capitalized into the landed cost</b>.</p>
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
       <div class="field" style="grid-column:1/3"><label>Product</label><select class="inp" id="et_prod">${prodOpts}</select></div>
       <div class="field"><label>From deposit</label><select class="inp" id="et_store"></select></div>
       <div class="field"><label>Units</label><input class="inp num" id="et_q" value="0"></div>
+      <div class="field" style="grid-column:1/3"><label>Leg cost — Intl freight + wire fees <span class="hint" style="font-weight:400">· total (USD), optional — spread across the units</span></label><input class="inp num" id="et_cost" value="0"></div>
       <div class="field" style="grid-column:1/3"><label>Notes</label><input class="inp" id="et_obs"></div>
     </div>`;
   buildModal("Send to transit (to AR)", body, [
@@ -434,8 +436,10 @@ function openEnviarTransito(){
       const q=Math.min(Math.max(0,parseNum(document.getElementById("et_q").value)||0), stockDe(p,st));
       const obs=(document.getElementById("et_obs").value||"").trim();
       if(q<=0){ toast("Enter a quantity (deposit may be empty)","warn"); return; }
-      const done = transferStock(p, st, TRANSITO_STORE, q, 0, obs);
-      if(done>0){ closeModal(); toast(`Sent ${qty(done)} u to transit`, "up"); render(); }
+      const costTot=Math.max(0,parseNum(document.getElementById("et_cost").value)||0);   // intl freight + wire fees (total)
+      const costPU = q>0 ? round2(costTot/q) : 0;                                          // prorrateo por unidad
+      const done = transferStock(p, st, TRANSITO_STORE, q, costPU, obs);
+      if(done>0){ closeModal(); toast(`Sent ${qty(done)} u to transit${costTot>0?` · +${money(costPU,"USD")}/u landed`:""}`, "up"); render(); }
     }}
   ]);
   // depósitos con stock del producto elegido (se actualiza al cambiar de producto)

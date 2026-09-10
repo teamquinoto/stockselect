@@ -50,7 +50,7 @@ const INV_STORE = "__inv";
 const TRANSITO_STORE = "__transito";
 function storeName(id){
   if(id===INV_STORE) return "Investment vault";
-  if(id===TRANSITO_STORE) return "In transit (to AR)";
+  if(id===TRANSITO_STORE) return "In transit · Buenos Aires";
   const s=STORES.find(x=>x.id===id); return s?s.name:(id||"—");
 }
 function isStore(id){ return STORE_IDS.includes(id); }

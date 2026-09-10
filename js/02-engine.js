@@ -211,10 +211,11 @@ function returnFromInvestment(prod, store, q, obs){
    TRANSFERENCIA GENÉRICA ENTRE DEPÓSITOS / BUCKETS
    ------------------------------------------------------------
    Mueve `cantidad` de `origen` a `destino` arrastrando el costo FIFO
-   EXACTO de cada capa consumida. En el tramo se puede SUMAR un costo por
-   unidad (`costoExtraUnit`): así la misma carta "vale más" al llegar a AR
-   si algún día se capitaliza flete/nacionalización. Hoy el default es 0
-   porque la importación la paga el cliente (dato de Juan).
+   EXACTO de cada capa consumida. En el tramo se SUMA un costo por
+   unidad (`costoExtraUnit`) que se CAPITALIZA al costo landed: así la misma
+   carta "vale más" al avanzar US → Buenos Aires → tienda. Lo paga el OPERADOR
+   (flete internacional, wire fees, flete/nacionalización en AR) y por eso
+   engrosa el COGS. El default es 0 sólo si ese tramo puntual no tuvo costo.
      · Depósitos VENDIBLES (select/swan): dejan kardex (entra/sale del vendible).
      · BUCKETS (__transito/__inv): NO dejan kardex propio (igual que la bóveda),
        para que el saldo corrido del producto siga espejando el stock vendible.
