@@ -12,7 +12,7 @@
    ACTUALIZACIÓN CONTROLADA: no auto-activamos con skipWaiting; cuando hay
    versión nueva el SW queda "waiting" y la app muestra el botón "Update".
    ============================================================ */
-const CACHE = "mayor-stock-v57";   // v57: compras unificadas propia/terceros + monitor terceros + iconos network-first (fix logo cacheado)
+const CACHE = "mayor-stock-v58";   // v58: costos por puerta (landed buildup + PDF), acciones masivas tránsito/terceros, modales mini centrados, crear owner al vuelo, editar factura de terceros, cargos on-top al cliente
 
 const ASSETS = [
   "./",

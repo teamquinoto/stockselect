@@ -815,3 +815,12 @@
    Se ocultan en navegadores WebKit/Chromium (Chrome, Edge, la PWA).
    ============================================================ */
 ::-webkit-scrollbar-button{ display:none !important; height:0 !important; width:0 !important; }
+
+/* ============================================================
+   Modal "mini": diálogo CENTRADO y compacto para acciones cortas
+   (recibir/entregar/enviar a tránsito). El resto sigue como panel lateral.
+   ============================================================ */
+.scrim:has(.modal.mini){ align-items:center; justify-content:center; padding:24px 16px; }
+.modal.mini{ border-radius:14px; max-width:440px; width:100%; height:auto; max-height:88vh; }
+.modal.mini .mbody{ flex:none; max-height:70vh; }
+.modal.mini .grid-form.stack{ grid-template-columns:1fr; }
