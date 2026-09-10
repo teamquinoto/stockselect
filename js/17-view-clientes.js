@@ -196,7 +196,7 @@ function renderLines(){
     ? `<colgroup><col><col style="width:92px"><col style="width:134px"><col style="width:134px"><col style="width:46px"></colgroup>`
     : `<colgroup><col><col style="width:78px"><col style="width:96px"><col style="width:86px"><col style="width:94px"><col style="width:80px"><col style="width:112px"><col style="width:46px"></colgroup>`;
   const thead = terc
-    ? `<tr><th>Product</th><th class="r" title="Total in the invoice">Qty</th><th class="r" title="Units you keep (enter stock)">Ours</th><th class="r" title="Travels to the owner (tracked)">→ owner</th><th class="r">Unit cost</th><th class="r" title="Subtotal of your units">Subtotal</th><th></th></tr>`
+    ? `<tr><th style="white-space:nowrap">Product</th><th class="r" style="white-space:nowrap" title="Total in the invoice">Qty</th><th class="r" style="white-space:nowrap" title="Units you keep (enter stock)">Ours</th><th class="r" style="white-space:nowrap" title="Travels to the owner (tracked)">→ owner</th><th class="r" style="white-space:nowrap">Unit cost</th><th class="r" style="white-space:nowrap" title="Subtotal of your units">Subtotal</th><th></th></tr>`
     : isC
     ? `<tr><th>Product</th><th class="r">Qty</th><th class="r">Unit cost</th><th class="r">Subtotal</th><th></th></tr>`
     : `<tr><th>Product</th><th class="r">Qty</th><th class="r">Cost</th><th class="r" title="Markup %">Mk&nbsp;%</th><th class="r" title="Unit price">Price</th><th class="r" title="Real margin on revenue">Mrg&nbsp;%</th><th class="r">Subtotal</th><th></th></tr>`;

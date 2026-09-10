@@ -407,7 +407,7 @@ function openRecibirTransito(prodId){
       const done = transferStock(p, TRANSITO_STORE, destino, q, c, obs, "arg");
       if(done>0){ closeModal(); toast(`Delivered ${qty(done)} u into ${storeName(destino)}${cTot>0?` · +${money(c,"USD")}/u landed`:""}`, "up"); render(); }
     }}
-  ]);
+  ], "mini");
 }
 
 /* ---- Enviar a tránsito: pasa unidades de un depósito vendible al bucket de tránsito.
@@ -441,7 +441,7 @@ function openEnviarTransito(){
       const done = transferStock(p, st, TRANSITO_STORE, q, costPU, obs, "intl");
       if(done>0){ closeModal(); toast(`Sent ${qty(done)} u to transit${costTot>0?` · +${money(costPU,"USD")}/u landed`:""}`, "up"); render(); }
     }}
-  ]);
+  ], "mini");
   // depósitos con stock del producto elegido (se actualiza al cambiar de producto)
   const fillStores=()=>{
     const p=prodById(document.getElementById("et_prod").value);
@@ -622,8 +622,8 @@ function viewConjunta(){
   <div class="panel" style="margin-bottom:18px">
     <div class="phead"><h3>Third-party we're holding — by location</h3><p class="hint" style="margin:2px 0 0">Receive in AR when it lands; mark delivered when it changes hands. Never enters sellable stock.</p></div>
     <div class="kanban">
-      <div class="kcol"><div class="kct">In transit (US→AR) <span class="kn">${activas.filter(cs=>cs.estado===CONSIGN_ESTADOS.TRANSITO).length}</span></div>${kCsTransit}</div>
-      <div class="kcol"><div class="kct">In AR · to deliver <span class="kn">${activas.filter(cs=>cs.estado===CONSIGN_ESTADOS.AR).length}</span></div>${kCsAR}</div>
+      <div class="kcol"><div class="kct" style="display:flex;align-items:center;gap:8px">In transit (US→AR) <span class="kn">${activas.filter(cs=>cs.estado===CONSIGN_ESTADOS.TRANSITO).length}</span>${activas.some(cs=>cs.estado===CONSIGN_ESTADOS.TRANSITO)?`<button class="btn up sm" data-cs-recib-all style="margin-left:auto">Receive all →</button>`:""}</div>${kCsTransit}</div>
+      <div class="kcol"><div class="kct" style="display:flex;align-items:center;gap:8px">In AR · to deliver <span class="kn">${activas.filter(cs=>cs.estado===CONSIGN_ESTADOS.AR).length}</span>${activas.some(cs=>cs.estado===CONSIGN_ESTADOS.AR)?`<button class="btn up sm" data-cs-entregar-all style="margin-left:auto">Deliver all</button>`:""}</div>${kCsAR}</div>
       <div class="kcol"><div class="kct">Delivered <span class="kn">${consignAll().filter(cs=>cs.estado===CONSIGN_ESTADOS.ENTREGADO).length}</span></div>${kCsDone}</div>
     </div>
   </div>
@@ -638,7 +638,7 @@ function viewConjunta(){
   <div class="panel" style="margin-bottom:18px">
     <div class="phead"><h3>Ours · pipeline to AR</h3><span class="hint">our own stock moving USA → AR · receiving makes it sellable</span></div>
     <div class="kanban" style="grid-template-columns:1fr 1fr">
-      <div class="kcol"><div class="kct">In transit → AR <span class="kn">${enTransito.length}</span></div>${kOurTransit}</div>
+      <div class="kcol"><div class="kct" style="display:flex;align-items:center;gap:8px">In transit → AR <span class="kn">${enTransito.length}</span>${enTransito.length?`<button class="btn up sm" data-deliver-all-ours style="margin-left:auto">Deliver all in AR</button>`:""}</div>${kOurTransit}</div>
       <div class="kcol"><div class="kct">Received <span class="kn">${recibidosSwan.length}</span></div>${kOurReceived}</div>
     </div>
   </div>
@@ -658,13 +658,63 @@ function viewConjunta(){
   </div>`:""}`;
 }
 
+/* ============================================================
+   ACCIONES MASIVAS (para no ir uno por uno con miles de productos)
+   ============================================================ */
+/* Recibir TODAS las consignaciones en tránsito → AR de una. */
+function recibirTodasConsign(){
+  if(!isAdmin()){ toast("Only admins can receive stock","warn"); return; }
+  const list = consignAll().filter(cs=> cs.estado===CONSIGN_ESTADOS.TRANSITO);
+  if(!list.length){ toast("Nothing in transit","warn"); return; }
+  const u = list.reduce((a,cs)=> a+cs.cantidad, 0);
+  if(!confirm(`Receive ALL third-party in transit into AR?\n\n${list.length} item(s) · ${qty(u)} u\nYou can still add courier costs later, item by item.`)) return;
+  list.forEach(cs=> avanzarConsignacion(cs.id, { obs:"bulk receive in AR" }));
+  toast(`Received ${list.length} third-party item(s) in AR`,"up"); render();
+}
+/* Entregar TODAS las consignaciones que están en AR → entregado de una. */
+function entregarTodasConsign(){
+  if(!isAdmin()){ toast("Only admins can deliver","warn"); return; }
+  const list = consignAll().filter(cs=> cs.estado===CONSIGN_ESTADOS.AR);
+  if(!list.length){ toast("None in AR to deliver","warn"); return; }
+  const u = list.reduce((a,cs)=> a+cs.cantidad, 0);
+  if(!confirm(`Mark ALL third-party in AR as delivered?\n\n${list.length} item(s) · ${qty(u)} u\nThis closes their tracking.`)) return;
+  list.forEach(cs=> avanzarConsignacion(cs.id, { obs:"bulk delivered" }));
+  toast(`Delivered ${list.length} third-party item(s)`,"up"); render();
+}
+/* Entregar en AR TODO el stock PROPIO en tránsito, con un costo Arg total opcional
+   prorrateado sobre el total de unidades (capitalizado, tramo "arg"). */
+function openDeliverAllOurs(){
+  if(!isAdmin()){ toast("Only admins can receive stock","warn"); return; }
+  const prods = db.productos.filter(p=> transUnits(p)>0);
+  const totalU = prods.reduce((a,p)=> a+transUnits(p), 0);
+  if(!prods.length || totalU<=0){ toast("Nothing of ours in transit","warn"); return; }
+  const destino = STORE_IDS[1] || STORE_IDS[0];
+  const body = `
+    <p class="hint" style="margin:0 0 14px">Deliver <b>everything of ours in transit</b> into <b>${esc(storeName(destino))}</b> (sellable): <b>${prods.length}</b> product(s) · <b>${qty(totalU)}</b> u. The Argentine leg cost (freight + local costs) is <b>spread across all units</b> and capitalized.</p>
+    <div class="grid-form stack" style="padding:0">
+      <div class="field"><label>Arg freight + local costs <span class="hint" style="font-weight:400">· total for the whole batch, optional</span></label><input class="inp num" id="da_cost" value="0"></div>
+      <div class="field"><label>Notes</label><input class="inp" id="da_obs" placeholder="e.g. shipment #, nationalization ref"></div>
+    </div>`;
+  buildModal("Deliver all in AR ("+esc(storeName(destino))+")", body, [
+    {label:"Cancel",cls:"btn",act:closeModal},
+    {label:"Deliver all · "+qty(totalU)+" u",cls:"btn up",act:()=>{
+      const costTot=Math.max(0,parseNum(document.getElementById("da_cost").value)||0);
+      const perU = totalU>0 ? round2(costTot/totalU) : 0;
+      const obs=(document.getElementById("da_obs").value||"").trim();
+      let done=0, items=0;
+      prods.forEach(p=>{ const q=transUnits(p); if(q>0){ const d=transferStock(p, TRANSITO_STORE, destino, q, perU, obs, "arg"); if(d>0){ done+=d; items++; } } });
+      closeModal(); toast(`Delivered ${qty(done)} u across ${items} product(s)${costTot>0?` · +${money(perU,"USD")}/u landed`:""}`,"up"); render();
+    }}
+  ], "mini");
+}
+
 /* ---- Recibir consignación (ajeno) en AR: en_transito → en_ar, con courier opcional ---- */
 function openRecibirConsignacion(id){
   if(!isAdmin()){ toast("Only admins can receive stock","warn"); return; }
   const cs = consignAll().find(x=>x.id===id); if(!cs) return;
   const body = `
-    <p class="hint" style="margin:0 0 12px"><b>${esc(cs.nombre)}</b> · owner <b>${esc(terceroNombre(cs))}</b> · <b>${qty(cs.cantidad)}</b> u. Marks them <b>received in AR</b> (still not ours, still tracked). Add courier/financial cost per unit for cost-sharing (optional — doesn't affect margin).</p>
-    <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
+    <p class="hint" style="margin:0 0 14px"><b>${esc(cs.nombre)}</b> · owner <b>${esc(terceroNombre(cs))}</b> · <b>${qty(cs.cantidad)}</b> u. Marks them <b>received in AR</b> (still not ours, still tracked). Add courier/financial cost per unit for cost-sharing (optional — doesn't affect margin).</p>
+    <div class="grid-form stack" style="padding:0">
       <div class="field"><label>Courier / financial cost per unit <span class="hint" style="font-weight:400">· optional</span></label><input class="inp num" id="csc_c" value="${cs.costoCourierUnit||0}"></div>
       <div class="field"><label>Notes</label><input class="inp" id="csc_obs" placeholder="e.g. arrival ref"></div>
     </div>`;
@@ -676,7 +726,7 @@ function openRecibirConsignacion(id){
       avanzarConsignacion(id, { costoCourierUnit:c, obs });
       closeModal(); toast("Third-party units received in AR","up"); render();
     }}
-  ]);
+  ], "mini");
 }
 /* ---- Entregar consignación: en_ar → entregado (pasamanos al tercero) ---- */
 function entregarConsignacion(id){
@@ -698,6 +748,9 @@ function wireConjunta(){
   const m = document.getElementById("main"); if(!m) return;
   const nb = m.querySelector("[data-new-conj]"); if(nb) nb.onclick=()=> openConjunta();
   const et = m.querySelector("[data-enviar-transito]"); if(et) et.onclick=()=> openEnviarTransito();
+  const cra = m.querySelector("[data-cs-recib-all]"); if(cra) cra.onclick=()=> recibirTodasConsign();
+  const cea = m.querySelector("[data-cs-entregar-all]"); if(cea) cea.onclick=()=> entregarTodasConsign();
+  const daa = m.querySelector("[data-deliver-all-ours]"); if(daa) daa.onclick=()=> openDeliverAllOurs();
   m.querySelectorAll("[data-recib]").forEach(b=> b.onclick=()=> openRecibirTransito(b.dataset.recib));
   m.querySelectorAll("[data-merma]").forEach(b=> b.onclick=()=> openMermaTransito(b.dataset.merma));
   m.querySelectorAll("[data-cjdel-doc]").forEach(b=> b.onclick=()=> deleteConjunta(b.dataset.cjdelDoc));
