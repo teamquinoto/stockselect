@@ -808,3 +808,10 @@
   padding:7px 14px;border-radius:8px;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s}
 .origen-bar .seg button.on{background:var(--accent);color:#fff;box-shadow:0 3px 10px rgba(124,58,237,.22)}
 .col-ours input{width:100%}
+
+/* ============================================================
+   Task 2 — Quitar las flechas (steppers ▲▼) del scrollbar nativo.
+   Eran los botones de incremento/decremento del scrollbar del SO.
+   Se ocultan en navegadores WebKit/Chromium (Chrome, Edge, la PWA).
+   ============================================================ */
+::-webkit-scrollbar-button{ display:none !important; height:0 !important; width:0 !important; }
