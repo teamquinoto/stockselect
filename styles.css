@@ -648,3 +648,105 @@
 .cmdk-item.on .cmdk-kind{background:var(--surface)}
 .cmdk-item .cmdk-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cmdk-item .cmdk-sub{flex-shrink:0;color:var(--muted);font-size:12px;font-family:var(--mono)}
+
+
+/* ============================================================
+   SELECT SHELL — capa de identidad (nav arriba 2 niveles + banner
+   + drawers + kanban + feed). Va AL FINAL: al ser lo último del
+   archivo, gana en el cascade sin necesidad de !important salvo
+   donde hay que vencer una @media previa. Misma paleta violeta.
+   ============================================================ */
+
+/* --- estructura general: se retira el sidebar, todo fluye de arriba --- */
+.app{display:block;min-height:100vh;padding-top:0}
+.side{display:none}
+.main{padding:24px 32px 90px;max-width:1560px;width:100%;margin-inline:auto}
+
+/* --- banner de entorno (red de seguridad anti-confusión) --- */
+.envbar{display:flex;align-items:center;gap:10px;background:var(--accent);color:#fff;
+  font-family:var(--mono);font-size:11.5px;font-weight:700;letter-spacing:.5px;padding:6px 16px}
+:root[data-theme="dark"] .envbar{color:var(--paper)}
+.envbar .dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex-shrink:0}
+.envbar .env-rt{margin-left:auto;opacity:.92;font-weight:600;white-space:nowrap}
+
+/* --- topbar sólida (deja de ser glass fijo) --- */
+.topbar{position:static;display:flex;align-items:center;justify-content:space-between;
+  gap:12px;height:54px;padding:0 18px;background:var(--topbar-bg);
+  border-bottom:1px solid var(--line);backdrop-filter:none;-webkit-backdrop-filter:none}
+.topbar .tb-right{display:flex;align-items:center;gap:10px;margin-left:auto}
+.topbar .tb-ctx{font-family:var(--mono);font-size:10.5px;font-weight:800;letter-spacing:.4px;
+  text-transform:uppercase;padding:4px 9px;border-radius:999px;white-space:nowrap}
+
+/* --- nivel 1: secciones tipo ERP (subrayado) --- */
+.navsections{display:flex;gap:2px;padding:0 14px;background:var(--topbar-bg);
+  border-bottom:1px solid var(--line);overflow-x:auto}
+.navsections button{border:0;background:none;color:var(--muted);font-family:var(--sans);
+  font-size:13.5px;font-weight:700;padding:12px 16px;cursor:pointer;border-bottom:2px solid transparent;
+  margin-bottom:-1px;white-space:nowrap;transition:color .15s}
+.navsections button:hover{color:var(--text)}
+.navsections button.on{color:var(--text);border-bottom-color:var(--accent)}
+
+/* --- nivel 2: vistas como chips horizontales --- */
+.nav{display:flex;flex-direction:row;flex-wrap:wrap;gap:4px;padding:9px 16px;
+  background:var(--surface-2);border-bottom:1px solid var(--line);position:static;height:auto}
+.nav button{position:relative;display:inline-flex;align-items:center;gap:7px;width:auto;text-align:left;
+  border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:6px 13px;
+  border-radius:999px;font-family:var(--sans);font-size:12.5px;font-weight:600;
+  transition:background .15s,color .15s,border-color .15s;animation:none}
+.nav button::before{display:none}
+.nav button .ico{width:auto;font-family:var(--mono);font-size:12px;opacity:.7}
+.nav button:hover{background:var(--surface);color:var(--text);border-color:var(--line-strong);transform:none}
+.nav button:not(.on):hover{transform:none}
+.nav button.on{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 4px 12px rgba(124,58,237,.24)}
+.nav button.on .ico{opacity:1;animation:none}
+.nav button.hide-sec{display:none}
+
+/* --- MODAL -> DRAWER lateral (sólo CSS; el JS de modales no se toca) --- */
+.scrim{align-items:stretch;justify-content:flex-end;padding:0}
+.modal{border-radius:0;max-width:560px;width:100%;height:100vh;max-height:100vh;
+  display:flex;flex-direction:column;box-shadow:-24px 0 60px rgba(0,0,0,.28);
+  animation:drawerIn .22s cubic-bezier(.22,1,.36,1)}
+.modal.wide{max-width:720px}
+.modal.doc{max-width:860px}
+.modal .mbody{flex:1;max-height:none}
+@keyframes drawerIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+
+/* --- KANBAN de tránsito (listo para viewConjunta) --- */
+.kanban{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-top:1px solid var(--line)}
+.kanban .kcol{padding:14px;border-right:1px solid var(--line)}
+.kanban .kcol:last-child{border-right:0}
+.kanban .kcol .kct{display:flex;align-items:center;gap:7px;font-size:10.5px;text-transform:uppercase;
+  letter-spacing:.5px;font-weight:800;color:var(--muted);margin-bottom:11px}
+.kanban .kcol .kct .kn{margin-left:auto;font-family:var(--mono);background:var(--surface-2);
+  border:1px solid var(--line);border-radius:999px;padding:1px 8px}
+.kcard{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);
+  border-radius:10px;padding:10px 12px;margin-bottom:9px;cursor:pointer;transition:border-color .15s,transform .12s}
+.kcard:hover{border-color:var(--line-strong);transform:translateY(-1px)}
+.kcard .kt{font-size:13px;font-weight:600;color:var(--text)}
+.kcard .km{display:flex;justify-content:space-between;gap:8px;margin-top:5px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.kcard .ka{margin-top:9px;display:flex;gap:6px}
+.kcol-empty{font-size:12px;color:var(--muted);padding:8px 2px}
+
+/* --- FEED / extracto de movimientos (listo para viewMov) --- */
+.feed{display:flex;flex-direction:column}
+.feed .fitem{display:grid;grid-template-columns:132px 1fr auto;gap:14px;align-items:center;
+  padding:12px 16px;border-bottom:1px solid var(--line)}
+.feed .fitem:last-child{border-bottom:0}
+.feed .fitem:hover{background:var(--surface-2)}
+.feed .ftime{font-family:var(--mono);font-size:11.5px;color:var(--muted);white-space:nowrap}
+.feed .fmain{min-width:0}
+.feed .fmain .fname{font-size:13.5px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.feed .fmain .fref{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:2px}
+.feed .fright{text-align:right;white-space:nowrap}
+.feed .fdelta{font-family:var(--mono);font-weight:700;font-size:14px}
+.feed .fdelta.up{color:var(--up)} .feed .fdelta.down{color:var(--down)} .feed .fdelta.flat{color:var(--muted)}
+.feed .fval{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:2px}
+
+/* --- mobile: se ocultan los dos niveles de nav de escritorio; queda el mobtop --- */
+@media (max-width:860px){
+  .topbar{display:flex}
+  .navsections{display:none}
+  .nav{display:none}
+  .main{padding:20px 16px 90px}
+  .modal{max-width:none}
+}
