@@ -115,11 +115,12 @@ function generarInvoicePDF(id){
   };
   line("Subtotal", pdfMoney(sub, dCcy));
   line("Shipping", d.envio && d.envio.tipo==="free" ? "Free" : pdfMoney(envio, dCcy));
+  (d.cargosCliente||[]).forEach(c=> line(c.nota||"Charge", pdfMoney(c.monto||0, dCcy)));   // Task 5
   y+=4;
   doc.setDrawColor(ACC[0],ACC[1],ACC[2]); doc.setLineWidth(1.2); doc.line(boxX, y-8, W-M, y-8); doc.setLineWidth(1);
   y+=4;
   doc.setFillColor(ACC[0],ACC[1],ACC[2]);
-  const total=(d.total!=null)?d.total:round2(sub+envio);
+  const total=(d.total!=null)?d.total:round2(sub+envio+((d.cargosCliente||[]).reduce((a,c)=>a+(c.monto||0),0)));
   line("TOTAL", pdfMoney(total, dCcy), {bold:true, big:true});
 
   /* ---------- Footer ---------- */

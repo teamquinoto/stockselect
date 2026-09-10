@@ -399,7 +399,11 @@ function saleCostosPorTipo(d){
   const acc={}; ((d&&d.costosExtra)||[]).forEach(c=>{ const k=c.tipo||"otro"; acc[k]=round2((acc[k]||0)+(+c.monto||0)); });
   return acc;
 }
-function saleNetMargin(d){ return round2(saleMargin(d) - saleCommission(d) - saleCostosExtra(d)); }
+/* ---- Task 5: cargos ON-TOP facturados al cliente (flete intl, wire fees, nac.,
+   markup de servicio, etc.). NO son costo nuestro: son plata que el cliente PAGA
+   además del producto. Suman al total de la factura y al margen neto. ---- */
+function saleCargosCliente(d){ return round2(((d&&d.cargosCliente)||[]).reduce((a,c)=> a + (+c.monto||0), 0)); }
+function saleNetMargin(d){ return round2(saleMargin(d) - saleCommission(d) - saleCostosExtra(d) + saleCargosCliente(d)); }
 /* ---- Vendedores (perfiles a los que se atribuye la venta) ---- */
 function vendedores(){ return (db.config && Array.isArray(db.config.vendedores)) ? db.config.vendedores : []; }
 function vendedorById(id){ if(!id) return null; return vendedores().find(v=>v.id===id) || null; }

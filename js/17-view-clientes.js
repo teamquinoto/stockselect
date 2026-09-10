@@ -430,8 +430,13 @@ function confirmDoc(){
   const subtotalLineas = totalLineas(resolved);
   const cli = isC ? null : clienteById(draft.clienteId);
   const envioMonto = (!isC && draft.envio && draft.envio.tipo==="monto") ? (draft.envio.monto||0) : 0;
+  // Task 5: cargos on-top facturados al cliente (suman al total de la venta).
+  const cargosClienteArr = (!isC ? (draft.cargosCliente||[]) : [])
+    .filter(c=> (parseNum(c.monto)||0) > 0)
+    .map(c=>({ nota:(c.nota||"").trim(), monto:round2(parseNum(c.monto)||0) }));
+  const cargosClienteMonto = round2(cargosClienteArr.reduce((a,c)=> a + c.monto, 0));
   const totalDoc = isC ? round2(subtotalLineas + (draft.handling||0) + (draft.flete||0))
-                       : round2(subtotalLineas + envioMonto);
+                       : round2(subtotalLineas + envioMonto + cargosClienteMonto);
   const doc = {
     id: editing ? draft.editingId : uid(), tipo:draft.tipo, contraparte:draft.contraparte.trim(),
     fecha:normISO(draft.fecha) || new Date().toISOString().slice(0,10), numero:draft.numero.trim(),
@@ -461,6 +466,7 @@ function confirmDoc(){
     doc.clienteId = draft.clienteId;
     doc.cliente = cli ? { nombre:cli.nombre, contacto:cli.contacto, empresa:cli.empresa, telefono:cli.telefono, email:cli.email, direccion:cli.direccion, ciudad:cli.ciudad, estado:cli.estado, zip:cli.zip, pais:cli.pais||"" } : null;  // snapshot for the invoice + country slicer
     doc.envio = { tipo:draft.envio.tipo, monto:envioMonto };
+    doc.cargosCliente = cargosClienteArr;   // Task 5
     doc.contraparte = cli ? clienteLinea(cli) : draft.contraparte.trim();
     // Vendedor: un seller queda fijado a sí mismo; el admin usa el que eligió (o ninguno).
     // El nombre se snapshotea para que sobreviva aunque después se renombre/borre el vendedor.
@@ -528,7 +534,22 @@ function confirmDoc(){
    ============================================================ */
 function confirmCompraTerceros(){
   if(!puedeComprar()){ toast("Only admins can load purchases","warn"); return; }
-  if(draft.editingId){ toast("Editing a third-party invoice isn't supported yet — delete it and reload","warn"); return; }
+  // ---- Task 3: EDICIÓN. Revertimos la compra previa y sus consignaciones en
+  // tránsito, y recreamos todo abajo como si fuera nueva. Si alguna consignación
+  // ya avanzó (hecho físico), no se toca. ----
+  if(draft.editingId){
+    const prev = db.compras.find(x=>x.id===draft.editingId);
+    if(prev){
+      const cons = (db.consignaciones||[]).filter(cs=> cs.conjuntaId===prev.id);
+      if(cons.some(cs=> cs.estado!==CONSIGN_ESTADOS.TRANSITO)){
+        toast("Can't edit: third-party units already moved past transit","warn"); return;
+      }
+      // 1) borrar sus consignaciones en tránsito  2) revertir el documento de compra
+      db.consignaciones = (db.consignaciones||[]).filter(cs=> !(cs.conjuntaId===prev.id && cs.estado===CONSIGN_ESTADOS.TRANSITO));
+      revertDoc(prev);   // saca la compra (y su stock/FIFO si ya estaba recibida)
+    }
+    draft.editingId = null;   // de acá en más es un alta limpia
+  }
   const store = draft.store || STORE_IDS[0];
 
   const resolved = [];
@@ -710,10 +731,46 @@ function deleteDoc(tipo,id){
 function editDoc(tipo,id){
   const list = tipo==="compra"?db.compras:db.ventas;
   const d=list.find(x=>x.id===id); if(!d) return;
+  // ---- Task 3: edición de COMPRA DE TERCEROS ----
+  // La compra sólo guarda lo NUESTRO; lo de terceros vive como consignaciones
+  // (conjuntaId = id de la compra). Reconstruimos el draft juntando ambas por
+  // producto+precio. Si alguna consignación ya avanzó (llegó a AR / se entregó),
+  // no se puede editar: es un hecho físico. Se avisa y se corta.
+  if(tipo==="compra" && d.origen==="terceros"){
+    const cons = (db.consignaciones||[]).filter(cs=> cs.conjuntaId===d.id);
+    if(cons.some(cs=> cs.estado!==CONSIGN_ESTADOS.TRANSITO)){
+      toast("Can't edit: third-party units already moved past transit — delete instead","warn");
+      return;
+    }
+    const map = {};   // key = productoId|precio  ->  { ..., ours, terc }
+    d.lineas.forEach(l=>{
+      const k=l.productoId+"|"+l.precio;
+      (map[k] = map[k] || { productoId:l.productoId, sku:l.sku, nombre:l.nombre, precio:l.precio, ours:0, terc:0 }).ours += l.cantidad;
+    });
+    cons.forEach(cs=>{
+      const k=cs.productoId+"|"+cs.costoUnit;
+      (map[k] = map[k] || { productoId:cs.productoId, sku:cs.sku, nombre:cs.nombre, precio:cs.costoUnit, ours:0, terc:0 }).terc += cs.cantidad;
+    });
+    draft = {
+      tipo:"compra", editingId:id, origen:"terceros", terceroId:d.terceroId||"",
+      store:d.store||STORE_IDS[0], storeOrig:d.store||STORE_IDS[0],
+      contraparte:d.contraparte||"", fecha:normISO(d.fecha), numero:d.numero||"",
+      handling:d.handling||0, flete:d.flete||0,
+      lineas: Object.values(map).map(m=>({
+        key:uid(), productoId:m.productoId, sku:m.sku, nombre:m.nombre,
+        cantidad:m.ours+m.terc, aNuestro:m.ours, precio:m.precio,
+        costoRef: prodById(m.productoId)?(prodById(m.productoId).ultimoCosto||0):m.precio,
+        margen:0, precioVentaSugerido:0, crear:false
+      }))
+    };
+    renderDocModal();
+    return;
+  }
   draft = {
     tipo, editingId:id, store:d.store||STORE_IDS[0], storeOrig:d.store||STORE_IDS[0],
     storeVenta: (tipo==="venta") ? (d.storeVenta||d.store||STORE_IDS[0]) : undefined,
     costosExtra: (tipo==="venta") ? (d.costosExtra||[]).map(c=>({ key:uid(), tipo:c.tipo||"otro", nota:c.nota||"", monto:c.monto||0, ccy:c.ccy||"USD", horas:c.horas||0, valorHora:c.valorHora||0 })) : undefined,
+    cargosCliente: (tipo==="venta") ? (d.cargosCliente||[]).map(c=>({ key:uid(), nota:c.nota||"", monto:c.monto||0 })) : undefined,
     vendedorId: (tipo==="venta") ? (d.vendedorId||"") : "",
     contraparte:d.contraparte||"", fecha:normISO(d.fecha), numero:d.numero||"",
     clienteId:d.clienteId||"", envio: d.envio ? {tipo:d.envio.tipo, monto:d.envio.monto||0} : {tipo:"free",monto:0},
@@ -735,6 +792,7 @@ function copyDoc(tipo,id){
     tipo, editingId:null, store,
     storeVenta: (tipo==="venta") ? storeV : undefined,
     costosExtra: (tipo==="venta") ? (d.costosExtra||[]).map(c=>({ key:uid(), tipo:c.tipo||"otro", nota:c.nota||"", monto:c.monto||0, ccy:c.ccy||"USD", horas:c.horas||0, valorHora:c.valorHora||0 })) : undefined,
+    cargosCliente: (tipo==="venta") ? (d.cargosCliente||[]).map(c=>({ key:uid(), nota:c.nota||"", monto:c.monto||0 })) : undefined,
     vendedorId: (tipo==="venta") ? (isSeller() ? (currentVendedorId()||"") : (d.vendedorId||"")) : "",
     contraparte: tipo==="compra"?(d.contraparte||""):"",
     fecha:new Date().toISOString().slice(0,10),
@@ -801,6 +859,7 @@ function verDoc(tipo,id){
     <div class="totrow"><span style="color:var(--muted)">Margin (FIFO)</span><span class="num">${money(saleMargin(d), dCcy)}</span></div>
     <div class="totrow"><span style="color:var(--muted)">− Commission (${nf0.format(saleCommissionRate(d)*100)}% of margin)</span><span class="num">${money(saleCommission(d), dCcy)}</span></div>
     ${costLines}
+    ${saleCargosCliente(d)>0?`<div class="totrow"><span style="color:var(--muted)">+ Charges billed to client</span><span class="num">${money(saleCargosCliente(d), dCcy)}</span></div>`:""}
     <div class="totrow" style="font-weight:700;border-top:1px solid var(--line);margin-top:2px;padding-top:6px"><span>Net margin</span><span class="num" style="color:${saleNetMargin(d)<0?'var(--alert)':'var(--up)'}">${money(saleNetMargin(d), dCcy)}</span></div>` : "";
   buildModal(`${isC?"Purchase":"Invoice"} ${esc(d.numero||"")}`.trim(), `
     <p style="margin:0 0 6px;color:var(--muted);font-size:14px">${esc(d.contraparte||"—")} · ${esc(fmtDate(d.fecha))}</p>
@@ -810,6 +869,7 @@ function verDoc(tipo,id){
       <tbody>${rows}</tbody></table></div>
     <div class="totrow"><span style="color:var(--muted)">Subtotal</span><span class="num">${money(sub, dCcy)}</span></div>
     ${extras}
+    ${(!isC ? (d.cargosCliente||[]).map(c=>`<div class="totrow"><span style="color:var(--muted)">+ ${esc(c.nota||"Charge")}</span><span class="num">${money(c.monto, dCcy)}</span></div>`).join("") : "")}
     <div class="totrow" style="font-weight:700"><span>Total</span><span class="num">${money(d.total, dCcy)}</span></div>
     ${statusBlock}
     ${vendBlock}

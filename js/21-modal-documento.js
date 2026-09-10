@@ -48,6 +48,7 @@ function openDoc(tipo, pre){
       draft.vendedorId = (lv && vendedorById(lv)) ? lv : "";
     }
     if(!Array.isArray(draft.costosExtra)) draft.costosExtra = [];   // costos de venta (shipping/labor/etc.)
+    if(!Array.isArray(draft.cargosCliente)) draft.cargosCliente = [];   // Task 5: cargos on-top que paga el cliente
   }
   renderDocModal();
 }
@@ -145,6 +146,9 @@ function renderDocModal(){
       </div>
       <div class="field"><label>Shipping cost</label><input class="inp num" id="d_envmonto" value="${draft.envio.monto||0}" ${draft.envio.tipo==="free"?"disabled":""}></div>
     </div>
+    <div class="phead" style="margin:16px 0 6px;padding:0"><h3 style="font-size:13px">Extra charges <span class="hint" style="font-weight:400">· on top, billed to the client (freight, wire fees, service…)</span></h3></div>
+    <div id="cargoHost"></div>
+    <button class="btn sm" id="addCargo" style="margin-top:8px">+ Add charge</button>
     ${isAdmin()?`
     <div class="phead" style="margin:16px 0 6px;padding:0"><h3 style="font-size:13px">Selling costs <span class="hint" style="font-weight:400">· eat into the sale margin, not the stock cost</span></h3></div>
     <div id="costHost"></div>
@@ -189,6 +193,8 @@ function renderDocModal(){
     const et=document.getElementById("d_envtipo"), em=document.getElementById("d_envmonto");
     et.onchange=()=>{ draft.envio.tipo=et.value; em.disabled=(et.value==="free"); if(et.value==="free"){ draft.envio.monto=0; em.value=0; } refreshTotal(); };
     em.oninput=()=>{ draft.envio.monto=parseNum(em.value); refreshTotal(); };
+    renderCargos();
+    const acg=document.getElementById("addCargo"); if(acg) acg.onclick=()=>{ (draft.cargosCliente=draft.cargosCliente||[]).push(nuevaLineaCargo()); renderCargos(); refreshTotal(); };
     if(isAdmin()){
       renderCostos();
       const ac=document.getElementById("addCost"); if(ac) ac.onclick=()=>{ (draft.costosExtra=draft.costosExtra||[]).push(nuevaLineaCosto()); renderCostos(); };
@@ -209,7 +215,25 @@ function docTotal(){
       : totalLineas(draft.lineas);
     return round2(base + (draft.handling||0) + (draft.flete||0));
   }
-  return round2(totalLineas(draft.lineas) + (draft.envio && draft.envio.tipo==="monto" ? (draft.envio.monto||0) : 0));
+  const envio = (draft.envio && draft.envio.tipo==="monto") ? (draft.envio.monto||0) : 0;
+  return round2(totalLineas(draft.lineas) + envio + cargosClienteTotal());
+}
+/* Task 5: suma de los cargos on-top (en la moneda de la venta). */
+function cargosClienteTotal(){ return round2((draft.cargosCliente||[]).reduce((a,c)=> a + (parseNum(c.monto)||0), 0)); }
+function nuevaLineaCargo(){ return { key:uid(), nota:"", monto:0 }; }
+function renderCargos(){
+  const host=document.getElementById("cargoHost"); if(!host) return;
+  draft.cargosCliente = draft.cargosCliente || [];
+  const cc = storeCcy(draft.storeVenta || STORE_IDS[0]);
+  host.innerHTML = draft.cargosCliente.length ? draft.cargosCliente.map((c,i)=>`
+    <div class="grid-form" style="grid-template-columns:1fr auto auto;padding:0;gap:8px;align-items:end;margin-bottom:6px">
+      <div class="field"><label>Concept</label><input class="inp" data-cgnota="${i}" value="${esc(c.nota||"")}" placeholder="Intl freight, wire fee, service…"></div>
+      <div class="field"><label>Amount (${esc(cc)})</label><input class="inp num" data-cgmonto="${i}" value="${c.monto||0}" style="max-width:130px"></div>
+      <button class="btn ghost sm" data-cgdel="${i}" style="color:var(--alert)">✕</button>
+    </div>`).join("") : `<p class="hint" style="font-size:12px;margin:0">No extra charges. The client pays only product + shipping.</p>`;
+  host.querySelectorAll("[data-cgnota]").forEach(inp=> inp.oninput=()=>{ draft.cargosCliente[+inp.dataset.cgnota].nota=inp.value; });
+  host.querySelectorAll("[data-cgmonto]").forEach(inp=> inp.oninput=()=>{ draft.cargosCliente[+inp.dataset.cgmonto].monto=parseNum(inp.value); refreshTotal(); });
+  host.querySelectorAll("[data-cgdel]").forEach(b=> b.onclick=()=>{ draft.cargosCliente.splice(+b.dataset.cgdel,1); renderCargos(); refreshTotal(); });
 }
 function pintarProrateo(){
   const h=document.getElementById("d_proHint"); if(!h) return;
