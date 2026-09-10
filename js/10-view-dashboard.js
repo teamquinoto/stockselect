@@ -200,6 +200,16 @@ function viewDash(){
   const consolidado = !viewUsesSociety() || activeStore==="all";
   const foco = consolidado ? "consolidated" : storeName(activeStore);
   const multi = allowedStores().length>1;
+  const cc = isAdmin() && STORE_IDS.length>1;
+  let heroHTML;
+  if(cc){ heroHTML = housesHTML(); }
+  else { heroHTML = `  <div class="kpis">
+    <div class="kpi"><div class="lbl">Products</div><div class="val">${vend.length}</div><div class="sub">sellable SKUs</div></div>
+    <div class="kpi"><div class="lbl">Units in stock</div><div class="val">${qty(unidadesTotales())}</div><div class="sub">${esc(foco)}</div></div>
+    <div class="kpi"><div class="lbl">Valuation</div><div class="val">${money(valorizacion())}</div><div class="sub">FIFO cost layers</div></div>
+    ${unidadesEnTransito()>0?`<div class="kpi"><div class="lbl">In transit</div><div class="val">${qty(unidadesEnTransito())}</div><div class="sub">incoming · ${money(vend.reduce((a,p)=>a+transitoValorEnFoco(p),0))}</div></div>`:""}
+    <div class="kpi ${porPedir.length?'warn kpi-click':''}" ${porPedir.length?'data-goto-pedir role="button" tabindex="0" title="See the reorder list"':''}><div class="lbl">Alerts</div><div class="val">${porPedir.length}</div><div class="sub">${subAlerta}</div></div>
+  </div>`; }
 
   return `
   <div class="head">
@@ -215,13 +225,7 @@ function viewDash(){
     <span><b>${porPedir.length}</b> product${porPedir.length>1?"s":""} to reorder${subAlerta&&subAlerta!=="all good"?` — ${subAlerta}`:""}. <u>Tap to see what to order.</u></span>
   </div>` : ""}
 
-  <div class="kpis">
-    <div class="kpi"><div class="lbl">Products</div><div class="val">${vend.length}</div><div class="sub">sellable SKUs</div></div>
-    <div class="kpi"><div class="lbl">Units in stock</div><div class="val">${qty(unidadesTotales())}</div><div class="sub">${esc(foco)}</div></div>
-    <div class="kpi"><div class="lbl">Valuation</div><div class="val">${money(valorizacion())}</div><div class="sub">FIFO cost layers</div></div>
-    ${unidadesEnTransito()>0?`<div class="kpi"><div class="lbl">In transit</div><div class="val">${qty(unidadesEnTransito())}</div><div class="sub">incoming · ${money(vend.reduce((a,p)=>a+transitoValorEnFoco(p),0))}</div></div>`:""}
-    <div class="kpi ${porPedir.length?'warn kpi-click':''}" ${porPedir.length?'data-goto-pedir role="button" tabindex="0" title="See the reorder list"':''}><div class="lbl">Alerts</div><div class="val">${porPedir.length}</div><div class="sub">${subAlerta}</div></div>
-  </div>
+  ${heroHTML}
 
   <div class="panel">
     <div class="phead"><h3>Stock on hand</h3><span class="hint" id="dashCount">tap a product to see its history</span></div>
@@ -291,7 +295,51 @@ function renderDashRows(){
   body.querySelectorAll("[data-ficha]").forEach(tr=> tr.onclick=()=> openFicha(tr.dataset.ficha));
 }
 function wireDashFiltros(){
+  const gt=document.querySelector("[data-goto-transit]"); if(gt) gt.onclick=()=>setView("conjunta");
   wireFilterBar("f", dashFiltros, renderDashRows);
   if(document.getElementById("dashBody")){ wireSortHeaders(dashFiltros); renderDashRows(); }
 }
 
+
+/* ============================================================
+   COMMAND CENTER — dual-pane por depósito (Select·USA / Swan·AR)
+   + franja de tránsito. Sólo admin y con 2+ depósitos; si no,
+   el dashboard cae al set de KPIs clásico. Reusa la valuación
+   FIFO por depósito (fifoLayers) y money() por moneda nativa.
+   ============================================================ */
+function valFifoStoreNativo(store){
+  return productosVendibles().reduce((a,p)=> a + fifoLayers(p,store).reduce((x,L)=>x+L.cantidad*L.costoUnit,0), 0);
+}
+function unidadesStore(store){ return productosVendibles().reduce((a,p)=> a + stockDe(p,store), 0); }
+function skusConStock(store){ return productosVendibles().filter(p=> stockDe(p,store)>0).length; }
+function topProdsStore(store,n){
+  return productosVendibles()
+    .map(p=>({ p, v: fifoLayers(p,store).reduce((x,L)=>x+L.cantidad*L.costoUnit,0), u: stockDe(p,store) }))
+    .filter(o=> o.u>0).sort((a,b)=> b.v-a.v).slice(0,n);
+}
+function housesHTML(){
+  const houses = STORE_IDS.map(s=>{
+    const val=valFifoStoreNativo(s), un=unidadesStore(s), sk=skusConStock(s);
+    const flag = storeCcy(s)==="USD" ? "US" : "AR";
+    const list = topProdsStore(s,3).map(o=>
+      `<div class="li"><span>${esc(o.p.nombre)} <span class="sku">${esc(o.p.sku||"—")}</span></span><span class="q">${qty(o.u)}</span></div>`
+    ).join("") || `<div class="li" style="color:var(--muted)">No stock yet.</div>`;
+    return `<div class="house">
+      <div class="hh"><span class="flag">${flag}</span><span class="nm">${esc(storeName(s))}</span><span class="cc">${storeCcy(s)}</span></div>
+      <div class="hrow">
+        <div class="stat"><div class="l">Valued (FIFO)</div><div class="v">${money(val, storeCcy(s))}</div></div>
+        <div class="stat"><div class="l">Units</div><div class="v">${qty(un)}</div></div>
+        <div class="stat"><div class="l">SKUs</div><div class="v">${qty(sk)}</div></div>
+      </div>
+      <div class="hlist">${list}</div>
+    </div>`;
+  }).join("");
+  const enTr = unidadesEnTransito();
+  const strip = enTr>0 ? `<div class="panel" data-goto-transit role="button" tabindex="0" style="cursor:pointer;margin-bottom:22px">
+      <div class="phead"><h3>In transit → AR</h3><span class="hint">tap to open Joint / Transit</span></div>
+      <div style="display:flex;gap:34px;padding:14px 18px">
+        <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600;margin-bottom:5px">Incoming units</div><div style="font-size:22px;font-weight:800;font-variant-numeric:tabular-nums">${qty(enTr)}</div></div>
+        <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600;margin-bottom:5px">Value (report)</div><div style="font-size:22px;font-weight:800;font-variant-numeric:tabular-nums">${money(productosVendibles().reduce((a,p)=>a+transitoValorEnFoco(p),0))}</div></div>
+      </div></div>` : "";
+  return `<div class="houses">${houses}</div>${strip}`;
+}

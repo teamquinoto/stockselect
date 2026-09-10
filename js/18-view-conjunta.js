@@ -527,12 +527,17 @@ function deleteConjunta(id){
 function viewConjunta(){
   const enTransito = db.productos.filter(p=> transUnits(p)>0)
     .sort((a,b)=> String(a.nombre||"").localeCompare(String(b.nombre||""),"en"));
-  const trRows = enTransito.map(p=>`<tr>
-      <td><span class="sku">${esc(p.sku||"—")}</span> ${esc(p.nombre)}</td>
-      <td class="r num">${qty(transUnits(p))}</td>
-      <td class="r num">${money(transValor(p), "USD")}</td>
-      <td class="r" style="white-space:nowrap"><button class="btn up sm" data-recib="${p.id}">Receive in AR ▾</button> <button class="btn ghost sm" data-merma="${p.id}" title="Write-off (loss)" style="color:var(--alert)">✕</button></td>
-    </tr>`).join("") || `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:18px">Nothing in transit right now.</td></tr>`;
+  const kOurTransit = enTransito.map(p=>`<div class="kcard">
+      <div class="kt">${esc(p.nombre)}</div>
+      <div class="km"><span>${esc(p.sku||"—")}</span><span>${qty(transUnits(p))} u · ${money(transValor(p),"USD")}</span></div>
+      <div class="ka"><button class="btn up sm" data-recib="${p.id}">Receive in AR ▾</button><button class="btn ghost sm" data-merma="${p.id}" title="Write-off (loss)" style="color:var(--alert)">✕</button></div>
+    </div>`).join("") || `<div class="kcol-empty">Nothing in transit.</div>`;
+  const recibidosSwan = (db.movimientos||[]).filter(m=> m.tipo==="transfer-in")
+    .slice().sort((a,b)=> String(b.fecha||"").localeCompare(String(a.fecha||""))).slice(0,6);
+  const kOurReceived = recibidosSwan.map(m=>{ const p=prodById(m.productoId); return `<div class="kcard" style="border-left-color:var(--up)">
+      <div class="kt">${esc((p&&p.nombre)||m.nombre||"—")}</div>
+      <div class="km"><span>${esc(fmtDate(m.fecha))}</span><span>+${qty(Math.abs(m.delta||m.cantidad||0))} u</span></div>
+    </div>`; }).join("") || `<div class="kcol-empty">Nothing received recently.</div>`;
 
   const hist = (db.conjuntas||[]).slice().sort((a,b)=> String(b.fecha||"").localeCompare(String(a.fecha||"")));
   const histRows = hist.map(d=>{
@@ -556,18 +561,17 @@ function viewConjunta(){
     const col = e===CONSIGN_ESTADOS.TRANSITO ? "var(--muted)" : e===CONSIGN_ESTADOS.AR ? "var(--acc)" : "var(--up)";
     return `<span style="font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid ${col};color:${col};white-space:nowrap">${esc(consignLabel(e))}</span>`;
   };
-  const csRows = activas.map(cs=>{
-    const acciones = cs.estado===CONSIGN_ESTADOS.TRANSITO
-        ? `<button class="btn up sm" data-cs-recib="${cs.id}">Receive in AR ▾</button>`
-        : `<button class="btn up sm" data-cs-entregar="${cs.id}">Mark delivered</button>`;
-    return `<tr>
-      <td><span class="sku">${esc(cs.sku||"—")}</span> ${esc(cs.nombre)}</td>
-      <td>${esc(terceroNombre(cs))}</td>
-      <td class="r num">${qty(cs.cantidad)}</td>
-      <td>${estadoPill(cs.estado)}</td>
-      <td class="r" style="white-space:nowrap">${acciones} <button class="btn ghost sm" data-cs-del="${cs.id}" title="Remove from tracking" style="color:var(--alert)">✕</button></td>
-    </tr>`;
-  }).join("") || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px">No third-party units being tracked.</td></tr>`;
+  const _csCard = (cs, action)=>`<div class="kcard">
+      <div class="kt">${esc(cs.nombre)}</div>
+      <div class="km"><span>${esc(terceroNombre(cs))}</span><span>${qty(cs.cantidad)} u</span></div>
+      <div class="ka">${action}<button class="btn ghost sm" data-cs-del="${cs.id}" title="Remove from tracking" style="color:var(--alert)">✕</button></div>
+    </div>`;
+  const kCsTransit = activas.filter(cs=>cs.estado===CONSIGN_ESTADOS.TRANSITO)
+    .map(cs=> _csCard(cs, `<button class="btn up sm" data-cs-recib="${cs.id}">Receive in AR ▾</button>`)).join("") || `<div class="kcol-empty">None in transit.</div>`;
+  const kCsAR = activas.filter(cs=>cs.estado===CONSIGN_ESTADOS.AR)
+    .map(cs=> _csCard(cs, `<button class="btn up sm" data-cs-entregar="${cs.id}">Mark delivered</button>`)).join("") || `<div class="kcol-empty">None in AR.</div>`;
+  const kCsDone = consignAll().filter(cs=>cs.estado===CONSIGN_ESTADOS.ENTREGADO).slice(-8).reverse()
+    .map(cs=>`<div class="kcard" style="border-left-color:var(--up)"><div class="kt">${esc(cs.nombre)}</div><div class="km"><span>${esc(terceroNombre(cs))}</span><span>${qty(cs.cantidad)} u</span></div></div>`).join("") || `<div class="kcol-empty">Nothing delivered yet.</div>`;
 
   // ---- Resumen por dueño × estado ----
   const resumen = consignResumenPorTercero();
@@ -608,17 +612,20 @@ function viewConjunta(){
   </div>
 
   <div class="panel" style="margin-bottom:18px">
-    <div class="phead"><h3>Ours · in transit → receive in AR</h3></div>
-    <div class="table-scroll"><table>
-      <thead><tr><th>Product</th><th class="r">In transit</th><th class="r">Value</th><th></th></tr></thead>
-      <tbody>${trRows}</tbody></table></div>
+    <div class="phead"><h3>Ours · pipeline to AR</h3><span class="hint">receiving moves units into Swan (sellable)</span></div>
+    <div class="kanban" style="grid-template-columns:1fr 1fr">
+      <div class="kcol"><div class="kct">In transit → AR <span class="kn">${enTransito.length}</span></div>${kOurTransit}</div>
+      <div class="kcol"><div class="kct">Received in Swan <span class="kn">${recibidosSwan.length}</span></div>${kOurReceived}</div>
+    </div>
   </div>
 
   <div class="panel" style="margin-bottom:18px">
-    <div class="phead"><h3>Third-party · tracked merchandise (not ours)</h3><p class="hint" style="margin:2px 0 0">Followed through the flow US → AR → delivery. Never enters sellable stock.</p></div>
-    <div class="table-scroll"><table>
-      <thead><tr><th>Product</th><th>Owner</th><th class="r">Units</th><th>Status</th><th></th></tr></thead>
-      <tbody>${csRows}</tbody></table></div>
+    <div class="phead"><h3>Third-party · tracking board (not ours)</h3><p class="hint" style="margin:2px 0 0">US → AR → delivery. Never enters sellable stock.</p></div>
+    <div class="kanban">
+      <div class="kcol"><div class="kct">In transit (US→AR) <span class="kn">${activas.filter(cs=>cs.estado===CONSIGN_ESTADOS.TRANSITO).length}</span></div>${kCsTransit}</div>
+      <div class="kcol"><div class="kct">In AR · to deliver <span class="kn">${activas.filter(cs=>cs.estado===CONSIGN_ESTADOS.AR).length}</span></div>${kCsAR}</div>
+      <div class="kcol"><div class="kct">Delivered <span class="kn">${consignAll().filter(cs=>cs.estado===CONSIGN_ESTADOS.ENTREGADO).length}</span></div>${kCsDone}</div>
+    </div>
   </div>
 
   <div class="panel" style="margin-bottom:18px">

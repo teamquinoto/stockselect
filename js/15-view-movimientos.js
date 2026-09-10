@@ -38,18 +38,7 @@ function viewMov(){
       <input class="inp num" id="mvmax" placeholder="Max value" value="${esc(movFiltros.vmax)}" style="width:86px">
       <button class="btn ghost sm" id="mclear">Clear</button>
     </div>
-    <div class="table-scroll"><table>
-      <thead><tr>
-        ${sortTh(movFiltros,"fecha","Date","")}
-        ${sortTh(movFiltros,"tipo","Type","")}
-        ${showStore?sortTh(movFiltros,"store","Society",""):""}
-        ${sortTh(movFiltros,"nombre","Product","")}
-        ${sortTh(movFiltros,"cant","Qty","r")}
-        ${sortTh(movFiltros,"valor","Unit value","r")}
-        ${sortTh(movFiltros,"ref","Source","")}
-        <th></th>
-      </tr></thead>
-      <tbody id="movBody"></tbody></table></div>`
+    <div class="feed" id="movBody"></div>`
       : emptyState("No movements yet","Every purchase, sale or adjustment leaves its trace here.")}
   </div>`;
 }
@@ -117,17 +106,18 @@ function renderMovRows(){
                :`<span class="pill ${up?'in':'out'}">${up?'↑ in':'↓ out'}</span>`;
     const deltaCls=isAdj?"flat":(up?'up':'down');
     const accion=isAdj?`<button class="btn ghost sm" data-delaj="${m.id}" style="color:var(--alert)" title="Delete adjustment">${ICO.trash}</button>`:"";
-    return `<tr>
-      <td class="num">${fecha}</td>
-      <td>${pill}</td>
-      ${showStore?`<td>${esc(storeName(m.store))}</td>`:""}
-      <td><span class="sku">${esc(m.sku||"—")}</span> ${esc(m.nombre)}</td>
-      <td class="r delta ${deltaCls}">${up?'+':'−'}${qty(Math.abs(signed))}</td>
-      <td class="r num">${money(m.valorUnit, storeCcy(m.store))}</td>
-      <td class="num">${esc(m.ref||"—")}</td>
-      <td class="r">${accion}</td>
-    </tr>`;
-  }).join("") || `<tr><td colspan="${cols}" style="text-align:center;color:var(--muted);padding:22px">No movement matches the filters.</td></tr>`;
+    return `<div class="fitem">
+      <div class="ftime">${fecha}</div>
+      <div class="fmain">
+        <div class="fname">${pill} ${esc(m.nombre)}</div>
+        <div class="fref"><span class="sku">${esc(m.sku||"—")}</span> · ${esc(m.ref||"—")}${showStore?` · ${esc(storeName(m.store))}`:""}</div>
+      </div>
+      <div class="fright">
+        <div class="fdelta ${deltaCls}">${up?'+':'−'}${qty(Math.abs(signed))}</div>
+        <div class="fval">${money(m.valorUnit, storeCcy(m.store))}${accion?` &nbsp;${accion}`:""}</div>
+      </div>
+    </div>`;
+  }).join("") || `<div class="fitem" style="display:block;text-align:center;color:var(--muted);padding:22px">No movement matches the filters.</div>`;
   const cnt=document.getElementById("movCount");
   const totalF=db.movimientos.filter(m=>!m.store||effectiveStores().includes(m.store)).length;
   if(cnt) cnt.textContent = (all.length===totalF?`${totalF} entries`:`${all.length} of ${totalF}`)+(list.length<all.length?` · showing 400`:"");
