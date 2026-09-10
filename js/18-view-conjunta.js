@@ -348,7 +348,7 @@ function confirmConjunta(){
       moverStock(p, +r.aSwan, r.costoUnit, "conjunta", doc.id, refTxt+" · commission", { store:STORE_IDS[0], tipo:"conjunta-in" });
     }
     // Unidades NUESTRAS rumbo AR: NACEN EN TRÁNSITO (bucket, sin kardex propio, como el vault).
-    // Entran a Select (AR) cuando se reciben (botón "Receive in AR").
+    // Se ENTREGAN en Select (AR) al final del recorrido (botón "Deliver in AR").
     if(r.aTransito>0){
       fifoEntrada(p, TRANSITO_STORE, r.aTransito, r.costoUnit, refTxt, doc.id);
       p.stockPorTienda[TRANSITO_STORE] = round4((p.stockPorTienda[TRANSITO_STORE]||0) + r.aTransito);
@@ -390,22 +390,22 @@ function openRecibirTransito(prodId){
   if(held<=0){ toast("Nothing in transit for this product","warn"); return; }
   const destino = STORE_IDS[1] || STORE_IDS[0];   // depósito de AR (destino del tránsito)
   const body = `
-    <p class="hint" style="margin:0 0 12px">In transit (Buenos Aires): <b>${qty(held)}</b> u · valued ${money(transValor(p), "USD")}. Receiving moves them into <b>${esc(storeName(destino))}</b> stock (sellable). The <b>operator pays</b> the Argentine leg (freight + nationalization + local costs) and it's <b>capitalized into the landed cost</b>.</p>
+    <p class="hint" style="margin:0 0 12px">In transit (Buenos Aires): <b>${qty(held)}</b> u · valued ${money(transValor(p), "USD")}. Delivering moves them into <b>${esc(storeName(destino))}</b> stock (sellable, AR). The <b>operator pays</b> the Argentine leg (freight + nationalization + local costs) and it's <b>capitalized into the landed cost</b>.</p>
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
       <div class="field"><label>Units to receive</label><input class="inp num" id="rt_q" value="${held}"></div>
       <div class="field"><label>Arg freight + local costs <span class="hint" style="font-weight:400">· total, optional — spread across the units</span></label><input class="inp num" id="rt_c" value="0"></div>
       <div class="field" style="grid-column:1/3"><label>Notes</label><input class="inp" id="rt_obs" placeholder="e.g. shipment #, nationalization ref"></div>
     </div>`;
-  buildModal("Receive in AR ("+esc(storeName(destino))+")", body, [
+  buildModal("Deliver in AR ("+esc(storeName(destino))+")", body, [
     {label:"Cancel",cls:"btn",act:closeModal},
-    {label:"Receive into "+storeName(destino),cls:"btn up",act:()=>{
+    {label:"Mark delivered · "+storeName(destino),cls:"btn up",act:()=>{
       const q=Math.min(Math.max(0,parseNum(document.getElementById("rt_q").value)||0), transUnits(p));
       const cTot=Math.max(0,parseNum(document.getElementById("rt_c").value)||0);   // arg freight + local costs (total)
       const c = q>0 ? round2(cTot/q) : 0;                                           // prorrateo por unidad
       const obs=(document.getElementById("rt_obs").value||"").trim();
       if(q<=0){ toast("Enter a quantity","warn"); return; }
       const done = transferStock(p, TRANSITO_STORE, destino, q, c, obs);
-      if(done>0){ closeModal(); toast(`Received ${qty(done)} u into ${storeName(destino)}${cTot>0?` · +${money(c,"USD")}/u landed`:""}`, "up"); render(); }
+      if(done>0){ closeModal(); toast(`Delivered ${qty(done)} u into ${storeName(destino)}${cTot>0?` · +${money(c,"USD")}/u landed`:""}`, "up"); render(); }
     }}
   ]);
 }
@@ -534,7 +534,7 @@ function viewConjunta(){
   const kOurTransit = enTransito.map(p=>`<div class="kcard">
       <div class="kt">${esc(p.nombre)}</div>
       <div class="km"><span>${esc(p.sku||"—")}</span><span>${qty(transUnits(p))} u · ${money(transValor(p),"USD")}</span></div>
-      <div class="ka"><button class="btn up sm" data-recib="${p.id}">Receive in AR ▾</button><button class="btn ghost sm" data-merma="${p.id}" title="Write-off (loss)" style="color:var(--alert)">✕</button></div>
+      <div class="ka"><button class="btn up sm" data-recib="${p.id}">Deliver in AR ▾</button><button class="btn ghost sm" data-merma="${p.id}" title="Write-off (loss)" style="color:var(--alert)">✕</button></div>
     </div>`).join("") || `<div class="kcol-empty">Nothing in transit.</div>`;
   const recibidosSwan = (db.movimientos||[]).filter(m=> m.tipo==="transfer-in")
     .slice().sort((a,b)=> String(b.fecha||"").localeCompare(String(a.fecha||""))).slice(0,6);
