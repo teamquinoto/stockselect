@@ -91,7 +91,7 @@ function exportPnL(desde, hasta){
     ["Notes:"],
     ["• COGS uses the actual FIFO cost layers of the deposit each sale shipped from (not last cost)."],
     ["• Inbound freight/handling is capitalized into landed cost, so it is already inside COGS."],
-    ["• Stock lives in real deposits (Select · USA / Swan · AR); a sale draws only from its chosen deposit."],
+    ["• Stock lives in real deposits (Swan · USA / Select · AR); a sale draws only from its chosen deposit."],
     ["• Selling costs (commission, shipping, man-hours, etc.) are charged per sale and sit below gross profit."],
     ["• Operating expenses (structure) are not captured here — plug them into your cost model."],
   ];

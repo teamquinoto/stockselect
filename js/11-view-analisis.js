@@ -140,7 +140,7 @@ function ventasFiltradas(){
   const rep = reportCcy();
   db.ventas.forEach(v=>{
     // Análisis es admin-only: se ven todas las ventas. Cada venta puede estar en
-    // una moneda distinta (Select USD / Swan ARS): convertimos a la moneda de
+    // una moneda distinta (Swan USD / Select ARS): convertimos a la moneda de
     // reporte al armar la fila, así todos los agregados suman en una sola moneda.
     if(anFiltros.vend && (v.vendedorId||"")!==anFiltros.vend) return;
     if(anFiltros.pais && ((v.cliente&&v.cliente.pais)||"")!==anFiltros.pais) return;

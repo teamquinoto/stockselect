@@ -28,12 +28,14 @@ const SESKEY = "gstock_session";  // { user, token, space, role, store }
    (executive hold, leaves the sellable inventory, admin-only vault).
    LANGUAGE: per-product tag JP | ESP.
    ============================================================ */
-/* DEPÓSITOS reales (entidades físicas donde vive el stock). Select en EEUU,
-   Swan en Argentina. La venta ELIGE depósito: lo que está en AR no se puede
-   vender desde USA y viceversa (el costo sale del FIFO de ESE depósito). */
+/* DEPÓSITOS reales (entidades físicas donde vive el stock). Swan en EEUU,
+   Select en Argentina. La venta ELIGE depósito: lo que está en AR no se puede
+   vender desde USA y viceversa (el costo sale del FIFO de ESE depósito).
+   El ORDEN importa: [0] = ORIGEN (EEUU, adonde llega el invoice y nace el
+   stock), [1] = DESTINO (AR, adonde viaja el tránsito y se recibe/vende). */
 const STORES = [
-  { id:"select", name:"Select · USA", ccy:"USD" },
-  { id:"swan",   name:"Swan · AR",    ccy:"ARS" }
+  { id:"swan",   name:"Swan · USA", ccy:"USD" },
+  { id:"select", name:"Select · AR", ccy:"ARS" }
 ];
 const STORE_IDS = STORES.map(s=>s.id);
 /* Investment vault = a hidden pseudo-store. Stock and FIFO cost layers moved
@@ -60,10 +62,10 @@ function isBucket(id){ return id===INV_STORE || id===TRANSITO_STORE; }
 /* ============================================================
    MONEDAS
    ------------------------------------------------------------
-   Cada depósito factura/valúa en SU moneda: Select en USD, Swan en ARS.
+   Cada depósito factura/valúa en SU moneda: Swan (EEUU) en USD, Select (AR) en ARS.
    Las capas FIFO no llevan etiqueta de moneda: la moneda la define el
    depósito donde vive la capa (por eso alcanza con storeCcy). El tránsito
-   viene del lado US => USD (se convierte a ARS recién al recibirse en Swan).
+   viene del lado US => USD (se convierte a ARS recién al recibirse en Select/AR).
    El TC es MANUAL (pesos por 1 USD) y hoy es único; se ajustará más adelante.
    La moneda de REPORTE (para consolidar dashboard/análisis/P&L) es elegible;
    por defecto USD.
@@ -277,6 +279,12 @@ function migrate(d){
   (d.compras||[]).forEach(c=>{ if(c.store) c.store = _remapSoc(c.store); });
   (d.ventas||[]).forEach(v=>{ if(v.store) v.store = _remapSoc(v.store); if(v.storeVenta) v.storeVenta = _remapSoc(v.storeVenta); });
   d.conjuntas = d.conjuntas || [];   // compras conjuntas (ingreso de comisión en especie)
+  // CONSIGNACIONES: mercadería AJENA (de terceros/locales, ej. Osvaldo) que viaja en
+  // el MISMO invoice pero NO es nuestra. Sólo se SIGUE por el flujo (EEUU → AR →
+  // entrega); nunca entra al stock vendible, ni al FIFO, ni a la valuación. Es un
+  // libro paralelo, con dueño (clienteId) y estado (en_transito → en_ar → entregado).
+  d.consignaciones = d.consignaciones || [];
+  (d.consignaciones||[]).forEach(cs=>{ if(!Array.isArray(cs.historial)) cs.historial = []; });
   d.clientes.forEach(c=>{ if(c.pais==null) c.pais = ""; });   // country of buyer (point 7 slicer)
   // Punto 11: normalizar fechas viejas mezcladas (ISO vs "01-Jul-2026") a YYYY-MM-DD
   [...(d.compras||[]), ...(d.ventas||[])].forEach(doc=>{ if(doc.fecha) doc.fecha = normISO(doc.fecha) || doc.fecha; });
