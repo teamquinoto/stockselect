@@ -32,6 +32,7 @@ El **operador** (la empresa dueña de la app) **paga la importación y compra en
 - La **compra nace "in transit"** y **recién impacta stock/FIFO al marcarla "received"**. Por eso se puede vender desde Swan y desde Select, pero **no** mientras está en el bucket de tránsito.
 - `transferStock(origen, destino, cantidad, costoExtraUnit)` arrastra el **costo FIFO exacto** de cada capa y **suma el costo del tramo por unidad**, capitalizándolo (la misma carta "vale más" al avanzar). El operador carga el total del tramo y la app lo prorratea.
 - Además del costo capitalizado, en la **venta** se pueden agregar **cargos on-top** que el cliente paga aparte (ver más abajo). Son cosas distintas: el costo engrosa el COGS; el cargo on-top es lo que el operador refactura.
+- **Ver los costos por puerta:** cada capa FIFO guarda el desglose `{us, intl, arg}`. En la **ficha del producto** se ve el buildup en pantalla (US → +Intl → +Arg = Landed) y el botón **"⤓ Landed cost"** (Productos, admin) baja un **PDF** con el desglose por producto (promedio ponderado del stock en mano) y el valor total del inventario por puerta. El **kardex** también deja el `+$/u leg cost` en cada traslado.
 
 ---
 
