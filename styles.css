@@ -767,3 +767,44 @@
 .house .hlist .li:last-child{border-bottom:0}
 .house .hlist .li .q{font-family:var(--mono);font-weight:700}
 @media (max-width:860px){ .houses{grid-template-columns:1fr} .kanban{grid-template-columns:1fr!important} .kanban .kcol{border-right:0;border-bottom:1px solid var(--line)} }
+
+/* ============================================================
+   PUNTO 4 — Editores de COMPRA e IMPORT: modal CENTRADO y ANCHO
+   ------------------------------------------------------------
+   El override global de más arriba convierte TODO modal en un cajón (drawer)
+   lateral angosto (max-width 560/720/860). En pantallas anchas eso dejaba una
+   banda vacía a la izquierda y, peor, recortaba la tabla de la factura a la
+   derecha (la columna "List price" quedaba cortada, ver captura). Para el
+   editor de compra (.doc) y el de import (.import) volvemos a modal centrado
+   que aprovecha el ancho, sin tocar el resto de los modales (siguen drawer).
+   Usamos :has() para pintar el scrim según la clase del modal que contiene.
+   ============================================================ */
+.scrim:has(.modal.import), .scrim:has(.modal.doc){
+  align-items:flex-start; justify-content:center; padding:44px 20px;
+}
+.modal.import, .modal.doc{
+  border-radius:16px; width:100%; max-width:min(1180px, 94vw);
+  height:auto; max-height:calc(100vh - 88px);
+  box-shadow:0 24px 70px rgba(0,0,0,.34);
+  animation:modalPop .18s cubic-bezier(.22,1,.36,1);
+}
+.modal.import .mbody, .modal.doc .mbody{ max-height:calc(100vh - 210px); }
+@keyframes modalPop{ from{transform:translateY(10px);opacity:0} to{transform:translateY(0);opacity:1} }
+/* La tabla de líneas de la factura respira: nada recortado con el modal ancho. */
+.modal.import .line-tbl, .modal.doc .line-tbl{ width:100%; }
+.modal.import .imp-desc{ max-width:none; white-space:normal; }
+/* En mobile, ancho completo (como el resto): más cómodo que centrar. */
+@media (max-width:860px){
+  .scrim:has(.modal.import), .scrim:has(.modal.doc){ padding:0; align-items:stretch; justify-content:stretch; }
+  .modal.import, .modal.doc{ max-width:none; height:100vh; max-height:100vh; border-radius:0; }
+  .modal.import .mbody, .modal.doc .mbody{ max-height:none; }
+}
+
+/* Cabecera propia/terceros del editor (dropdown arriba + dueño) */
+.origen-bar{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin:0 0 12px}
+.origen-bar .field{margin:0}
+.origen-bar .seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
+.origen-bar .seg button{border:0;background:transparent;color:var(--muted);font-weight:700;font-size:12.5px;
+  padding:7px 14px;border-radius:8px;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s}
+.origen-bar .seg button.on{background:var(--accent);color:#fff;box-shadow:0 3px 10px rgba(124,58,237,.22)}
+.col-ours input{width:100%}

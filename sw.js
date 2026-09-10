@@ -12,7 +12,7 @@
    ACTUALIZACIÓN CONTROLADA: no auto-activamos con skipWaiting; cuando hay
    versión nueva el SW queda "waiting" y la app muestra el botón "Update".
    ============================================================ */
-const CACHE = "mayor-stock-v56";   // v56: seguimiento de mercadería ajena (terceros) + remito US→AR
+const CACHE = "mayor-stock-v57";   // v57: compras unificadas propia/terceros + monitor terceros + iconos network-first (fix logo cacheado)
 
 const ASSETS = [
   "./",
@@ -104,9 +104,12 @@ self.addEventListener("fetch", e => {
     return;
   }
 
-  // Nuestros propios .js y .css: NETWORK-FIRST con copia en cache (para ver
-  // los cambios al toque al editar; offline usa la última copia cacheada).
-  if (url.origin === self.location.origin && /\.(js|css)$/.test(url.pathname)) {
+  // Nuestros propios .js, .css e ICONOS/imágenes: NETWORK-FIRST con copia en cache.
+  // Antes los .png (incl. el logo icon-192/icon-512) caían en el bucket cache-first
+  // de más abajo: al reemplazar el archivo con el MISMO nombre, el SW seguía sirviendo
+  // el viejo hasta un hard refresh. Poniéndolos network-first, online siempre trae el
+  // último y offline usa la última copia cacheada. Ése era el bug del logo.
+  if (url.origin === self.location.origin && /\.(js|css|png|jpg|jpeg|svg|webp|ico)$/.test(url.pathname)) {
     e.respondWith(
       fetch(req).then(res => {
         const copy = res.clone();
