@@ -8,7 +8,7 @@ navs y los `<script>` en **orden fijo**. Todo el código vive en `styles.css` y 
 
 | # | Archivo | Qué hace |
 |---|---|---|
-| 01 | `js/01-core.js` | Config, estado, sesión, sync con el Worker, login, formatos, toast, **depósitos Swan/Select + buckets `__transito`/`__inv`**, helpers de stock, helpers de venta (margen, comisión, **`saleCargosCliente`/`saleNetMargin`**) |
+| 01 | `js/01-core.js` | Config, estado, sesión, sync con el Worker, login, formatos, toast, **depósitos Swan/Select + buckets `__transito`/`__inv`**, helpers de stock, helpers de venta (margen, comisión, **`saleCargosCliente`/`saleNetMargin`**), **remitos numerados** (`nextRemitoNum`/`crearRemito`, series U/A) |
 | 02 | `js/02-engine.js` | Motor: `moverStock`, FIFO por depósito, **FIFO global** (venta), bóveda (`sendToInvestment`/`returnFromInvestment`), **`transferStock`** (con costo por tramo opcional) |
 | 03 | `js/03-router.js` | Router de vistas + wireo del nav |
 | 10 | `js/10-view-dashboard.js` | Panel / KPIs |
@@ -23,7 +23,7 @@ navs y los `<script>` en **orden fijo**. Todo el código vive en `styles.css` y 
 | 20 | `js/20-modal-producto.js` | Modal alta/edición de producto |
 | 21 | `js/21-modal-documento.js` | **Modal de compra/venta**: líneas, picker de producto, costos adicionales (compra), **shipping + extra charges on-top (venta)**, total en vivo |
 | 22 | `js/22-ui-modales.js` | Infra de modales, ajustes de stock |
-| 30 | `js/30-pdf.js` | **PDF de factura** (incluye extra charges) y remitos |
+| 30 | `js/30-pdf.js` | **PDF de factura** (incluye extra charges) y **remitos numerados** (`generarRemitoDocPDF`: serie U/A con referencia de origen) |
 | 31 | `js/31-export-pnl.js` | Export P&L |
 | 32 | `js/32-importar-pdf.js` | Importar factura desde PDF (llama al Worker `/parse-invoice`) |
 | 33 | `js/33-ficha-producto.js` | Ficha individual + kardex del producto |

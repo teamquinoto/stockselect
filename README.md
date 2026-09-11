@@ -56,6 +56,8 @@ Una compra puede ser **`propia`** (todo entra a stock) o **`terceros`**. En terc
 
 **Vista por remito + quedarse para Select (2ª puerta propio/ajeno, en AR):** en **Third-party** la mercadería ajena se agrupa **por remito** (el envío/factura del que nació). Se toca un remito para expandirlo, se **tildan** las líneas que se quieran y se aplica la acción sólo a ese subconjunto (o a todo si no se tilda nada): **recibir en AR**, **entregar al dueño** o **quedarse para Select**. Este último (`quedarseParaSelect`) es la **segunda puerta**: al llegar a Argentina, parte de lo ajeno puede **ingresarse como stock vendible de Select** (entra al FIFO con su costo real; deja kardex). Baja las unidades de la consignación y, si queda en cero, la cierra. Lo que no se retiene sigue trazándose para el pasamanos al tercero.
 
+**Remitos numerados (serie U / A).** Cada envío US → AR emite un **remito U** con correlativo automático (ej. `U 7215`), que nace en la compra de terceros y en *Send to transit*, y agrupa la vista de terceros. Si al llegar a AR el remito se **parte** (parte a Select, parte a terceros) se emite un **remito A** (ej. `A 2314`) que lista lo retenido para Select y **referencia el U de origen**. Si todo va al mismo destino (todo a Select o todo al tercero) **no** hay A: el U alcanza. El arranque de cada serie es configurable en *Data → Settings* (para empatar la numeración de papel). Ambos se bajan en PDF (`generarRemitoDocPDF`).
+
 ---
 
 ## Ventas: shipping, extra charges y margen
