@@ -54,6 +54,8 @@ Una compra puede ser **`propia`** (todo entra a stock) o **`terceros`**. En terc
 
 **Editar una factura de terceros (soportado):** al guardar la edición se **revierte** la compra previa + sus consignaciones **en tránsito** y se **recrea** todo. Si alguna consignación ya avanzó (llegó a AR / se entregó = hecho físico), la edición se bloquea y hay que borrar.
 
+**Vista por remito + quedarse para Select (2ª puerta propio/ajeno, en AR):** en **Third-party** la mercadería ajena se agrupa **por remito** (el envío/factura del que nació). Se toca un remito para expandirlo, se **tildan** las líneas que se quieran y se aplica la acción sólo a ese subconjunto (o a todo si no se tilda nada): **recibir en AR**, **entregar al dueño** o **quedarse para Select**. Este último (`quedarseParaSelect`) es la **segunda puerta**: al llegar a Argentina, parte de lo ajeno puede **ingresarse como stock vendible de Select** (entra al FIFO con su costo real; deja kardex). Baja las unidades de la consignación y, si queda en cero, la cierra. Lo que no se retiene sigue trazándose para el pasamanos al tercero.
+
 ---
 
 ## Ventas: shipping, extra charges y margen

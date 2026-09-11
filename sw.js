@@ -12,7 +12,7 @@
    ACTUALIZACIÓN CONTROLADA: no auto-activamos con skipWaiting; cuando hay
    versión nueva el SW queda "waiting" y la app muestra el botón "Update".
    ============================================================ */
-const CACHE = "mayor-stock-v58";   // v58: costos por puerta (landed buildup + PDF), acciones masivas tránsito/terceros, modales mini centrados, crear owner al vuelo, editar factura de terceros, cargos on-top al cliente
+const CACHE = "mayor-stock-v59";   // v59: terceros por REMITO (colapsable + selección parcial de líneas), quedarse mercadería de terceros para Select (AR) al llegar, preview "= $/u" del costo por puerta, filtro sin opción "Negative"
 
 const ASSETS = [
   "./",
