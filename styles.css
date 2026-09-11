@@ -807,6 +807,16 @@
 .origen-bar .seg button{border:0;background:transparent;color:var(--muted);font-weight:700;font-size:12.5px;
   padding:7px 14px;border-radius:8px;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s}
 .origen-bar .seg button.on{background:var(--accent);color:#fff;box-shadow:0 3px 10px rgba(124,58,237,.22)}
+/* Punto 1: resumen compacto cuando el tipo/dueño ya se eligieron en el import */
+.origen-bar.locked{align-items:center;justify-content:space-between;background:var(--surface-2);
+  border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.origen-sum{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
+.origen-chip{font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;white-space:nowrap;
+  border:1px solid var(--line-strong)}
+.origen-chip.is-third{background:color-mix(in srgb, var(--accent) 14%, transparent);color:var(--accent);border-color:transparent}
+.origen-chip.is-own{background:color-mix(in srgb, var(--up) 16%, transparent);color:var(--up);border-color:transparent}
+.origen-owner{font-size:13px;color:var(--text)}
+.origen-owner b{font-weight:640}
 .col-ours input{width:100%}
 
 /* ============================================================
@@ -824,6 +834,35 @@
 .modal.mini{ border-radius:14px; max-width:440px; width:100%; height:auto; max-height:88vh; }
 .modal.mini .mbody{ flex:none; max-height:70vh; }
 .modal.mini .grid-form.stack{ grid-template-columns:1fr; }
+
+/* ============================================================
+   Modal "recv": recibir en AR — más ancho que el mini y en DOS columnas
+   (lista de productos | costo + notas). Antes era un mini de 440px con la lista
+   apretada en 180px; en una pantalla grande quedaba chico y desperdiciaba lugar.
+   Colapsa a una sola columna en pantallas angostas, y a fullscreen en mobile.
+   ============================================================ */
+.scrim:has(.modal.recv){ align-items:center; justify-content:center; padding:28px 18px; }
+.modal.recv{ border-radius:16px; width:100%; max-width:min(880px, 94vw); height:auto; max-height:90vh;
+  box-shadow:0 24px 70px rgba(0,0,0,.34); animation:modalPop .18s cubic-bezier(.22,1,.36,1); }
+.modal.recv .mbody{ flex:none; max-height:76vh; }
+.recv-grid{ display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:22px; align-items:start; }
+.recv-list{ min-width:0; }
+.recv-list-head{ font-size:12px; text-transform:uppercase; letter-spacing:.03em; color:var(--muted);
+  font-weight:600; margin:0 0 8px; }
+.recv-list-head .hint{ text-transform:none; letter-spacing:0; font-weight:400; margin-left:4px; }
+.recv-scroll{ max-height:380px; overflow:auto; border:1px solid var(--line); border-radius:10px; }
+.recv-scroll table{ width:100%; }
+.recv-scroll .rm-tbl th{ position:sticky; top:0; background:var(--surface); z-index:1; }
+.recv-side{ min-width:0; }
+@media (max-width:720px){
+  .recv-grid{ grid-template-columns:1fr; gap:16px; }
+  .recv-scroll{ max-height:240px; }
+}
+@media (max-width:860px){
+  .scrim:has(.modal.recv){ padding:0; align-items:stretch; justify-content:stretch; }
+  .modal.recv{ max-width:none; height:100vh; max-height:100vh; border-radius:0; }
+  .modal.recv .mbody{ max-height:none; }
+}
 
 /* ============================================================
    Vista por REMITO (Third-party) — tarjetas colapsables + costo por puerta

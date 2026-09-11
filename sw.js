@@ -12,7 +12,7 @@
    ACTUALIZACIÓN CONTROLADA: no auto-activamos con skipWaiting; cuando hay
    versión nueva el SW queda "waiting" y la app muestra el botón "Update".
    ============================================================ */
-const CACHE = "mayor-stock-v61";   // v61: paso único "Resolver en AR" (reparto por línea Select/tercero); un reparto emite DOS remitos A citando al U (A-tercero con costo acumulado + markup = lo que se cobra; A-Select = ingreso a nuestro stock); todo-a-un-lado no emite A; el tercero NO es venta
+const CACHE = "mayor-stock-v62";   // v62: sección Remitos (listado + descarga a demanda, sin pop-ups); el remito de compra/conjunta NO lista lo propio (ours), sólo lo de terceros; import no vuelve a preguntar tipo/dueño (resumen + "Change"); modal "Receive in AR" más ancho y en 2 columnas
 
 const ASSETS = [
   "./",
@@ -38,6 +38,7 @@ const ASSETS = [
   "./js/21-modal-documento.js",
   "./js/17-view-clientes.js",
   "./js/18-view-conjunta.js",
+  "./js/19-view-remitos.js",
   "./js/30-pdf.js",
   "./js/31-export-pnl.js",
   "./js/32-importar-pdf.js",
