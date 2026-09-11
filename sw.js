@@ -12,7 +12,7 @@
    ACTUALIZACIÓN CONTROLADA: no auto-activamos con skipWaiting; cuando hay
    versión nueva el SW queda "waiting" y la app muestra el botón "Update".
    ============================================================ */
-const CACHE = "mayor-stock-v60";   // v60: remitos numerados por serie (U salida US / A split en AR, correlativo automático configurable), remito U en compra de terceros y en send-to-transit, remito A sólo cuando el U se parte (parte Select / parte terceros), PDF por remito con referencia de origen
+const CACHE = "mayor-stock-v61";   // v61: paso único "Resolver en AR" (reparto por línea Select/tercero); un reparto emite DOS remitos A citando al U (A-tercero con costo acumulado + markup = lo que se cobra; A-Select = ingreso a nuestro stock); todo-a-un-lado no emite A; el tercero NO es venta
 
 const ASSETS = [
   "./",

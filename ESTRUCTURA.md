@@ -19,7 +19,7 @@ navs y los `<script>` en **orden fijo**. Todo el código vive en `styles.css` y 
 | 15 | `js/15-view-movimientos.js` | Kardex global (admin) |
 | 16 | `js/16-view-datos.js` | Import/export de datos |
 | 17 | `js/17-view-clientes.js` | Clientes; **build del doc de venta** (shipping, **extra charges**), `editDoc`/`copyDoc`/`verDoc`, **compra de terceros** (`confirmCompraTerceros`) y **edición de terceros** (revert + recreate), revert/receive de compras |
-| 18 | `js/18-view-conjunta.js` | Vista **Third-party**: consignaciones agrupadas **por remito** (colapsable, con selección parcial de líneas), `crearConsignacion`, **`quedarseParaSelect`** (quedarse mercadería ajena para Select/AR al llegar), preview `= $/u` del costo por puerta, joint buys |
+| 18 | `js/18-view-conjunta.js` | Vista **Third-party**: consignaciones agrupadas **por remito** (colapsable, con selección parcial de líneas), `crearConsignacion`, **`openResolverAR`** (reparto en AR: comisión → Select / dueño → entrega + cobro; emite dos remitos A en el split), `quedarseParaSelect`, preview `= $/u` del costo por puerta |
 | 20 | `js/20-modal-producto.js` | Modal alta/edición de producto |
 | 21 | `js/21-modal-documento.js` | **Modal de compra/venta**: líneas, picker de producto, costos adicionales (compra), **shipping + extra charges on-top (venta)**, total en vivo |
 | 22 | `js/22-ui-modales.js` | Infra de modales, ajustes de stock |
