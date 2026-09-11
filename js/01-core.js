@@ -284,7 +284,23 @@ function migrate(d){
   // entrega); nunca entra al stock vendible, ni al FIFO, ni a la valuación. Es un
   // libro paralelo, con dueño (clienteId) y estado (en_transito → en_ar → entregado).
   d.consignaciones = d.consignaciones || [];
-  (d.consignaciones||[]).forEach(cs=>{ if(!Array.isArray(cs.historial)) cs.historial = []; });
+  (d.consignaciones||[]).forEach(cs=>{
+    if(!Array.isArray(cs.historial)) cs.historial = [];
+    if(cs.cantidadOrig==null) cs.cantidadOrig = cs.cantidad||0;   // unidades con las que nació (para saber cuánto se retuvo)
+    if(cs.keptForSelect==null) cs.keptForSelect = 0;              // acumulado retenido para Select (AR)
+    if(cs.keptFull==null)      cs.keptFull = false;               // se retuvo TODA la línea para Select
+    if(cs.remitoId==null)      cs.remitoId = null;                // remito U del que salió
+    if(cs.remitoCodigo==null)  cs.remitoCodigo = "";
+  });
+  // REMITOS: documento interno numerado del movimiento US → AR. Serie por letra:
+  //  · U = salida de USA (nace al arrancar el tránsito). Uno por envío.
+  //  · A = Argentina, se emite SÓLO si el remito U se PARTE (parte a Select, parte a
+  //    terceros). Referencia al U de origen para la trazabilidad. Correlativo automático.
+  d.remitos = d.remitos || [];
+  if(!d.config.remitoSeq || typeof d.config.remitoSeq!=="object"){
+    d.config.remitoSeq = { U:{ inicio:1 }, A:{ inicio:1 } };
+  }
+  ["U","A"].forEach(L=>{ if(!d.config.remitoSeq[L]) d.config.remitoSeq[L] = { inicio:1 }; });
   d.clientes.forEach(c=>{ if(c.pais==null) c.pais = ""; });   // country of buyer (point 7 slicer)
   // Punto 11: normalizar fechas viejas mezcladas (ISO vs "01-Jul-2026") a YYYY-MM-DD
   [...(d.compras||[]), ...(d.ventas||[])].forEach(doc=>{ if(doc.fecha) doc.fecha = normISO(doc.fecha) || doc.fecha; });
@@ -821,6 +837,42 @@ function nextFacturaVenta(){
     if(!isNaN(n) && n>max) max=n;
   });
   return String(max+1);
+}
+
+/* ============================================================
+   REMITOS — numeración por serie de letra (U salida USA · A Argentina)
+   ------------------------------------------------------------
+   El correlativo es AUTOMÁTICO: parte del "inicio" configurable de cada serie
+   (para empatar con la numeración de papel) y sigue el máximo ya emitido + 1.
+   ============================================================ */
+function remitoSeqInicio(letra){
+  const seq = (db.config.remitoSeq && db.config.remitoSeq[letra]) || {};
+  return parseInt(seq.inicio,10) || 1;
+}
+function nextRemitoNum(letra){
+  let max = remitoSeqInicio(letra) - 1;
+  (db.remitos||[]).forEach(r=>{ if(r.letra===letra){ const n=parseInt(r.numero,10); if(!isNaN(n)&&n>max) max=n; } });
+  return max + 1;
+}
+function remitoById(id){ return (db.remitos||[]).find(r=>r.id===id) || null; }
+/* Crea y persiste un remito. `lineas`: [{productoId, sku, nombre, cantidad, rol, owner}].
+   rol ∈ {ours, third, select}. `origen` (para el A) = el remito U de procedencia. */
+function crearRemito(o){
+  o = o || {};
+  const letra = o.letra || "U";
+  const numero = nextRemitoNum(letra);
+  const r = {
+    id: uid(), letra, numero, codigo: letra+" "+numero,
+    tipo: o.tipo || (letra==="A"?"ar-split":"salida-us"),
+    fecha: o.fecha || new Date().toISOString().slice(0,10),
+    fuente: o.fuente || null,                       // {tipo:"compra"|"conjunta"|"transito", id}
+    origenRemitoId: (o.origen && o.origen.id) || null,
+    origenCodigo:   (o.origen && o.origen.codigo) || "",
+    lineas: (o.lineas||[]).map(l=>({ productoId:l.productoId||null, sku:l.sku||"", nombre:l.nombre||"", cantidad:Math.max(0,+l.cantidad||0), rol:l.rol||"", owner:l.owner||"" })),
+    obs: o.obs || ""
+  };
+  (db.remitos || (db.remitos=[])).push(r);
+  return r;
 }
 
 /* ============================================================

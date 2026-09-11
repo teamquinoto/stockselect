@@ -610,6 +610,21 @@ function confirmCompraTerceros(){
     db.compras.push(compraDoc);
   }
 
+  // --- Remito U: documento interno del envío US → AR (numeración automática) ---
+  // Lista TODO lo que viaja: lo nuestro rumbo AR + lo de terceros por dueño.
+  const remitoLineas = [];
+  resolved.forEach(r=>{
+    if(r.ours>0)  remitoLineas.push({ productoId:r.prod.id, sku:r.prod.sku, nombre:r.prod.nombre, cantidad:r.ours,  rol:"ours",  owner:"" });
+    if(r.aTerc>0) remitoLineas.push({ productoId:r.prod.id, sku:r.prod.sku, nombre:r.prod.nombre, cantidad:r.aTerc, rol:"third", owner:ownerName });
+  });
+  let uRemito = null;
+  if(remitoLineas.length){
+    uRemito = crearRemito({ letra:"U", tipo:"salida-us",
+      fecha:fechaISO, fuente:{ tipo:"compra", id: compraDoc?compraDoc.id:null },
+      lineas:remitoLineas, obs:(numero?("Invoice "+numero):"")+(ownerName?(" · "+ownerName):"") });
+    if(compraDoc){ compraDoc.remitoId = uRemito.id; compraDoc.remitoCodigo = uRemito.codigo; }
+  }
+
   // --- Unidades de TERCEROS -> consignaciones (tracked, nacen en tránsito) ---
   let udsTerc = 0;
   resolved.forEach(r=>{
@@ -618,6 +633,8 @@ function confirmCompraTerceros(){
       crearConsignacion({
         conjuntaId: compraDoc ? compraDoc.id : null,
         envioRef: numero, fecha: fechaISO, terceroId: ownerId,
+        remitoId: uRemito ? uRemito.id : null,
+        remitoCodigo: uRemito ? uRemito.codigo : "",
         productoId:r.prod.id, sku:r.prod.sku, nombre:r.prod.nombre,
         cantidad:r.aTerc, costoUnit:r.precio,
         obs: "Third-party invoice" + (numero?(" "+numero):"")
@@ -631,8 +648,13 @@ function confirmCompraTerceros(){
   const parts = [];
   if(udsOurs>0) parts.push(`+${qty(udsOurs)} u to stock (in transit)`);
   if(udsTerc>0) parts.push(`${qty(udsTerc)} u tracked for ${ownerName||"owner"}`);
+  if(uRemito) parts.push(`remito ${uRemito.codigo}`);
   toast("Third-party invoice saved · " + (parts.join(" · ")||"nothing to load"), "up");
   render();
+  // Ofrecer el remito U en PDF (el documento que viaja US → AR)
+  if(uRemito && typeof generarRemitoDocPDF==="function"){
+    setTimeout(()=>{ if(confirm(`Generate the internal remito ${uRemito.codigo} (US → AR) PDF now?`)) generarRemitoDocPDF(uRemito.id); }, 250);
+  }
 }
 
 /* ---- Revertir / borrar / editar documentos ---- */

@@ -59,6 +59,8 @@ function viewDatos(){
           <option value="ARS" ${reportCcy()==="ARS"?"selected":""}>AR$ · Pesos</option>
         </select></div>
       <div class="field"><label>Starting invoice #</label><input class="inp num" id="cfgFac" value="${esc(String(db.config.facturaInicio||101))}"></div>
+      ${isAdmin()?`<div class="field"><label>Remito U · starting # <span class="hint" style="font-weight:400">· US → AR</span></label><input class="inp num" id="cfgRemU" value="${esc(String(remitoSeqInicio("U")))}"></div>
+      <div class="field"><label>Remito A · starting # <span class="hint" style="font-weight:400">· AR split</span></label><input class="inp num" id="cfgRemA" value="${esc(String(remitoSeqInicio("A")))}"></div>`:""}
       ${isAdmin()?`<div class="field"><label>Default commission (% of margin)</label><input class="inp num" id="cfgComm" value="${esc(String(round2((db.config.commissionRate||0)*100)))}"></div>
       <div class="field" style="justify-content:flex-end"><p class="hint" style="font-size:11.5px;margin:0 0 8px">Default for new sellers. Each seller can override it below. Existing sales keep the rate they were booked at.</p></div>`:""}
       <button class="btn" data-savecfg style="justify-self:start;margin-top:4px">Save</button>
@@ -150,6 +152,8 @@ function wire(){
     const tcEl=document.getElementById("cfgTC"); if(tcEl){ const t=parseNum(tcEl.value); if(t>0) db.config.tc=t; }
     const repEl=document.getElementById("cfgRep"); if(repEl){ db.config.reportCcy = repEl.value==="ARS"?"ARS":"USD"; }
     const fi=parseInt(document.getElementById("cfgFac").value,10); if(!isNaN(fi)&&fi>0) db.config.facturaInicio=fi;
+    const ru=document.getElementById("cfgRemU"); if(ru){ const n=parseInt(ru.value,10); if(!isNaN(n)&&n>0){ db.config.remitoSeq=db.config.remitoSeq||{}; db.config.remitoSeq.U={inicio:n}; } }
+    const ra=document.getElementById("cfgRemA"); if(ra){ const n=parseInt(ra.value,10); if(!isNaN(n)&&n>0){ db.config.remitoSeq=db.config.remitoSeq||{}; db.config.remitoSeq.A={inicio:n}; } }
     const commEl=document.getElementById("cfgComm");   // sólo lo renderiza el admin
     if(commEl){ const pct=parseNum(commEl.value); if(!isNaN(pct)) db.config.commissionRate = Math.min(1, Math.max(0, round2(pct)/100)); }
     db.config.emisor = {

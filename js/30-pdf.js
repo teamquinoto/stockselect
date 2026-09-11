@@ -237,6 +237,105 @@ function generarRemitoPDF(conjuntaId){
   toast("Remito downloaded");
 }
 
+/* ============================================================
+   REMITO NUMERADO (documento de primera clase) — U (salida US) / A (split AR)
+   ------------------------------------------------------------
+   Renderiza un objeto de db.remitos con su código de serie (ej. "U 7215").
+   El remito A imprime de qué U salió, para la trazabilidad del split.
+   ============================================================ */
+function generarRemitoDocPDF(remitoId){
+  if(!pdfReady()){ toast("Couldn't load the PDF generator (try once with internet)","warn"); return; }
+  const r = remitoById(remitoId); if(!r){ toast("Remito not found","warn"); return; }
+  const filas = (r.lineas||[]).filter(l=> (l.cantidad||0)>0).map(l=>{
+    const detalle = l.rol==="ours"   ? "Ours → AR"
+                  : l.rol==="select" ? ("Kept for Select" + (l.owner?` · from ${l.owner}`:""))
+                  : (l.owner || "Third party");
+    return { nom:(l.sku?`[${l.sku}] `:"")+(l.nombre||""), detalle, qty:l.cantidad||0, ours:l.rol==="ours" };
+  });
+  if(!filas.length){ toast("This remito has no lines","warn"); return; }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:"pt", format:"letter" });
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 48;
+  const em = db.config.emisor||{};
+  const INK=[26,26,26], MUT=[120,120,120], LINE=[228,225,220], ACC=[37,99,235], ZEBRA=[248,247,245];
+  const setInk=(c)=>doc.setTextColor(c[0],c[1],c[2]);
+  const esAR = r.letra==="A";
+
+  /* Header band */
+  doc.setFillColor(ACC[0],ACC[1],ACC[2]); doc.rect(0,0,W,96,"F");
+  doc.setTextColor(255,255,255);
+  doc.setFont("helvetica","bold"); doc.setFontSize(19);
+  doc.text(em.nombre || "REMITO", M, 42);
+  doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
+  doc.text(esAR ? "Internal transfer note · Argentina (split → Select)" : "Internal transfer note · USA (Swan) → AR (Select)", M, 60);
+  doc.setFont("helvetica","bold"); doc.setFontSize(20);
+  doc.text("REMITO", W-M, 40, {align:"right"});
+  doc.setFont("helvetica","bold"); doc.setFontSize(13);
+  doc.text(r.codigo, W-M, 60, {align:"right"});
+  doc.setFont("helvetica","normal"); doc.setFontSize(9.5);
+  doc.text(fmtDate(r.fecha), W-M, 76, {align:"right"});
+
+  /* Sub-caption + origen (trazabilidad del split) */
+  let y=126;
+  setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(9);
+  if(esAR && r.origenCodigo){
+    setInk(ACC); doc.setFont("helvetica","bold"); doc.setFontSize(10);
+    doc.text(`Split from remito ${r.origenCodigo}`, M, y);
+    setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(9); y+=16;
+  }
+  doc.text(esAR
+    ? "Part of the original shipment was retained as Select (AR) sellable stock. Remaining units keep their third-party tracking."
+    : "Not a commercial invoice — internal movement document. Quantities already filtered (US-kept units excluded).", M, y);
+  y+=22;
+
+  /* Table */
+  const cItem=M;
+  const cDet=W-M-260, wDet=200;
+  const cQty=W-M-60, wQty=60;
+  const drawHead=(yy)=>{
+    doc.setFillColor(ACC[0],ACC[1],ACC[2]); doc.rect(M, yy-13, W-2*M, 24, "F");
+    doc.setTextColor(255,255,255); doc.setFont("helvetica","bold"); doc.setFontSize(9);
+    doc.text("ITEM", cItem+6, yy+3);
+    doc.text("DESTINATION / OWNER", cDet, yy+3);
+    doc.text("QTY", cQty+wQty, yy+3, {align:"right"});
+    return yy+24;
+  };
+  y = drawHead(y);
+  doc.setFont("helvetica","normal"); let zebra=false, totQ=0;
+  const wItem = cDet - cItem - 12;
+  filas.forEach(f=>{
+    const wrapped=doc.splitTextToSize(f.nom, wItem);
+    const rowH=Math.max(20, wrapped.length*11.5 + 8);
+    if(y+rowH>H-96){ y=drawHead(60); zebra=false; }
+    if(zebra){ doc.setFillColor(ZEBRA[0],ZEBRA[1],ZEBRA[2]); doc.rect(M, y-12, W-2*M, rowH, "F"); }
+    zebra=!zebra;
+    const tTop=y+1;
+    setInk(INK); doc.setFontSize(9.5); doc.text(wrapped, cItem+6, tTop);
+    setInk(f.ours?MUT:INK); doc.setFontSize(9);
+    doc.text(doc.splitTextToSize(f.detalle, wDet), cDet, tTop);
+    setInk(INK); doc.setFontSize(9.5);
+    doc.text(qty(f.qty), cQty+wQty, tTop, {align:"right"});
+    totQ+=f.qty;
+    y+=rowH; doc.setDrawColor(LINE[0],LINE[1],LINE[2]); doc.line(M, y-6, W-M, y-6);
+  });
+
+  /* Totals */
+  y+=14; const boxX=W-M-230;
+  doc.setFont("helvetica","bold"); doc.setFontSize(12); setInk(INK);
+  doc.text("Total units", boxX, y); doc.text(qty(totQ), W-M, y, {align:"right"});
+
+  /* Footer */
+  setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
+  doc.text(esAR
+    ? "Traceability document — links the Select-retained units back to their origin remito."
+    : "Third-party units belong to their listed owner and are moved for logistics/traceability only.", M, H-46);
+  doc.setDrawColor(LINE[0],LINE[1],LINE[2]); doc.line(M, H-58, W-M, H-58);
+
+  doc.save(`remito-${String(r.codigo).replace(/\s+/g,"-")}.pdf`);
+  toast(`Remito ${r.codigo} downloaded`);
+}
+
 /* Lista de precios para clientes (punto 10). Recibe la lista ya filtrada. */
 function exportListaPrecios(prods){
   if(!pdfReady()){ toast("Couldn't load the PDF generator (try once with internet)","warn"); return; }

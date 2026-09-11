@@ -48,15 +48,21 @@ function terceroNombre(cs){
 /* Alta de una consignación (nace en tránsito). */
 function crearConsignacion(o){
   const c = clienteById(o.terceroId);
+  const cant = Math.max(0, +o.cantidad||0);
   const cs = {
     id: uid(),
     fecha: o.fecha || new Date().toISOString().slice(0,10),
     conjuntaId: o.conjuntaId || null,
     envioRef: o.envioRef || "",
+    remitoId: o.remitoId || null,                  // remito U del que salió (numeración interna)
+    remitoCodigo: o.remitoCodigo || "",
     terceroId: o.terceroId || null,
     terceroNombre: c ? (c.nombre + (c.empresa?` · ${c.empresa}`:"")) : (o.terceroNombre||""),
     productoId: o.productoId, sku: o.sku||"", nombre: o.nombre||"",
-    cantidad: Math.max(0, +o.cantidad||0),
+    cantidad: cant,
+    cantidadOrig: cant,                            // unidades con las que nació
+    keptForSelect: 0,                             // acumulado retenido para Select (AR)
+    keptFull: false,                              // se retuvo TODA la línea para Select
     estado: CONSIGN_ESTADOS.TRANSITO,
     costoUnit: Math.max(0, +o.costoUnit||0),      // costo de referencia (reparto), NO COGS
     costoCourierUnit: 0,                           // se agrega al recibir en AR (trazabilidad de costos)
@@ -107,10 +113,11 @@ function consignResumenPorTercero(){
 let remitoOpen = {};   // remitoKey -> true si está expandido (persiste entre renders)
 let remitoSel  = {};   // consignId -> true si la línea está tildada
 
-/* Clave de agrupación: el documento de origen (conjuntaId) es el remito real.
-   Si no lo hay (factura 100% de terceros), caemos a ref+dueño+fecha. */
+/* Clave de agrupación: el REMITO U (numeración interna) es la agrupación real.
+   Si una línea vieja no lo tiene, caemos al documento de origen o a ref+dueño+fecha. */
 function remitoKey(cs){
-  return cs.conjuntaId ? ("doc:"+cs.conjuntaId)
+  return cs.remitoId ? ("rem:"+cs.remitoId)
+       : cs.conjuntaId ? ("doc:"+cs.conjuntaId)
        : ("ref:"+(cs.envioRef||"—")+"|"+(cs.terceroId||"—")+"|"+(cs.fecha||"—"));
 }
 /* Remitos con mercadería ajena todavía EN FLUJO (tránsito o en AR; lo entregado sale). */
@@ -120,11 +127,12 @@ function remitosActivos(){
     if(cs.estado===CONSIGN_ESTADOS.ENTREGADO) return;   // ya cerrado: fuera
     if((cs.cantidad||0)<=0) return;                      // absorbido por completo
     const k = remitoKey(cs);
-    const g = map[k] || (map[k] = { key:k, ref:cs.envioRef||"", fecha:cs.fecha||"", conjuntaId:cs.conjuntaId||null, lineas:[], owners:new Set() });
+    const g = map[k] || (map[k] = { key:k, ref:cs.envioRef||"", fecha:cs.fecha||"", conjuntaId:cs.conjuntaId||null, remitoId:cs.remitoId||null, codigo:cs.remitoCodigo||"", lineas:[], owners:new Set() });
     g.lineas.push(cs);
     if(cs.terceroId) g.owners.add(cs.terceroId);
     if(!g.fecha && cs.fecha) g.fecha = cs.fecha;
     if(!g.ref && cs.envioRef) g.ref = cs.envioRef;
+    if(!g.codigo && cs.remitoCodigo) g.codigo = cs.remitoCodigo;
   });
   return Object.values(map).map(g=>{
     g.enTransito = g.lineas.filter(l=>l.estado===CONSIGN_ESTADOS.TRANSITO);
@@ -134,7 +142,21 @@ function remitosActivos(){
     g.uTotal     = g.uTransito + g.uAr;
     g.ownerNames = [...g.owners].map(id=> (clienteById(id)||{}).nombre || "—");
     return g;
-  }).sort((a,b)=> String(b.fecha).localeCompare(String(a.fecha)) || String(a.ref).localeCompare(String(b.ref),"en"));
+  }).sort((a,b)=> String(b.fecha).localeCompare(String(a.fecha)) || String(a.codigo||a.ref).localeCompare(String(b.codigo||b.ref),"en"));
+}
+/* ¿Cuántas unidades de este REMITO U NO se retienen para Select? = las que siguen en
+   flujo (tránsito/AR sin retener) + las ya entregadas al dueño. Sirve para decidir si
+   hubo un SPLIT (parte a Select, parte a terceros) → recién ahí se emite el remito A. */
+function remitoUnidadesNoSelect(remitoId, conjuntaId){
+  if(!remitoId && !conjuntaId) return 0;
+  return consignAll().reduce((a,cs)=>{
+    const match = remitoId ? (cs.remitoId===remitoId) : (cs.conjuntaId===conjuntaId);
+    if(!match) return a;
+    // en flujo (todavía sin decidir/entregar) o entregada al dueño (no retenida)
+    if(cs.estado!==CONSIGN_ESTADOS.ENTREGADO) return a + (cs.cantidad||0);
+    if(!cs.keptFull) return a + (cs.cantidad||0);   // entregada al tercero (cantidad = lo entregado)
+    return a;                                        // retenida entera para Select: no cuenta
+  }, 0);
 }
 /* Líneas destino de una acción sobre un remito: las tildadas de ESE remito,
    o todas si no hay ninguna tildada, filtradas por estado si se pide. */
@@ -170,11 +192,14 @@ function quedarseParaSelect(consignId, unidades, costoUnit, obs){
   p.ultimoCosto = landed;
   // baja de la consignación
   cs.cantidad = round4(cs.cantidad - q);
+  cs.keptForSelect = round4((cs.keptForSelect||0) + q);
   cs.historial.push({ estado:cs.estado, fecha:new Date().toISOString(), obs:`kept ${qty(q)} u for ${storeName(store)}` });
   if(cs.cantidad<=0.00001){
     cs.cantidad = 0;
-    cs.estado = CONSIGN_ESTADOS.ENTREGADO;                 // cerrada: se fue toda a Select
-    cs.obs = (cs.obs?cs.obs+" · ":"") + "fully kept for "+storeName(store);
+    // La línea se drenó: fue ENTERA para Select sólo si nunca se entregó nada al dueño.
+    cs.keptFull = ((cs.keptForSelect||0) >= (cs.cantidadOrig||cs.keptForSelect||0) - 0.00001);
+    cs.estado = CONSIGN_ESTADOS.ENTREGADO;                 // cerrada
+    cs.obs = (cs.obs?cs.obs+" · ":"") + "kept for "+storeName(store);
   }
   return q;
 }
@@ -552,7 +577,17 @@ function openEnviarTransito(){
       const costTot=Math.max(0,parseNum(document.getElementById("et_cost").value)||0);   // intl freight + wire fees (total)
       const costPU = q>0 ? round2(costTot/q) : 0;                                          // prorrateo por unidad
       const done = transferStock(p, st, TRANSITO_STORE, q, costPU, obs, "intl");
-      if(done>0){ closeModal(); toast(`Sent ${qty(done)} u to transit${costTot>0?` · +${money(costPU,"USD")}/u landed`:""}`, "up"); render(); }
+      if(done>0){
+        // Remito U del envío propio US → AR (numeración automática)
+        const uRem = crearRemito({ letra:"U", tipo:"salida-us", fuente:{ tipo:"transito", id:p.id },
+          lineas:[{ productoId:p.id, sku:p.sku, nombre:p.nombre, cantidad:done, rol:"ours", owner:"" }],
+          obs:obs || ("Own stock "+storeName(st)+" → AR") });
+        save();
+        closeModal();
+        toast(`Sent ${qty(done)} u to transit · remito ${uRem.codigo}${costTot>0?` · +${money(costPU,"USD")}/u landed`:""}`, "up");
+        render();
+        if(typeof generarRemitoDocPDF==="function"){ setTimeout(()=>{ if(confirm(`Generate remito ${uRem.codigo} (US → AR) PDF now?`)) generarRemitoDocPDF(uRem.id); }, 250); }
+      }
     }}
   ], "mini");
   // depósitos con stock del producto elegido (se actualiza al cambiar de producto)
@@ -863,7 +898,7 @@ function remitoCardHTML(g){
   ].filter(Boolean).join("");
   const head = `<div class="rm-head" data-remito-toggle="${esc(g.key)}">
       <span class="rm-caret">${open?"▾":"▸"}</span>
-      <div class="rm-id"><b>${esc(g.ref||"(no ref)")}</b><span class="rm-sub">${esc(fmtDate(g.fecha))} · ${esc(owners)} · ${g.lineas.length} product(s) · ${qty(g.uTotal)} u</span></div>
+      <div class="rm-id"><b>${g.codigo?esc(g.codigo):esc(g.ref||"(no ref)")}</b><span class="rm-sub">${g.codigo&&g.ref?esc(g.ref)+" · ":""}${esc(fmtDate(g.fecha))} · ${esc(owners)} · ${g.lineas.length} product(s) · ${qty(g.uTotal)} u</span></div>
       <div class="rm-pills">${pills}</div>
     </div>`;
   if(!open) return `<div class="rm-card">${head}</div>`;
@@ -886,6 +921,7 @@ function remitoCardHTML(g){
   const hasAr       = scopeLines.some(l=> l.estado===CONSIGN_ESTADOS.AR);
   const bar = `<div class="rm-actions">
       <span class="rm-scope">${selHere.length?`${selHere.length} selected`:"acting on the whole remito"}</span>
+      ${g.remitoId?`<button class="btn ghost xs" data-rm-pdf="${esc(g.remitoId)}" title="Download remito ${esc(g.codigo)} (US → AR)">⤓ ${esc(g.codigo||"remito")}</button>`:""}
       <div style="flex:1"></div>
       ${hasTransito?`<button class="btn up sm" data-rm-receive="${esc(g.key)}" title="Puerta 2 · US transit → AR">Receive in AR ▾</button>`:""}
       ${hasAr?`<button class="btn sm" data-rm-keep="${esc(g.key)}" title="Puerta 3 · keep units as Select (AR) sellable stock">↳ Keep for Select ▾</button>`:""}
@@ -961,16 +997,34 @@ function openKeepForSelect(key){
       const extraTot = Math.max(0,parseNum(document.getElementById("k_extra").value)||0);
       const extraPU  = totalKeep>0 ? round2(extraTot/totalKeep) : 0;
       const obs = (document.getElementById("k_obs").value||"").trim();
-      let done=0, items=0;
+      // contexto del remito U (antes de mutar) para decidir si hay SPLIT y emitir el A
+      const remId  = lines[0] && lines[0].remitoId || null;
+      const conjId = lines[0] && lines[0].conjuntaId || null;
+      const uRemito = remId ? remitoById(remId) : null;
+      let done=0, items=0; const keptLines=[];
       lines.forEach((cs,i)=>{
         const q = Math.min(Math.max(0,parseNum(document.getElementById("kq_"+i).value)||0), cs.cantidad);
         if(q<=0) return;
         const cost = round2((parseNum(document.getElementById("kc_"+i).value)||0) + extraPU);
         const kept = quedarseParaSelect(cs.id, q, cost, obs);
-        if(kept>0){ done+=kept; items++; if((cs.cantidad||0)<=0) delete remitoSel[cs.id]; }
+        if(kept>0){ done+=kept; items++; keptLines.push({ productoId:cs.productoId, sku:cs.sku, nombre:cs.nombre, cantidad:kept, rol:"select", owner:terceroNombre(cs), origenOwner:terceroNombre(cs) }); if((cs.cantidad||0)<=0) delete remitoSel[cs.id]; }
       });
+      // ¿Hubo SPLIT? Se retuvo algo para Select Y queda algo que NO va a Select
+      // (en flujo o entregado al dueño) → recién ahí se emite el remito A.
+      let aRem = null;
+      if(done>0 && remitoUnidadesNoSelect(remId, conjId) > 0.00001){
+        aRem = crearRemito({ letra:"A", tipo:"ar-split",
+          fuente:{ tipo:"keep", id:(remId||conjId) },
+          origen: uRemito ? { id:uRemito.id, codigo:uRemito.codigo } : (lines[0]&&lines[0].remitoCodigo?{ id:null, codigo:lines[0].remitoCodigo }:null),
+          lineas:keptLines, obs:obs });
+      }
       save(); closeModal();
-      toast(done>0?`Kept ${qty(done)} u for ${storeName(store)} across ${items} product(s)`:"Nothing kept","up");
+      if(aRem){
+        toast(`Kept ${qty(done)} u for ${storeName(store)} · remito ${aRem.codigo} issued`,"up");
+        setTimeout(()=>{ if(confirm(`Split from remito ${uRemito?uRemito.codigo:(lines[0]&&lines[0].remitoCodigo)||"U"} — new AR remito ${aRem.codigo}.\n\nDownload the PDF now?`) && typeof generarRemitoDocPDF==="function") generarRemitoDocPDF(aRem.id); }, 250);
+      } else {
+        toast(done>0?`Kept ${qty(done)} u for ${storeName(store)} across ${items} product(s) · no split, remito U unchanged`:"Nothing kept","up");
+      }
       render();
     }}
   ], "wide");
@@ -1018,4 +1072,5 @@ function wireConjunta(){
   m.querySelectorAll("[data-rm-receive]").forEach(b=> b.onclick=()=> openRecibirRemito(b.dataset.rmReceive));
   m.querySelectorAll("[data-rm-keep]").forEach(b=> b.onclick=()=> openKeepForSelect(b.dataset.rmKeep));
   m.querySelectorAll("[data-rm-deliver]").forEach(b=> b.onclick=()=> entregarRemito(b.dataset.rmDeliver));
+  m.querySelectorAll("[data-rm-pdf]").forEach(b=> b.onclick=(e)=>{ e.stopPropagation(); generarRemitoDocPDF(b.dataset.rmPdf); });
 }
