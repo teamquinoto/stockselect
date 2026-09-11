@@ -149,7 +149,6 @@ function filterBarHTML(prefix, f){
       <option value="con" ${f.estado==="con"?"selected":""}>In stock</option>
       <option value="sin" ${f.estado==="sin"?"selected":""}>Out of stock</option>
       <option value="bajo" ${f.estado==="bajo"?"selected":""}>Below min</option>
-      <option value="neg" ${f.estado==="neg"?"selected":""}>Negative</option>
       <option value="blocked" ${f.estado==="blocked"?"selected":""}>Blocked</option>
     </select>
     <select class="inp" id="${prefix}xstate" style="flex:1;min-width:120px" title="Available vs. incoming (in transit)">
