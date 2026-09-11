@@ -95,7 +95,7 @@ function isAdmin(){ return currentRole()===ROLES.ADMIN; }
 function isSeller(){ return currentRole()===ROLES.SELLER; }
 /* Vistas reservadas al admin. Un vendedor NO carga compras, no manda a inversión,
    no ve análisis/comisiones globales ni la exportación de datos. Sólo vende. */
-const ADMIN_VIEWS = ["compras","inv","analisis","datos","mov","conjunta"];
+const ADMIN_VIEWS = ["compras","inv","analisis","datos","mov","conjunta","remitos"];
 /* Capacidades gateadas por rol (punto 3). El modo Local (sin sesión) = admin. */
 function puedeComprar(){ return isAdmin(); }        // cargar compras / recibir facturas
 function puedeInvertir(){ return isAdmin(); }       // enviar / traer de la bóveda de inversión

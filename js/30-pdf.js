@@ -248,7 +248,14 @@ function generarRemitoDocPDF(remitoId){
   const r = remitoById(remitoId); if(!r){ toast("Remito not found","warn"); return; }
   const esTercero = r.tipo==="ar-tercero";
   const esSelect  = r.tipo==="ar-select";
-  const filas = (r.lineas||[]).filter(l=> (l.cantidad||0)>0).map(l=>{
+  // Un remito NO lista lo "ours" cuando además lleva líneas de terceros: la mercadería
+  // propia ya entra como stock nuestro, no viaja como documento de traslado. Sólo se
+  // conserva "ours" si el remito es 100% propio (envío de stock propio US→AR desde
+  // "Send to transit"), donde ES el sujeto del documento. Esto arregla también remitos
+  // viejos que se hayan guardado con la línea "ours" mezclada.
+  let lineasVivas = (r.lineas||[]).filter(l=> (l.cantidad||0)>0);
+  if(lineasVivas.some(l=> l.rol!=="ours")) lineasVivas = lineasVivas.filter(l=> l.rol!=="ours");
+  const filas = lineasVivas.map(l=>{
     const detalle = l.rol==="ours"   ? "Ours → AR"
                   : l.rol==="select" ? ("Kept for Select" + (l.owner?` · from ${l.owner}`:""))
                   : (l.owner || "Third party");

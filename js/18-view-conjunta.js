@@ -474,6 +474,18 @@ function confirmConjunta(){
   };
   const refTxt = "Joint buy" + (doc.numero?(" "+doc.numero):"") + (cli?(" · "+cli.nombre):"");
 
+  // Remito U (numerado) del envío US→AR: SÓLO lo de TERCEROS. Lo nuestro (Swan / →AR)
+  // ya es stock propio, no viaja como documento de traslado. Queda guardado en
+  // db.remitos y disponible en la sección Remitos (sin pop-up al guardar).
+  const uRemLineas = resolved.filter(r=> r.ajeno>0 && r.terceroId)
+    .map(r=>({ productoId:r.prod.id, sku:r.prod.sku, nombre:r.prod.nombre, cantidad:r.ajeno, rol:"third",
+               owner:(clienteById(r.terceroId)||{}).nombre||"" }));
+  let uRem = null;
+  if(uRemLineas.length && typeof crearRemito==="function"){
+    uRem = crearRemito({ letra:"U", tipo:"salida-us", fecha:doc.fecha, fuente:{ tipo:"conjunta", id:doc.id },
+      lineas:uRemLineas, obs:refTxt });
+  }
+
   resolved.forEach(r=>{
     const p = r.prod;
     // Unidades que quedan en SWAN (USA): stock vendible al toque, con kardex.
@@ -491,6 +503,7 @@ function confirmConjunta(){
     // consignaciones (nacen en tránsito US→AR) para seguirse por separado.
     if(r.ajeno>0 && r.terceroId){
       crearConsignacion({ conjuntaId:doc.id, envioRef:doc.numero, fecha:doc.fecha, terceroId:r.terceroId,
+        remitoId: uRem?uRem.id:null, remitoCodigo: uRem?uRem.codigo:"",
         productoId:p.id, sku:p.sku, nombre:p.nombre, cantidad:r.ajeno, costoUnit:r.costoUnit, obs:refTxt });
     }
     // último costo landed de referencia (sólo si cargaron un costo > 0)
@@ -504,16 +517,13 @@ function confirmConjunta(){
   });
 
   db.conjuntas.push(doc);
-  const savedId = doc.id;
   conjDraft=null;
   save(); closeModal();
   const sw = doc.lineas.reduce((a,l)=>a+l.aSwan,0), tr = doc.lineas.reduce((a,l)=>a+l.aTransito,0), aj = doc.lineas.reduce((a,l)=>a+(l.ajeno||0),0);
-  toast(`Joint buy saved · +${qty(sw)} Swan · ${qty(tr)} in transit · ${qty(aj)} third-party`, "up");
+  const remBit = uRem ? ` · remito ${uRem.codigo}` : "";
+  toast(`Joint buy saved · +${qty(sw)} Swan · ${qty(tr)} in transit · ${qty(aj)} third-party${remBit}`, "up");
   render();
-  // Ofrecer el remito interno (documento que viaja EEUU→AR con cantidades filtradas)
-  if((tr+aj)>0 && typeof generarRemitoPDF==="function"){
-    setTimeout(()=>{ if(confirm("Generate the internal transfer note (remito) for the US→AR shipment?")) generarRemitoPDF(savedId); }, 250);
-  }
+  // El remito queda en la sección Remitos (descargá cuando quieras). Sin pop-up.
 }
 
 /* ---- Recibir en AR: pasa unidades de TRÁNSITO a SWAN (con costo de importación opcional) ---- */
@@ -586,7 +596,7 @@ function openEnviarTransito(){
         closeModal();
         toast(`Sent ${qty(done)} u to transit · remito ${uRem.codigo}${costTot>0?` · +${money(costPU,"USD")}/u landed`:""}`, "up");
         render();
-        if(typeof generarRemitoDocPDF==="function"){ setTimeout(()=>{ if(confirm(`Generate remito ${uRem.codigo} (US → AR) PDF now?`)) generarRemitoDocPDF(uRem.id); }, 250); }
+        // Remito guardado — descargalo desde la sección Remitos (sin pop-up).
       }
     }}
   ], "mini");
@@ -942,11 +952,18 @@ function openRecibirRemito(key){
   const totalU = lines.reduce((a,l)=>a+l.cantidad,0);
   const list = lines.map(cs=>`<tr><td>${esc(cs.nombre)}<div class="hint">${esc(cs.sku||"")} · ${esc(terceroNombre(cs))}</div></td><td class="r num">${qty(cs.cantidad)}</td></tr>`).join("");
   const body = `
-    <p class="hint" style="margin:0 0 12px"><b>Receive ${lines.length} line(s)</b> · ${qty(totalU)} u into <b>AR</b> (still third-party, still tracked). The courier / financial cost is <b>optional</b> and only for cost-sharing reports — it doesn't touch stock or margin.</p>
-    <div class="table-scroll" style="max-height:180px;margin-bottom:12px"><table class="rm-tbl"><thead><tr><th>Product</th><th class="r">Units</th></tr></thead><tbody>${list}</tbody></table></div>
-    <div class="grid-form stack" style="padding:0">
-      ${legCostFieldHTML("rr_c","Courier / financial cost","· total for the batch, optional")}
-      <div class="field" style="grid-column:1/-1"><label>Notes</label><input class="inp" id="rr_obs" placeholder="e.g. arrival ref"></div>
+    <p class="hint" style="margin:0 0 16px"><b>Receive ${lines.length} line(s)</b> · ${qty(totalU)} u into <b>AR</b> (still third-party, still tracked). The courier / financial cost is <b>optional</b> and only for cost-sharing reports — it doesn't touch stock or margin.</p>
+    <div class="recv-grid">
+      <div class="recv-list">
+        <div class="recv-list-head">Products <span class="hint">· ${lines.length} line(s) · ${qty(totalU)} u</span></div>
+        <div class="table-scroll recv-scroll"><table class="rm-tbl"><thead><tr><th>Product</th><th class="r">Units</th></tr></thead><tbody>${list}</tbody></table></div>
+      </div>
+      <div class="recv-side">
+        <div class="grid-form stack" style="padding:0;gap:16px">
+          ${legCostFieldHTML("rr_c","Courier / financial cost","· total for the batch, optional")}
+          <div class="field"><label>Notes</label><input class="inp" id="rr_obs" placeholder="e.g. arrival ref"></div>
+        </div>
+      </div>
     </div>`;
   buildModal("Receive in AR · third-party", body, [
     {label:"Cancel",cls:"btn",act:closeModal},
@@ -958,7 +975,7 @@ function openRecibirRemito(key){
       lines.forEach(l=> delete remitoSel[l.id]);
       closeModal(); toast(`Received ${lines.length} line(s) in AR${tot>0?` · +${money(perU,"USD")}/u courier`:""}`,"up"); render();
     }}
-  ], "mini");
+  ], "recv");
   wireLegPreview("rr_c", totalU);
 }
 
@@ -1044,13 +1061,8 @@ function openResolverAR(key){
       }
       save(); closeModal();
       if(aSel && aTer){
-        toast(`Split ${uCodigo} → ${aTer.codigo} (owner) + ${aSel.codigo} (Select)`,"up");
-        setTimeout(()=>{
-          if(confirm(`Remito ${uCodigo} split.\n\nDownload the two A remitos now?\n· ${aTer.codigo} — owner (charge)\n· ${aSel.codigo} — Select (our stock)`) && typeof generarRemitoDocPDF==="function"){
-            generarRemitoDocPDF(aTer.id);
-            setTimeout(()=> generarRemitoDocPDF(aSel.id), 400);
-          }
-        }, 250);
+        toast(`Split ${uCodigo} → ${aTer.codigo} (owner) + ${aSel.codigo} (Select) · in Remitos`,"up");
+        // Ambos remitos A quedan guardados y se descargan desde la sección Remitos.
       } else if(selU>0){
         toast(`Kept ${qty(selU)} u for ${storeName(store)} · no split, no A`,"up");
       } else {

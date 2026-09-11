@@ -71,7 +71,24 @@ function renderDocModal(){
   if(isC){
     const terc = draft.origen==="terceros";
     const owner = draft.terceroId ? clienteById(draft.terceroId) : null;
-    origenBar = `
+    // Punto 1: si el tipo (propia/terceros) y el dueño ya se eligieron en el paso de
+    // import, NO se vuelve a preguntar. Se muestra un resumen compacto con un botón
+    // "Change" que despliega la barra completa por si hay que corregir algo.
+    const locked = draft.origenLocked && !draft._origenEdit;
+    const ownerHint = `${terc?`<p class="hint" style="margin:-4px 0 12px;font-size:12px">Third-party invoice: set <b>Ours</b> on each line for the units you keep (they enter stock like a normal purchase). The rest keeps travelling to the owner and is only <b>tracked</b> — it never touches your stock, valuation or P&amp;L.</p>`:""}`;
+    if(locked){
+      origenBar = `
+      <div class="origen-bar locked">
+        <div class="origen-sum">
+          <span class="origen-chip ${terc?"is-third":"is-own"}">${terc?"Third-party":"Own · all to stock"}</span>
+          ${terc?`<span class="origen-owner">Owner: <b>${owner?esc(clienteLinea(owner)):"— none —"}</b></span>`:""}
+          <span class="hint" style="font-size:11.5px">· set in the import step</span>
+        </div>
+        <button type="button" class="btn ghost xs" id="d_origen_edit">Change</button>
+      </div>
+      ${ownerHint}`;
+    } else {
+      origenBar = `
       <div class="origen-bar">
         <div class="field">
           <label>Invoice type</label>
@@ -86,7 +103,8 @@ function renderDocModal(){
             <span class="ppick-label">${owner?esc(clienteLinea(owner)):"— pick owner (client / local) —"}</span><span class="ppick-caret">▾</span>
           </button></div>`:""}
       </div>
-      ${terc?`<p class="hint" style="margin:-4px 0 12px;font-size:12px">Third-party invoice: set <b>Ours</b> on each line for the units you keep (they enter stock like a normal purchase). The rest keeps travelling to the owner and is only <b>tracked</b> — it never touches your stock, valuation or P&amp;L.</p>`:""}`;
+      ${ownerHint}`;
+    }
   }
   let topSel;
   if(isC){
@@ -176,6 +194,7 @@ function renderDocModal(){
     renderDocModal();
   });
   const dOw=document.getElementById("d_owner"); if(dOw) dOw.onclick=(e)=> openDocOwnerPicker(e.currentTarget);
+  const dOe=document.getElementById("d_origen_edit"); if(dOe) dOe.onclick=()=>{ draft._origenEdit=true; renderDocModal(); };
   const dst=document.getElementById("d_store"); if(dst) dst.onchange=e=>{ draft.store=e.target.value; };
   const dvend=document.getElementById("d_vend"); if(dvend) dvend.onchange=e=>{ draft.vendedorId=e.target.value; };
   const dsv=document.getElementById("d_storeventa"); if(dsv) dsv.onchange=e=>{ draft.storeVenta=e.target.value; renderDocModal(); };   // re-render: refresca disponibilidad y costos del depósito

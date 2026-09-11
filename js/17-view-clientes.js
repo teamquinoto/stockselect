@@ -611,10 +611,11 @@ function confirmCompraTerceros(){
   }
 
   // --- Remito U: documento interno del envío US → AR (numeración automática) ---
-  // Lista TODO lo que viaja: lo nuestro rumbo AR + lo de terceros por dueño.
+  // SÓLO viaja con remito lo de TERCEROS: son unidades del dueño que siguen a AR
+  // para entregárselas. Lo NUESTRO (ours) ya entró como mercadería propia con la
+  // compra de arriba (nace en tránsito, es nuestro stock) — no necesita remito.
   const remitoLineas = [];
   resolved.forEach(r=>{
-    if(r.ours>0)  remitoLineas.push({ productoId:r.prod.id, sku:r.prod.sku, nombre:r.prod.nombre, cantidad:r.ours,  rol:"ours",  owner:"" });
     if(r.aTerc>0) remitoLineas.push({ productoId:r.prod.id, sku:r.prod.sku, nombre:r.prod.nombre, cantidad:r.aTerc, rol:"third", owner:ownerName });
   });
   let uRemito = null;
@@ -651,10 +652,8 @@ function confirmCompraTerceros(){
   if(uRemito) parts.push(`remito ${uRemito.codigo}`);
   toast("Third-party invoice saved · " + (parts.join(" · ")||"nothing to load"), "up");
   render();
-  // Ofrecer el remito U en PDF (el documento que viaja US → AR)
-  if(uRemito && typeof generarRemitoDocPDF==="function"){
-    setTimeout(()=>{ if(confirm(`Generate the internal remito ${uRemito.codigo} (US → AR) PDF now?`)) generarRemitoDocPDF(uRemito.id); }, 250);
-  }
+  // El remito U queda GUARDADO y se descarga cuando quieras desde la sección Remitos.
+  // Sin pop-up bloqueante (antes preguntaba "¿generar PDF ahora?" en cada carga).
 }
 
 /* ---- Revertir / borrar / editar documentos ---- */

@@ -8,7 +8,7 @@
    ============================================================ */
 let view = "dash";
 /* Nav de dos niveles (ERP): cada vista pertenece a una sección de nivel 1. */
-const SECTION_OF = { dash:"op", ventas:"op", compras:"op", conjunta:"op", mov:"op",
+const SECTION_OF = { dash:"op", ventas:"op", compras:"op", conjunta:"op", remitos:"op", mov:"op",
                      prod:"cat", clientes:"cat", analisis:"fin", inv:"fin", datos:"dat" };
 let activeSection = "op";
 document.querySelectorAll("#nav button, #navMob button").forEach(b=>{
@@ -119,6 +119,7 @@ function render(){
   else if(view==="mov") m.innerHTML = isAdmin()? (bar+viewMov()) : viewDash();
   else if(view==="inv") m.innerHTML = isAdmin()? viewInversiones() : viewDash();
   else if(view==="conjunta") m.innerHTML = isAdmin()? viewConjunta() : viewDash();
+  else if(view==="remitos") m.innerHTML = isAdmin()? viewRemitos() : viewDash();
   else if(view==="datos") m.innerHTML = viewDatos();
   applyRoleUI();
   activeSection = SECTION_OF[view] || activeSection;

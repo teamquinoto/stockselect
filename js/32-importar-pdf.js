@@ -301,7 +301,7 @@ function showImportEditor(fname, parsed){
       cantidad:c.cantidad, precio:c.costo,
       aNuestro: terc ? 0 : (c.cantidad)   // terceros: por defecto nada nuestro (lo marcás por línea); propia: todo
     }));
-    openDoc("compra", { tipo:"compra", origen:importOrigen, terceroId: terc?importOwner:"",
+    openDoc("compra", { tipo:"compra", origen:importOrigen, terceroId: terc?importOwner:"", origenLocked:true,
       contraparte:meta.proveedor||"", fecha:meta.fecha||new Date().toISOString().slice(0,10),
       numero:meta.numero||"", handling:0, flete:meta.flete||0, lineas });
   };
