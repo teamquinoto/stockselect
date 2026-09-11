@@ -868,7 +868,7 @@ function crearRemito(o){
     fuente: o.fuente || null,                       // {tipo:"compra"|"conjunta"|"transito", id}
     origenRemitoId: (o.origen && o.origen.id) || null,
     origenCodigo:   (o.origen && o.origen.codigo) || "",
-    lineas: (o.lineas||[]).map(l=>({ productoId:l.productoId||null, sku:l.sku||"", nombre:l.nombre||"", cantidad:Math.max(0,+l.cantidad||0), rol:l.rol||"", owner:l.owner||"" })),
+    lineas: (o.lineas||[]).map(l=>({ productoId:l.productoId||null, sku:l.sku||"", nombre:l.nombre||"", cantidad:Math.max(0,+l.cantidad||0), rol:l.rol||"", owner:l.owner||"", costoUnit:(+l.costoUnit||0), charge:(l.charge!=null?+l.charge:null) })),
     obs: o.obs || ""
   };
   (db.remitos || (db.remitos=[])).push(r);

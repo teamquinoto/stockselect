@@ -246,11 +246,14 @@ function generarRemitoPDF(conjuntaId){
 function generarRemitoDocPDF(remitoId){
   if(!pdfReady()){ toast("Couldn't load the PDF generator (try once with internet)","warn"); return; }
   const r = remitoById(remitoId); if(!r){ toast("Remito not found","warn"); return; }
+  const esTercero = r.tipo==="ar-tercero";
+  const esSelect  = r.tipo==="ar-select";
   const filas = (r.lineas||[]).filter(l=> (l.cantidad||0)>0).map(l=>{
     const detalle = l.rol==="ours"   ? "Ours → AR"
                   : l.rol==="select" ? ("Kept for Select" + (l.owner?` · from ${l.owner}`:""))
                   : (l.owner || "Third party");
-    return { nom:(l.sku?`[${l.sku}] `:"")+(l.nombre||""), detalle, qty:l.cantidad||0, ours:l.rol==="ours" };
+    return { nom:(l.sku?`[${l.sku}] `:"")+(l.nombre||""), detalle, qty:l.cantidad||0, ours:l.rol==="ours",
+             costo:+l.costoUnit||0, charge:(l.charge!=null?+l.charge:(+l.costoUnit||0)) };
   });
   if(!filas.length){ toast("This remito has no lines","warn"); return; }
 
@@ -268,7 +271,9 @@ function generarRemitoDocPDF(remitoId){
   doc.setFont("helvetica","bold"); doc.setFontSize(19);
   doc.text(em.nombre || "REMITO", M, 42);
   doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
-  doc.text(esAR ? "Internal transfer note · Argentina (split → Select)" : "Internal transfer note · USA (Swan) → AR (Select)", M, 60);
+  doc.text(esTercero ? "Delivery note + charge · to owner (Argentina)"
+         : esSelect  ? "Internal note · retained as Select (AR) stock"
+         :             "Internal transfer note · USA (Swan) → AR (Select)", M, 60);
   doc.setFont("helvetica","bold"); doc.setFontSize(20);
   doc.text("REMITO", W-M, 40, {align:"right"});
   doc.setFont("helvetica","bold"); doc.setFontSize(13);
@@ -278,58 +283,74 @@ function generarRemitoDocPDF(remitoId){
 
   /* Sub-caption + origen (trazabilidad del split) */
   let y=126;
-  setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(9);
   if(esAR && r.origenCodigo){
     setInk(ACC); doc.setFont("helvetica","bold"); doc.setFontSize(10);
     doc.text(`Split from remito ${r.origenCodigo}`, M, y);
     setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(9); y+=16;
   }
-  doc.text(esAR
-    ? "Part of the original shipment was retained as Select (AR) sellable stock. Remaining units keep their third-party tracking."
-    : "Not a commercial invoice — internal movement document. Quantities already filtered (US-kept units excluded).", M, y);
+  setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(9);
+  doc.text(esTercero ? "Owner's goods brought in for them (never our stock). Charge = accumulated landed cost per door + markup."
+         : esSelect  ? "Our commission taken in Argentina — these units enter Select (AR) as our sellable stock."
+         :             "Not a commercial invoice — internal movement document. Quantities already filtered (US-kept excluded).", M, y);
   y+=22;
 
-  /* Table */
-  const cItem=M;
-  const cDet=W-M-260, wDet=200;
-  const cQty=W-M-60, wQty=60;
+  /* Columnas numéricas (derecha) según tipo */
+  let rightCols;
+  if(esTercero) rightCols = [
+    { h:"QTY", w:44, val:f=>qty(f.qty) },
+    { h:"COST/u", w:62, val:f=>pdfMoney(f.costo,"USD") },
+    { h:"CHARGE/u", w:62, val:f=>pdfMoney(f.charge,"USD") },
+    { h:"TOTAL", w:70, val:f=>pdfMoney(f.qty*f.charge,"USD"), bold:true },
+  ];
+  else if(esSelect) rightCols = [
+    { h:"QTY", w:44, val:f=>qty(f.qty) },
+    { h:"COST/u", w:64, val:f=>pdfMoney(f.costo,"USD") },
+    { h:"VALUE", w:70, val:f=>pdfMoney(f.qty*f.costo,"USD"), bold:true },
+  ];
+  else rightCols = [ { h:"QTY", w:60, val:f=>qty(f.qty) } ];
+  let cx = W-M; for(let k=rightCols.length-1;k>=0;k--){ rightCols[k].xr=cx; cx-=rightCols[k].w; }
+  const wItem = cx - M - 12;
+
   const drawHead=(yy)=>{
     doc.setFillColor(ACC[0],ACC[1],ACC[2]); doc.rect(M, yy-13, W-2*M, 24, "F");
     doc.setTextColor(255,255,255); doc.setFont("helvetica","bold"); doc.setFontSize(9);
-    doc.text("ITEM", cItem+6, yy+3);
-    doc.text("DESTINATION / OWNER", cDet, yy+3);
-    doc.text("QTY", cQty+wQty, yy+3, {align:"right"});
+    doc.text("ITEM", M+6, yy+3);
+    rightCols.forEach(c=> doc.text(c.h, c.xr, yy+3, {align:"right"}));
     return yy+24;
   };
   y = drawHead(y);
-  doc.setFont("helvetica","normal"); let zebra=false, totQ=0;
-  const wItem = cDet - cItem - 12;
+  doc.setFont("helvetica","normal"); let zebra=false, totQ=0, totCharge=0, totValue=0;
   filas.forEach(f=>{
     const wrapped=doc.splitTextToSize(f.nom, wItem);
-    const rowH=Math.max(20, wrapped.length*11.5 + 8);
+    const rowH=Math.max(24, wrapped.length*11.5 + 8 + (f.detalle?11:0));
     if(y+rowH>H-96){ y=drawHead(60); zebra=false; }
     if(zebra){ doc.setFillColor(ZEBRA[0],ZEBRA[1],ZEBRA[2]); doc.rect(M, y-12, W-2*M, rowH, "F"); }
     zebra=!zebra;
     const tTop=y+1;
-    setInk(INK); doc.setFontSize(9.5); doc.text(wrapped, cItem+6, tTop);
-    setInk(f.ours?MUT:INK); doc.setFontSize(9);
-    doc.text(doc.splitTextToSize(f.detalle, wDet), cDet, tTop);
-    setInk(INK); doc.setFontSize(9.5);
-    doc.text(qty(f.qty), cQty+wQty, tTop, {align:"right"});
-    totQ+=f.qty;
+    setInk(INK); doc.setFontSize(9.5); doc.text(wrapped, M+6, tTop);
+    if(f.detalle){ setInk(MUT); doc.setFontSize(8); doc.text(f.detalle, M+6, tTop + wrapped.length*11.5); }
+    rightCols.forEach(c=>{ setInk(INK); doc.setFont("helvetica", c.bold?"bold":"normal"); doc.setFontSize(9.5); doc.text(String(c.val(f)), c.xr, tTop, {align:"right"}); });
+    doc.setFont("helvetica","normal");
+    totQ+=f.qty; totCharge+=f.qty*f.charge; totValue+=f.qty*f.costo;
     y+=rowH; doc.setDrawColor(LINE[0],LINE[1],LINE[2]); doc.line(M, y-6, W-M, y-6);
   });
 
   /* Totals */
   y+=14; const boxX=W-M-230;
-  doc.setFont("helvetica","bold"); doc.setFontSize(12); setInk(INK);
-  doc.text("Total units", boxX, y); doc.text(qty(totQ), W-M, y, {align:"right"});
+  const tline=(label,val,opts={})=>{
+    doc.setFont("helvetica",opts.bold?"bold":"normal"); doc.setFontSize(opts.big?12:10);
+    setInk(opts.bold?INK:MUT); doc.text(label, boxX, y); setInk(INK);
+    doc.text(val, W-M, y, {align:"right"}); y+= opts.big?22:16;
+  };
+  tline("Total units", qty(totQ));
+  if(esTercero){ doc.setDrawColor(ACC[0],ACC[1],ACC[2]); doc.setLineWidth(1.2); doc.line(boxX, y-8, W-M, y-8); doc.setLineWidth(1); y+=4; tline("Total to charge", pdfMoney(totCharge,"USD"), {bold:true, big:true}); }
+  else if(esSelect){ tline("Value at cost", pdfMoney(totValue,"USD"), {bold:true}); }
 
   /* Footer */
   setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
-  doc.text(esAR
-    ? "Traceability document — links the Select-retained units back to their origin remito."
-    : "Third-party units belong to their listed owner and are moved for logistics/traceability only.", M, H-46);
+  doc.text(esTercero ? "Charge to the owner for goods we imported on their behalf. Not a sale from our inventory."
+         : esSelect  ? "Traceability — links our retained (commission) units back to their origin remito."
+         :             "Third-party units belong to their listed owner and are moved for logistics/traceability only.", M, H-46);
   doc.setDrawColor(LINE[0],LINE[1],LINE[2]); doc.line(M, H-58, W-M, H-58);
 
   doc.save(`remito-${String(r.codigo).replace(/\s+/g,"-")}.pdf`);

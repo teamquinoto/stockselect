@@ -924,8 +924,7 @@ function remitoCardHTML(g){
       ${g.remitoId?`<button class="btn ghost xs" data-rm-pdf="${esc(g.remitoId)}" title="Download remito ${esc(g.codigo)} (US → AR)">⤓ ${esc(g.codigo||"remito")}</button>`:""}
       <div style="flex:1"></div>
       ${hasTransito?`<button class="btn up sm" data-rm-receive="${esc(g.key)}" title="Puerta 2 · US transit → AR">Receive in AR ▾</button>`:""}
-      ${hasAr?`<button class="btn sm" data-rm-keep="${esc(g.key)}" title="Puerta 3 · keep units as Select (AR) sellable stock">↳ Keep for Select ▾</button>`:""}
-      ${hasAr?`<button class="btn ghost sm" data-rm-deliver="${esc(g.key)}" title="Hand over to the owner (closes tracking)">Deliver to owner</button>`:""}
+      ${hasAr?`<button class="btn sm" data-rm-resolve="${esc(g.key)}" title="Split each product: our commission → Select · rest → owner">Resolve in AR ▾</button>`:""}
     </div>`;
 
   return `<div class="rm-card open">${head}
@@ -963,87 +962,117 @@ function openRecibirRemito(key){
   wireLegPreview("rr_c", totalU);
 }
 
-/* ---- Quedarse para Select las líneas EN AR del remito (punto 3) ---- */
-function openKeepForSelect(key){
+/* ---- Resolver en AR: repartir cada línea del remito entre Select (comisión
+   nuestra) y el tercero (dueño). Si hay REPARTO (algo a Select Y algo al tercero)
+   se emiten DOS remitos A citando al U: uno para el tercero (con costo acumulado
+   + markup = lo que se cobra) y uno para Select (ingreso a nuestro stock). Si va
+   todo a un solo lado, NO se emite A. ---- */
+function openResolverAR(key){
   if(!isAdmin()){ toast("Only admins can move stock","warn"); return; }
   const lines = remitoTargetLines(key, CONSIGN_ESTADOS.AR);
-  if(!lines.length){ toast("No in-AR lines to keep here (receive them first)","warn"); return; }
+  if(!lines.length){ toast("No in-AR lines to resolve (receive them first)","warn"); return; }
   const store = STORE_IDS[1] || STORE_IDS[0];
   const rows = lines.map((cs,i)=>{
-    const ref = round2((cs.costoUnit||0)+(cs.costoCourierUnit||0));
+    const acc = round2((cs.costoUnit||0)+(cs.costoCourierUnit||0));   // costo acumulado (2 puertas)
     return `<tr>
       <td>${esc(cs.nombre)}<div class="hint">${esc(cs.sku||"")} · ${esc(terceroNombre(cs))}</div></td>
       <td class="r num">${qty(cs.cantidad)}</td>
-      <td><input class="inp num keep-q" id="kq_${i}" value="0" data-max="${cs.cantidad}" inputmode="numeric"></td>
-      <td><input class="inp num" id="kc_${i}" value="${ref}" inputmode="decimal"></td>
+      <td><input class="inp num res-q" id="rq_${i}" value="0" data-max="${cs.cantidad}" inputmode="numeric"></td>
+      <td class="r num" id="rt_${i}">${qty(cs.cantidad)}</td>
+      <td class="r num">${money(acc,"USD")}</td>
+      <td><input class="inp num" id="rc_${i}" value="${acc}" inputmode="decimal" title="Cost the Select units enter at (FIFO/COGS)"></td>
     </tr>`;
   }).join("");
   const body = `
-    <p class="hint" style="margin:0 0 12px">Keep units as <b>${esc(storeName(store))}</b> sellable stock. They <b>leave third-party tracking</b> and enter your inventory at the unit cost you set (its FIFO/COGS). Whatever you don't keep stays tracked to hand over to the owner.</p>
+    <p class="hint" style="margin:0 0 10px">Split each product between <b>${esc(storeName(store))}</b> (our commission — enters our sellable stock) and the <b>owner</b> (their goods — delivered, never our stock). The owner is charged the <b>accumulated cost + markup</b>. A split issues two <b>A</b> remitos citing the U; all-to-one-side issues none.</p>
     <div class="table-scroll" style="max-height:230px;margin-bottom:12px"><table class="rm-tbl">
-      <thead><tr><th>Product</th><th class="r">In AR</th><th style="width:92px">Keep</th><th style="width:110px">Unit cost</th></tr></thead>
+      <thead><tr><th>Product</th><th class="r">In AR</th><th style="width:84px">→ Select</th><th class="r" style="width:70px">→ Owner</th><th class="r">Acc. cost</th><th style="width:104px">Select cost/u</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
-    <div class="grid-form stack" style="padding:0">
-      ${legCostFieldHTML("k_extra","Extra Arg leg cost","· freight / nationalization total, optional — spread across kept units")}
-      <div class="field" style="grid-column:1/-1"><label>Notes</label><input class="inp" id="k_obs" placeholder="e.g. why we kept these"></div>
+    <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
+      ${legCostFieldHTML("res_extra","Extra Arg leg cost (our Select units)","· total, optional — spread across kept units")}
+      <div class="field"><label>Owner markup <span class="hint" style="font-weight:400">· % over accumulated cost, optional</span></label><input class="inp num" id="res_mk" value="0" inputmode="decimal"><div class="leg-pu hint" id="res_mk_pu">no markup</div></div>
+      <div class="field" style="grid-column:1/-1"><label>Notes</label><input class="inp" id="res_obs" placeholder="e.g. split reason"></div>
     </div>`;
-  buildModal("Keep for "+esc(storeName(store)), body, [
+  buildModal("Resolve in AR · "+esc(store===STORE_IDS[1]?storeName(store):"AR"), body, [
     {label:"Cancel",cls:"btn",act:closeModal},
-    {label:"Keep for "+esc(storeName(store)),cls:"btn up",act:()=>{
-      // total a quedarse (para prorratear el extra)
-      let totalKeep=0;
-      lines.forEach((cs,i)=>{ const q=Math.min(Math.max(0,parseNum(document.getElementById("kq_"+i).value)||0), cs.cantidad); totalKeep+=q; });
-      if(totalKeep<=0){ toast("Enter how many units to keep","warn"); return; }
-      const extraTot = Math.max(0,parseNum(document.getElementById("k_extra").value)||0);
-      const extraPU  = totalKeep>0 ? round2(extraTot/totalKeep) : 0;
-      const obs = (document.getElementById("k_obs").value||"").trim();
-      // contexto del remito U (antes de mutar) para decidir si hay SPLIT y emitir el A
+    {label:"Resolve",cls:"btn up",act:()=>{
+      // contexto del U (antes de mutar)
       const remId  = lines[0] && lines[0].remitoId || null;
       const conjId = lines[0] && lines[0].conjuntaId || null;
       const uRemito = remId ? remitoById(remId) : null;
-      let done=0, items=0; const keptLines=[];
+      const uCodigo = uRemito ? uRemito.codigo : ((lines[0]&&lines[0].remitoCodigo)||"U");
+      const mkPct = Math.max(0, parseNum(document.getElementById("res_mk").value)||0);
+      const obs   = (document.getElementById("res_obs").value||"").trim();
+      // total a Select para prorratear el extra
+      let totalSelU=0;
+      lines.forEach((cs,i)=>{ totalSelU += Math.min(Math.max(0,parseNum(document.getElementById("rq_"+i).value)||0), cs.cantidad); });
+      const extraTot = Math.max(0,parseNum(document.getElementById("res_extra").value)||0);
+      const extraPU  = totalSelU>0 ? round2(extraTot/totalSelU) : 0;
+
+      const selLines=[], terLines=[];
+      let selU=0, terU=0;
       lines.forEach((cs,i)=>{
-        const q = Math.min(Math.max(0,parseNum(document.getElementById("kq_"+i).value)||0), cs.cantidad);
-        if(q<=0) return;
-        const cost = round2((parseNum(document.getElementById("kc_"+i).value)||0) + extraPU);
-        const kept = quedarseParaSelect(cs.id, q, cost, obs);
-        if(kept>0){ done+=kept; items++; keptLines.push({ productoId:cs.productoId, sku:cs.sku, nombre:cs.nombre, cantidad:kept, rol:"select", owner:terceroNombre(cs), origenOwner:terceroNombre(cs) }); if((cs.cantidad||0)<=0) delete remitoSel[cs.id]; }
+        const inAr = cs.cantidad;
+        const sel  = Math.min(Math.max(0,parseNum(document.getElementById("rq_"+i).value)||0), inAr);
+        const ter  = round4(inAr - sel);
+        const acc  = round2((cs.costoUnit||0)+(cs.costoCourierUnit||0));
+        // 1) lo del tercero: cobro = costo acumulado + markup (se calcula ANTES de mutar)
+        if(ter>0){
+          const chargeU = round2(acc*(1+mkPct/100));
+          terLines.push({ productoId:cs.productoId, sku:cs.sku, nombre:cs.nombre, cantidad:ter, rol:"third", owner:terceroNombre(cs), costoUnit:acc, charge:chargeU });
+          terU += ter;
+        }
+        // 2) lo nuestro a Select: ingresa al stock (reduce la consignación / la cierra)
+        if(sel>0){
+          const cost = round2((parseNum(document.getElementById("rc_"+i).value)||0) + extraPU);
+          const kept = quedarseParaSelect(cs.id, sel, cost, obs);
+          if(kept>0){ selLines.push({ productoId:cs.productoId, sku:cs.sku, nombre:cs.nombre, cantidad:kept, rol:"select", owner:terceroNombre(cs), costoUnit:cost }); selU += kept; }
+        }
+        // 3) entregar al tercero lo que le queda a la consignación (lo no retenido)
+        if(ter>0){ avanzarConsignacion(cs.id, { obs:"delivered (resolve)" }); }
+        delete remitoSel[cs.id];
       });
-      // ¿Hubo SPLIT? Se retuvo algo para Select Y queda algo que NO va a Select
-      // (en flujo o entregado al dueño) → recién ahí se emite el remito A.
-      let aRem = null;
-      if(done>0 && remitoUnidadesNoSelect(remId, conjId) > 0.00001){
-        aRem = crearRemito({ letra:"A", tipo:"ar-split",
-          fuente:{ tipo:"keep", id:(remId||conjId) },
-          origen: uRemito ? { id:uRemito.id, codigo:uRemito.codigo } : (lines[0]&&lines[0].remitoCodigo?{ id:null, codigo:lines[0].remitoCodigo }:null),
-          lineas:keptLines, obs:obs });
+
+      if(selU<=0 && terU<=0){ toast("Nothing to resolve","warn"); return; }
+
+      // Dos remitos A SÓLO si hubo REPARTO (algo a Select Y algo al tercero)
+      let aSel=null, aTer=null;
+      if(selU>0 && terU>0){
+        const origen = uRemito ? { id:uRemito.id, codigo:uRemito.codigo } : { id:null, codigo:uCodigo };
+        aTer = crearRemito({ letra:"A", tipo:"ar-tercero", fuente:{ tipo:"resolve", id:(remId||conjId) }, origen, lineas:terLines, obs:(obs?obs+" · ":"")+"to owner"+(mkPct>0?` · +${mkPct}% markup`:"") });
+        aSel = crearRemito({ letra:"A", tipo:"ar-select",  fuente:{ tipo:"resolve", id:(remId||conjId) }, origen, lineas:selLines, obs:(obs?obs+" · ":"")+"to Select (our commission)" });
       }
       save(); closeModal();
-      if(aRem){
-        toast(`Kept ${qty(done)} u for ${storeName(store)} · remito ${aRem.codigo} issued`,"up");
-        setTimeout(()=>{ if(confirm(`Split from remito ${uRemito?uRemito.codigo:(lines[0]&&lines[0].remitoCodigo)||"U"} — new AR remito ${aRem.codigo}.\n\nDownload the PDF now?`) && typeof generarRemitoDocPDF==="function") generarRemitoDocPDF(aRem.id); }, 250);
+      if(aSel && aTer){
+        toast(`Split ${uCodigo} → ${aTer.codigo} (owner) + ${aSel.codigo} (Select)`,"up");
+        setTimeout(()=>{
+          if(confirm(`Remito ${uCodigo} split.\n\nDownload the two A remitos now?\n· ${aTer.codigo} — owner (charge)\n· ${aSel.codigo} — Select (our stock)`) && typeof generarRemitoDocPDF==="function"){
+            generarRemitoDocPDF(aTer.id);
+            setTimeout(()=> generarRemitoDocPDF(aSel.id), 400);
+          }
+        }, 250);
+      } else if(selU>0){
+        toast(`Kept ${qty(selU)} u for ${storeName(store)} · no split, no A`,"up");
       } else {
-        toast(done>0?`Kept ${qty(done)} u for ${storeName(store)} across ${items} product(s) · no split, remito U unchanged`:"Nothing kept","up");
+        toast(`Delivered ${qty(terU)} u to owner${mkPct>0?` · +${mkPct}% markup`:""} · no split, no A`,"up");
       }
       render();
     }}
   ], "wide");
-  // preview del extra prorrateado sobre lo que se está por quedar (se recalcula al tipear cantidades)
-  const recalcExtra=()=>{ let t=0; lines.forEach((cs,i)=>{ t+=Math.min(Math.max(0,parseNum(document.getElementById("kq_"+i).value)||0), cs.cantidad); }); wireLegPreview("k_extra", t); };
-  lines.forEach((cs,i)=>{ const el=document.getElementById("kq_"+i); if(el) el.addEventListener("input", recalcExtra); });
-  recalcExtra();
-}
-
-/* ---- Entregar al dueño las líneas EN AR del remito ---- */
-function entregarRemito(key){
-  if(!isAdmin()){ toast("Only admins can deliver","warn"); return; }
-  const lines = remitoTargetLines(key, CONSIGN_ESTADOS.AR);
-  if(!lines.length){ toast("No in-AR lines to deliver here","warn"); return; }
-  const u = lines.reduce((a,l)=>a+l.cantidad,0);
-  if(!confirm(`Mark ${lines.length} line(s) · ${qty(u)} u as delivered to the owner?\nThis closes their tracking.`)) return;
-  lines.forEach(cs=> avanzarConsignacion(cs.id, { obs:"delivered" }));
-  lines.forEach(l=> delete remitoSel[l.id]);
-  toast(`Delivered ${lines.length} line(s)`,"up"); render();
+  // previews en vivo: "→ Owner" por fila, extra prorrateado y markup
+  const recalc=()=>{
+    let t=0;
+    lines.forEach((cs,i)=>{
+      const sel=Math.min(Math.max(0,parseNum(document.getElementById("rq_"+i).value)||0), cs.cantidad);
+      const cell=document.getElementById("rt_"+i); if(cell) cell.textContent=qty(round4(cs.cantidad-sel));
+      t+=sel;
+    });
+    wireLegPreview("res_extra", t);
+  };
+  lines.forEach((cs,i)=>{ const el=document.getElementById("rq_"+i); if(el) el.addEventListener("input", recalc); });
+  const mk=document.getElementById("res_mk"), mkOut=document.getElementById("res_mk_pu");
+  if(mk&&mkOut){ const upd=()=>{ const p=Math.max(0,parseNum(mk.value)||0); mkOut.textContent = p>0?`owner charge = accumulated cost + ${p}%`:"no markup"; }; mk.oninput=upd; upd(); }
+  recalc();
 }
 
 /* Wireo de la vista (lo llama wire() en 16-view-datos.js). */
@@ -1070,7 +1099,6 @@ function wireConjunta(){
     render();
   });
   m.querySelectorAll("[data-rm-receive]").forEach(b=> b.onclick=()=> openRecibirRemito(b.dataset.rmReceive));
-  m.querySelectorAll("[data-rm-keep]").forEach(b=> b.onclick=()=> openKeepForSelect(b.dataset.rmKeep));
-  m.querySelectorAll("[data-rm-deliver]").forEach(b=> b.onclick=()=> entregarRemito(b.dataset.rmDeliver));
+  m.querySelectorAll("[data-rm-resolve]").forEach(b=> b.onclick=()=> openResolverAR(b.dataset.rmResolve));
   m.querySelectorAll("[data-rm-pdf]").forEach(b=> b.onclick=(e)=>{ e.stopPropagation(); generarRemitoDocPDF(b.dataset.rmPdf); });
 }
