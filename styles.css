@@ -900,3 +900,12 @@
 .lang-opt.on{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.14)}
 .lang-opt:not(.on):hover{color:var(--text)}
 @media(max-width:860px){ .lang-opt .lc{display:none} .lang-opt{padding:5px 7px} }
+
+/* --- Per-gate currency selector (USD/ARS + rate) --- */
+.cost-row{display:flex;gap:8px;align-items:center}
+.cost-row .inp{flex:1 1 auto;min-width:0}
+.ccy-seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:2px;flex:0 0 auto}
+.ccy-opt{border:0;background:transparent;color:var(--muted);font-family:var(--mono);font-size:12px;font-weight:700;padding:5px 10px;border-radius:6px;cursor:pointer;transition:background .12s,color .12s}
+.ccy-opt.on{background:var(--accent);color:var(--paper)}
+.ccy-opt:not(.on):hover{color:var(--text)}
+.rate-row{display:flex;align-items:center;gap:8px}
