@@ -51,9 +51,9 @@ function setView(v){
 function stockViewSwitchHTML(){
   // Punto 2: sólo en vistas de stock (dashboard / productos).
   if(view!=="dash" && view!=="prod") return "";
-  return `<div class="sb-viewas"><span class="sb-label">View as</span>
-    <button class="chip-btn ${stockView==="units"?"on":""}" data-stockview="units">Units</button>
-    <button class="chip-btn ${stockView==="cases"?"on":""}" data-stockview="cases">Cases</button></div>`;
+  return `<div class="sb-viewas"><span class="sb-label">${t("bar.viewas")}</span>
+    <button class="chip-btn ${stockView==="units"?"on":""}" data-stockview="units">${t("bar.units")}</button>
+    <button class="chip-btn ${stockView==="cases"?"on":""}" data-stockview="cases">${t("bar.cases")}</button></div>`;
 }
 function storeBarHTML(){
   const sw = stockViewSwitchHTML();
@@ -63,14 +63,14 @@ function storeBarHTML(){
   const showChips = isAdmin() && STORE_IDS.length>1 && viewUsesSociety();
   const chips = [];
   if(showChips){
-    chips.push(`<button class="chip-btn ${activeStore==="all"?"on":""}" data-store="all">All (consolidated)</button>`);
+    chips.push(`<button class="chip-btn ${activeStore==="all"?"on":""}" data-store="all">${t("bar.all")}</button>`);
     STORE_IDS.forEach(s=> chips.push(`<button class="chip-btn ${activeStore===s?"on":""}" data-store="${s}">${esc(storeName(s))}</button>`));
   }
-  const left = chips.length ? `<span class="sb-label" title="Society = who bought the stock (provenance). Selling always uses the unified pool.">Society</span>${chips.join("")}` : "";
-  // Toggle de moneda de REPORTE (consolidados): sólo admin.
-  const repSw = isAdmin() ? `<div class="sb-viewas" style="margin-left:auto"><span class="sb-label">Report in</span>
-    <button class="chip-btn ${reportCcy()==="USD"?"on":""}" data-repccy="USD">US$</button>
-    <button class="chip-btn ${reportCcy()==="ARS"?"on":""}" data-repccy="ARS">AR$</button></div>` : "";
+  const left = chips.length ? `<span class="sb-label" title="${esc(t("bar.society.tip"))}">${t("bar.society")}</span>${chips.join("")}` : "";
+  // REPORT currency toggle (consolidated): admin only.
+  const repSw = isAdmin() ? `<div class="sb-viewas" style="margin-left:auto"><span class="sb-label">${t("bar.reportin")}</span>
+    <button class="chip-btn ${reportCcy()==="USD"?"on":""}" data-repccy="USD">${t("bar.usd")}</button>
+    <button class="chip-btn ${reportCcy()==="ARS"?"on":""}" data-repccy="ARS">${t("bar.ars")}</button></div>` : "";
   if(!left && !sw && !repSw) return "";
   return `<div class="storebar">${left}${sw}${repSw}</div>`;
 }
@@ -85,7 +85,7 @@ function applyRoleUI(){
   // role badge (mobile top bar): shows who is logged in and their role
   const admin = isAdmin();
   const nombre = (session && session.name) || (session && session.user) || "";
-  const txt = session ? (admin ? "Admin" : ("Seller · "+(nombre||"—"))) : "Local";
+  const txt = session ? (admin ? t("role.admin") : (t("role.seller")+" · "+(nombre||"—"))) : t("role.local");
   document.querySelectorAll("[data-rolebadge]").forEach(el=>{
     el.textContent = txt;
     el.style.background = admin ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "color-mix(in srgb, var(--up) 18%, transparent)";
@@ -122,6 +122,7 @@ function render(){
   else if(view==="remitos") m.innerHTML = isAdmin()? viewRemitos() : viewDash();
   else if(view==="datos") m.innerHTML = viewDatos();
   applyRoleUI();
+  if(typeof applyStaticI18n==="function") applyStaticI18n();
   activeSection = SECTION_OF[view] || activeSection;
   syncSectionUI();
   wireStoreBar();
