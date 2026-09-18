@@ -32,9 +32,9 @@ let conjDraft = null;
 const CONSIGN_ESTADOS = { TRANSITO:"en_transito", AR:"en_ar", ENTREGADO:"entregado" };
 const CONSIGN_ORDEN = [CONSIGN_ESTADOS.TRANSITO, CONSIGN_ESTADOS.AR, CONSIGN_ESTADOS.ENTREGADO];
 function consignLabel(e){
-  return e===CONSIGN_ESTADOS.TRANSITO ? "In transit (US→AR)"
-       : e===CONSIGN_ESTADOS.AR       ? "In AR (to deliver)"
-       : e===CONSIGN_ESTADOS.ENTREGADO? "Delivered"
+  return e===CONSIGN_ESTADOS.TRANSITO ? "En tránsito (US→AR)"
+       : e===CONSIGN_ESTADOS.AR       ? "En AR (para resolver)"
+       : e===CONSIGN_ESTADOS.ENTREGADO? "Resuelto / entregado"
        : (e||"—");
 }
 function consignSiguiente(e){ const i=CONSIGN_ORDEN.indexOf(e); return (i>=0 && i<CONSIGN_ORDEN.length-1) ? CONSIGN_ORDEN[i+1] : null; }
@@ -261,9 +261,9 @@ function renderConjModal(){
     <button class="btn sm" id="cjAddLine" style="margin-top:10px">+ Add line</button>
     <div class="field" style="margin-top:12px"><label>Notes</label><input class="inp" id="cj_obs" value="${esc(conjDraft.obs)}"></div>
   `;
-  buildModal("＋ New joint buy (commission)", body, [
-    {label:"Cancel",cls:"btn",act:()=>{ conjDraft=null; closeModal(); }},
-    {label:"Confirm intake (+stock)",cls:"btn up",act:confirmConjunta}
+  buildModal("＋ Nueva compra conjunta (comisión)", body, [
+    {label:"Cancelar",cls:"btn",act:()=>{ conjDraft=null; closeModal(); }},
+    {label:"Confirmar ingreso (+stock)",cls:"btn up",act:confirmConjunta}
   ], "wide doc",
   `<div class="totrow"><span style="color:var(--muted)">Units we keep</span><span class="num" id="cjTot">${qty(conjUnidadesNuestras())}</span></div><div class="totrow"><span style="color:var(--muted)">Third-party (tracked)</span><span class="num" id="cjTotAj">${qty(conjUnidadesAjenas())}</span></div>`);
   renderConjLines();
@@ -536,13 +536,13 @@ function openRecibirTransito(prodId){
   const body = `
     <p class="hint" style="margin:0 0 12px">In transit (Buenos Aires): <b>${qty(held)}</b> u · valued ${money(transValor(p), "USD")}. Delivering moves them into <b>${esc(storeName(destino))}</b> stock (sellable, AR). The <b>operator pays</b> the Argentine leg (freight + nationalization + local costs) and it's <b>capitalized into the landed cost</b>.</p>
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
-      <div class="field"><label>Units to receive</label><input class="inp num" id="rt_q" value="${held}"></div>
+      <div class="field"><label>Unidades a recibir</label><input class="inp num" id="rt_q" value="${held}"></div>
       <div class="field"><label>Puerta 3 · Arg freight + local costs <span class="hint" style="font-weight:400">· total, optional</span></label><input class="inp num" id="rt_c" value="0" inputmode="decimal"><div class="leg-pu hint" id="rt_c_pu">= ${money(0,"USD")} per unit</div></div>
       <div class="field" style="grid-column:1/3"><label>Notes</label><input class="inp" id="rt_obs" placeholder="e.g. shipment #, nationalization ref"></div>
     </div>`;
-  buildModal("Deliver in AR ("+esc(storeName(destino))+")", body, [
-    {label:"Cancel",cls:"btn",act:closeModal},
-    {label:"Mark delivered · "+storeName(destino),cls:"btn up",act:()=>{
+  buildModal("Recibir en AR ("+esc(storeName(destino))+")", body, [
+    {label:"Cancelar",cls:"btn",act:closeModal},
+    {label:"Recibir · "+storeName(destino),cls:"btn up",act:()=>{
       const q=Math.min(Math.max(0,parseNum(document.getElementById("rt_q").value)||0), transUnits(p));
       const cTot=Math.max(0,parseNum(document.getElementById("rt_c").value)||0);   // arg freight + local costs (total)
       const c = q>0 ? round2(cTot/q) : 0;                                           // prorrateo por unidad
@@ -575,9 +575,9 @@ function openEnviarTransito(){
       <div class="field" style="grid-column:1/3"><label>Puerta 2 · Intl freight + wire fees <span class="hint" style="font-weight:400">· total (USD), optional</span></label><input class="inp num" id="et_cost" value="0" inputmode="decimal"><div class="leg-pu hint" id="et_cost_pu">= ${money(0,"USD")} per unit</div></div>
       <div class="field" style="grid-column:1/3"><label>Notes</label><input class="inp" id="et_obs"></div>
     </div>`;
-  buildModal("Send to transit (to AR)", body, [
-    {label:"Cancel",cls:"btn",act:closeModal},
-    {label:"Send to transit",cls:"btn",act:()=>{
+  buildModal("Despachar a AR", body, [
+    {label:"Cancelar",cls:"btn",act:closeModal},
+    {label:"Despachar",cls:"btn",act:()=>{
       const p=prodById(document.getElementById("et_prod").value);
       const st=document.getElementById("et_store").value;
       if(!p||!st){ toast("Pick a product and deposit","warn"); return; }
@@ -636,9 +636,9 @@ function openMermaTransito(prodId){
         </select></div>
       <div class="field" style="grid-column:1/3"><label>Notes</label><input class="inp" id="mm_obs"></div>
     </div>`;
-  buildModal("Write-off from transit", body, [
-    {label:"Cancel",cls:"btn",act:closeModal},
-    {label:"Write off",cls:"btn danger",act:()=>{
+  buildModal("Merma de tránsito", body, [
+    {label:"Cancelar",cls:"btn",act:closeModal},
+    {label:"Dar de baja",cls:"btn danger",act:()=>{
       const q=Math.min(Math.max(0,parseNum(document.getElementById("mm_q").value)||0), transUnits(p));
       if(q<=0){ toast("Enter a quantity","warn"); return; }
       const motivo=document.getElementById("mm_motivo").value;
@@ -690,45 +690,107 @@ function deleteConjunta(id){
   render();
 }
 
+/* ============================================================
+   RIEL GUIADO (prueba de boludo) — presentacion del flujo
+   ------------------------------------------------------------
+   Reemplaza el render SIN tocar el motor: cada mercaderia es un
+   riel con la puerta actual encendida y UN boton = el proximo paso.
+   Carril "Nuestra" (por producto, entra a stock) y carril "Tercero"
+   (por remito, solo se sigue, termina en el split).
+   ============================================================ */
+function ensureRielCSS(){
+  if(document.getElementById("rl-css")) return;
+  const s = document.createElement("style"); s.id = "rl-css";
+  s.textContent = `
+.rl-chips{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:6px 0 20px}
+.rl-chip{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border-radius:var(--radius);background:var(--surface);border:1px solid var(--line);cursor:pointer}
+.rl-chip:hover{border-color:var(--line-strong)}
+.rl-chip .n{font-size:22px;font-weight:700;line-height:1.1}
+.rl-chip .l{font-size:13px;color:var(--muted)}
+.rl-chip.hot{border-color:var(--accent)}
+.rl-chip.hot .n{color:var(--accent-ink)}
+.rl-wrap{display:flex;flex-direction:column;gap:14px}
+.rl-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px}
+.rl-rhead{display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:12px}
+.rl-caret{color:var(--muted);font-size:12px;width:12px;flex:0 0 auto}
+.rl-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.rl-code{font-weight:700;font-size:15px}
+.rl-meta{font-size:13px;color:var(--muted)}
+.rl-badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.rl-badge.ours{background:var(--up-bg);color:var(--accent-ink)}
+.rl-badge.third{background:var(--surface-2);color:var(--muted);border:1px solid var(--line-strong)}
+.rl-steps{display:flex;align-items:flex-start;margin:2px 2px 12px}
+.rl-node{display:flex;flex-direction:column;align-items:center;gap:6px;width:100px;text-align:center;flex:0 0 auto}
+.rl-dot{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;border:1.5px solid var(--line-strong);background:var(--surface);color:var(--muted)}
+.rl-dot.done{background:var(--up-bg);border-color:var(--up);color:var(--accent-ink)}
+.rl-dot.cur{background:var(--accent);border-color:var(--accent);color:var(--paper)}
+.rl-lab{font-size:12px;line-height:1.25;color:var(--muted)}
+.rl-lab.cur{color:var(--accent-ink);font-weight:700}
+.rl-conn{flex:1 1 auto;height:2px;margin-top:16px;border-radius:2px;background:var(--line-strong)}
+.rl-conn.done{background:var(--up)}
+.rl-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:12px}
+.rl-next{font-size:12px;color:var(--muted);flex:1 1 auto;min-width:120px}
+.rl-warn{color:var(--alert);font-weight:600}
+.rl-pill{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--line-strong);color:var(--muted);white-space:nowrap}
+.rl-pill.ar{border-color:var(--accent);color:var(--accent-ink)}
+.rl-empty{padding:16px;text-align:center;color:var(--muted);font-size:13px}
+`;
+  document.head.appendChild(s);
+}
+/* Un riel: nodos = array de labels (con <br> si hace falta); cur = indice del paso actual (0-based). */
+function rielHTML(nodes, cur){
+  let h = "";
+  nodes.forEach((nd, i)=>{
+    if(i>0) h += `<div class="rl-conn ${i<=cur?"done":""}"></div>`;
+    const st = i<cur ? "done" : (i===cur ? "cur" : "");
+    const txt = i<cur ? "\u2713" : String(i+1);
+    h += `<div class="rl-node"><div class="rl-dot ${st}">${txt}</div><div class="rl-lab ${i===cur?"cur":""}">${nd}</div></div>`;
+  });
+  return `<div class="rl-steps">${h}</div>`;
+}
+/* Tarjeta-riel de mercaderia NUESTRA en transito (por producto: asi vive el dato hoy). */
+function ourTransitCardHTML(p){
+  const u = transUnits(p), val = transValor(p);
+  return `<div class="rl-card">
+    <div class="rl-head">
+      <span class="rl-code">${esc(p.nombre)}</span>
+      <span class="rl-badge ours">Nuestra \u00b7 entra a stock</span>
+      <span class="rl-meta">${esc(p.sku||"\u2014")} \u00b7 ${qty(u)} u \u00b7 ${money(val,"USD")}</span>
+    </div>
+    ${rielHTML(["En USA<br>(Swan)","En tr\u00e1nsito<br>a AR","Vendible<br>en AR (Select)"], 1)}
+    <div class="rl-foot">
+      <span class="rl-next">Ya sali\u00f3 de USA \u00b7 el pr\u00f3ximo paso es recibirla en Select (AR)</span>
+      <button class="btn ghost sm" data-merma="${p.id}" style="color:var(--alert)">Merma</button>
+      <button class="btn up sm" data-recib="${p.id}">Recibir en AR \u25be</button>
+    </div>
+  </div>`;
+}
 function viewConjunta(){
+  ensureRielCSS();
+  // --- Carril NUESTRA: productos en transito (por producto) ---
   const enTransito = db.productos.filter(p=> transUnits(p)>0)
     .sort((a,b)=> String(a.nombre||"").localeCompare(String(b.nombre||""),"en"));
-  const kOurTransit = enTransito.map(p=>`<div class="kcard">
-      <div class="kt">${esc(p.nombre)}</div>
-      <div class="km"><span>${esc(p.sku||"—")}</span><span>${qty(transUnits(p))} u · ${money(transValor(p),"USD")}</span></div>
-      <div class="ka"><button class="btn up sm" data-recib="${p.id}">Deliver in AR ▾</button><button class="btn ghost sm" data-merma="${p.id}" title="Write-off (loss)" style="color:var(--alert)">✕</button></div>
-    </div>`).join("") || `<div class="kcol-empty">Nothing in transit.</div>`;
-  const recibidosSwan = (db.movimientos||[]).filter(m=> m.tipo==="transfer-in")
-    .slice().sort((a,b)=> String(b.fecha||"").localeCompare(String(a.fecha||""))).slice(0,6);
-  const kOurReceived = recibidosSwan.map(m=>{ const p=prodById(m.productoId); return `<div class="kcard" style="border-left-color:var(--up)">
-      <div class="kt">${esc((p&&p.nombre)||m.nombre||"—")}</div>
-      <div class="km"><span>${esc(fmtDate(m.fecha))}</span><span>+${qty(Math.abs(m.delta||m.cantidad||0))} u</span></div>
-    </div>`; }).join("") || `<div class="kcol-empty">Nothing received recently.</div>`;
+  const uNuestraTransito = enTransito.reduce((a,p)=> a + transUnits(p), 0);
+  const ourCards = enTransito.map(ourTransitCardHTML).join("")
+    || `<div class="rl-empty">Nada nuestro en tr\u00e1nsito. Mand\u00e1 stock con \u201cDespachar a AR\u201d.</div>`;
 
-  const hist = (db.conjuntas||[]).slice().sort((a,b)=> String(b.fecha||"").localeCompare(String(a.fecha||"")));
-  const histRows = hist.map(d=>{
-    const sw = d.lineas.reduce((a,l)=>a+(l.aSwan||0),0), tr = d.lineas.reduce((a,l)=>a+l.aTransito,0), aj = d.lineas.reduce((a,l)=>a+(l.ajeno||0),0);
-    return `<tr>
-      <td>${esc(fmtDate(d.fecha))}</td>
-      <td>${esc(conjClienteNombre(d))}</td>
-      <td>${esc(d.numero||"—")}</td>
-      <td class="c num">${d.totalEnvio?qty(d.totalEnvio):"—"}</td>
-      <td class="r num">${qty(sw)}</td>
-      <td class="r num">${qty(tr)}</td>
-      <td class="r num">${qty(aj)}</td>
-      <td class="r" style="white-space:nowrap"><button class="btn ghost sm" data-remito-doc="${d.id}" title="Internal transfer note (US→AR)">Remito</button> <button class="btn ghost sm" data-cjdel-doc="${d.id}" style="color:var(--alert)">Delete</button></td>
-    </tr>`;
-  }).join("") || `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:18px">No joint buys loaded yet.</td></tr>`;
-
-  // ---- Terceros (consignaciones): mercadería ajena que sólo seguimos, por estado ----
-  const activas = consignAll().filter(cs=> cs.estado!==CONSIGN_ESTADOS.ENTREGADO)
-    .sort((a,b)=> (CONSIGN_ORDEN.indexOf(a.estado)-CONSIGN_ORDEN.indexOf(b.estado)) || String(a.terceroNombre).localeCompare(String(b.terceroNombre),"en"));
-  // Agrupado por REMITO (colapsable) — reemplaza el kanban plano de antes.
+  // --- Carril TERCEROS: consignaciones agrupadas por remito ---
   const remitos = remitosActivos();
+  const remTransito = remitos.filter(g=> g.uTransito>0).length;
+  const remAr       = remitos.filter(g=> g.uAr>0).length;
   const remitoCards = remitos.map(remitoCardHTML).join("")
-    || `<div class="kcol-empty" style="padding:16px">No third-party in flow. New units come in from Purchases (invoice type = Third-party).</div>`;
+    || `<div class="rl-empty">No hay mercader\u00eda de terceros en flujo. Entra desde Compras (tipo Tercero) o desde \u201c\uff0b Compra conjunta\u201d.</div>`;
 
-  // ---- Resumen por dueño × estado ----
+  // --- Contadores accionables ---
+  const chips = `
+    <p class="hint" style="margin:0 0 6px">\u00bfQu\u00e9 hay que hacer?</p>
+    <div class="rl-chips">
+      <div class="rl-chip${enTransito.length?" hot":""}" data-scroll="rl-nuestra"><span class="n">${qty(uNuestraTransito)}</span><span class="l">Nuestro en tr\u00e1nsito \u00b7 recibir en AR</span></div>
+      <div class="rl-chip${remTransito?" hot":""}" data-scroll="rl-terceros"><span class="n">${remTransito}</span><span class="l">Remitos de terceros \u00b7 recibir en AR</span></div>
+      <div class="rl-chip${remAr?" hot":""}" data-scroll="rl-terceros"><span class="n">${remAr}</span><span class="l">Remitos de terceros \u00b7 resolver reparto</span></div>
+    </div>`;
+
+  // --- Resumen por dueno ---
   const resumen = consignResumenPorTercero();
   const resRows = resumen.map(r=>`<tr>
       <td>${esc(r.nombre)}</td>
@@ -736,11 +798,10 @@ function viewConjunta(){
       <td class="r num">${qty(r.en_ar||0)}</td>
       <td class="r num">${qty(r.entregado||0)}</td>
       <td class="r num"><b>${qty(r.total||0)}</b></td>
-    </tr>`).join("") || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px">No third-party merchandise yet.</td></tr>`;
-  const ajActivas = activas.reduce((a,cs)=> a + cs.cantidad, 0);
+    </tr>`).join("") || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px">Todav\u00eda no hay mercader\u00eda de terceros.</td></tr>`;
 
-  // Movimientos entre depósitos (traspasos, comisión, recepciones y mermas) — para verlos de un vistazo.
-  const tipos = { "transfer-out":"→ sent", "transfer-in":"← received", "conjunta":"commission in", "tercero-keep":"kept for Select", "merma":"write-off" };
+  // --- Movimientos recientes entre depositos ---
+  const tipos = { "transfer-out":"\u2192 enviado", "transfer-in":"\u2190 recibido", "conjunta":"comisi\u00f3n (ingreso)", "tercero-keep":"retenido para Select", "merma":"merma" };
   const movs = (db.movimientos||[]).filter(m=> m.tipo in tipos)
     .slice().sort((a,b)=> String(b.fecha||"").localeCompare(String(a.fecha||""))).slice(0,15);
   const movRows = movs.map(m=>{
@@ -748,64 +809,74 @@ function viewConjunta(){
     const up = (m.delta||0) >= 0;
     return `<tr>
       <td>${esc(fmtDate(m.fecha))}</td>
-      <td><span class="sku">${esc(m.sku||"—")}</span> ${esc((p&&p.nombre)||m.nombre||"—")}</td>
+      <td><span class="sku">${esc(m.sku||"\u2014")}</span> ${esc((p&&p.nombre)||m.nombre||"\u2014")}</td>
       <td>${esc(storeName(m.store))}</td>
       <td>${esc(m.ref||tipos[m.tipo]||"")}</td>
-      <td class="r num" style="color:${up?'var(--up)':'var(--alert)'}">${up?"+":"−"}${qty(Math.abs(m.delta||m.cantidad||0))}</td>
+      <td class="r num" style="color:${up?'var(--up)':'var(--alert)'}">${up?"+":"\u2212"}${qty(Math.abs(m.delta||m.cantidad||0))}</td>
     </tr>`;
-  }).join("") || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px">No transfers yet.</td></tr>`;
+  }).join("") || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px">Sin traspasos todav\u00eda.</td></tr>`;
 
-  const inTransit3 = activas.filter(cs=>cs.estado===CONSIGN_ESTADOS.TRANSITO).reduce((a,cs)=>a+cs.cantidad,0);
-  const inAR3      = activas.filter(cs=>cs.estado===CONSIGN_ESTADOS.AR).reduce((a,cs)=>a+cs.cantidad,0);
-  const hayHist    = (db.conjuntas||[]).length>0;   // sólo mostramos el histórico legacy si hay algo
+  // --- Historico legacy de compras conjuntas (solo lectura) ---
+  const hist = (db.conjuntas||[]).slice().sort((a,b)=> String(b.fecha||"").localeCompare(String(a.fecha||"")));
+  const hayHist = hist.length>0;
+  const histRows = hist.map(d=>{
+    const sw = d.lineas.reduce((a,l)=>a+(l.aSwan||0),0), tr = d.lineas.reduce((a,l)=>a+l.aTransito,0), aj = d.lineas.reduce((a,l)=>a+(l.ajeno||0),0);
+    return `<tr>
+      <td>${esc(fmtDate(d.fecha))}</td>
+      <td>${esc(conjClienteNombre(d))}</td>
+      <td>${esc(d.numero||"\u2014")}</td>
+      <td class="c num">${d.totalEnvio?qty(d.totalEnvio):"\u2014"}</td>
+      <td class="r num">${qty(sw)}</td>
+      <td class="r num">${qty(tr)}</td>
+      <td class="r num">${qty(aj)}</td>
+      <td class="r" style="white-space:nowrap"><button class="btn ghost sm" data-remito-doc="${d.id}" title="Remito interno (US\u2192AR)">Remito</button> <button class="btn ghost sm" data-cjdel-doc="${d.id}" style="color:var(--alert)">Borrar</button></td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:18px">No hay compras conjuntas cargadas.</td></tr>`;
 
   return `
-  <div class="head"><div class="title"><h2>Third-party monitor</h2><p>Third-party merchandise in our hands and where it is (US transit → AR → delivered). It's only tracked — never our stock, valuation or P&amp;L. New third-party units come in from <b>Purchases</b> (invoice type = Third-party).</p></div>
-    <div class="actions"><button class="btn" data-enviar-transito title="Move our own stock USA → AR">Send our stock to transit</button></div>
-  </div>
-  <div class="kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:18px">
-    <div class="kpi"><div class="lbl">3rd-party · in transit</div><div class="val">${qty(inTransit3)}</div><div class="sub">US → AR</div></div>
-    <div class="kpi"><div class="lbl">3rd-party · in AR to deliver</div><div class="val">${qty(inAR3)}</div><div class="sub">in our hands, in AR</div></div>
-    <div class="kpi"><div class="lbl">3rd-party · total held</div><div class="val">${qty(ajActivas)}</div><div class="sub">not ours · in flow</div></div>
-    <div class="kpi"><div class="lbl">Ours · in transit to AR</div><div class="val">${qty(unidadesEnTransitoAR())}</div><div class="sub">${money(valorEnTransitoAR(),"USD")} · sellable once received</div></div>
+  <div class="head"><div class="title"><h2>Mercader\u00eda en camino \u00b7 USA \u2192 Argentina</h2><p>Cada env\u00edo es un riel: mir\u00e1 d\u00f3nde est\u00e1 la mercader\u00eda y toc\u00e1 el \u00fanico bot\u00f3n del pr\u00f3ximo paso. <b>Nuestra</b> = entra a stock. <b>Tercero</b> = s\u00f3lo se sigue y termina en un reparto.</p></div>
+    <div class="actions"><button class="btn" data-enviar-transito title="Mandar stock propio USA \u2192 AR">Despachar a AR</button><button class="btn up" data-new-conj>\uff0b Compra conjunta</button></div>
   </div>
 
-  <div class="panel" style="margin-bottom:18px">
+  ${chips}
+
+  <div class="panel" id="rl-nuestra" style="margin-bottom:18px">
     <div class="phead" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <div><h3>Third-party by remito</h3><p class="hint" style="margin:2px 0 0">Grouped by the shipment / invoice they came in. Tap a remito to open it, tick the products you want, then <b>receive them in AR</b>, <b>keep some for Select</b> (adds to sellable AR stock) or <b>hand them to the owner</b>.</p></div>
+      <div><h3>Lo nuestro rumbo a AR</h3><p class="hint" style="margin:2px 0 0">Stock propio que ya sali\u00f3 de USA. Al recibirlo se vuelve vendible en Select (AR), sum\u00e1ndole el costo del tramo argentino. Se muestra por producto (as\u00ed se guarda hoy en tr\u00e1nsito).</p></div>
       <div style="flex:1"></div>
-      ${activas.some(cs=>cs.estado===CONSIGN_ESTADOS.TRANSITO)?`<button class="btn ghost sm" data-cs-recib-all title="Receive every in-transit line at once">Receive all in AR</button>`:""}
-      ${activas.some(cs=>cs.estado===CONSIGN_ESTADOS.AR)?`<button class="btn ghost sm" data-cs-entregar-all title="Deliver every in-AR line to their owners">Deliver all</button>`:""}
+      ${enTransito.length?`<button class="btn ghost sm" data-deliver-all-ours>Recibir todo en AR</button>`:""}
     </div>
-    <div class="rm-list">${remitoCards}</div>
+    <div class="rl-wrap">${ourCards}</div>
+  </div>
+
+  <div class="panel" id="rl-terceros" style="margin-bottom:18px">
+    <div class="phead" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div><h3>Terceros (consignaci\u00f3n)</h3><p class="hint" style="margin:2px 0 0">Mercader\u00eda ajena que s\u00f3lo seguimos (nunca es stock ni P&amp;L). Toc\u00e1 un remito para ver sus productos, tild\u00e1 los que quieras y aplic\u00e1 la acci\u00f3n s\u00f3lo a esos.</p></div>
+      <div style="flex:1"></div>
+      ${remTransito?`<button class="btn ghost sm" data-cs-recib-all>Recibir todo en AR</button>`:""}
+      ${remAr?`<button class="btn ghost sm" data-cs-entregar-all>Entregar todo</button>`:""}
+    </div>
+    <div class="rl-wrap">${remitoCards}</div>
   </div>
 
   <div class="panel" style="margin-bottom:18px">
-    <div class="phead"><h3>Third-party · by owner</h3><span class="hint">who owns it and where</span></div>
+    <div class="phead"><h3>Terceros \u00b7 por due\u00f1o</h3><span class="hint">qui\u00e9n es el due\u00f1o y d\u00f3nde est\u00e1</span></div>
     <div class="table-scroll"><table>
-      <thead><tr><th>Owner</th><th class="r">In transit</th><th class="r">In AR</th><th class="r">Delivered</th><th class="r">Total</th></tr></thead>
+      <thead><tr><th>Due\u00f1o</th><th class="r">En tr\u00e1nsito</th><th class="r">En AR</th><th class="r">Entregado</th><th class="r">Total</th></tr></thead>
       <tbody>${resRows}</tbody></table></div>
   </div>
 
-  <div class="panel" style="margin-bottom:18px">
-    <div class="phead"><h3>Ours · pipeline to AR</h3><span class="hint">our own stock moving USA → AR · receiving makes it sellable</span></div>
-    <div class="kanban" style="grid-template-columns:1fr 1fr">
-      <div class="kcol"><div class="kct" style="display:flex;align-items:center;gap:8px">In transit → AR <span class="kn">${enTransito.length}</span>${enTransito.length?`<button class="btn up sm" data-deliver-all-ours style="margin-left:auto">Deliver all in AR</button>`:""}</div>${kOurTransit}</div>
-      <div class="kcol"><div class="kct">Received <span class="kn">${recibidosSwan.length}</span></div>${kOurReceived}</div>
-    </div>
-  </div>
-
   <div class="panel"${hayHist?' style="margin-bottom:18px"':''}>
-    <div class="phead"><h3>Recent movements between deposits</h3></div>
+    <div class="phead"><h3>Movimientos recientes entre dep\u00f3sitos</h3></div>
     <div class="table-scroll"><table>
-      <thead><tr><th>Date</th><th>Product</th><th>Deposit</th><th>Movement</th><th class="r">Units</th></tr></thead>
+      <thead><tr><th>Fecha</th><th>Producto</th><th>Dep\u00f3sito</th><th>Movimiento</th><th class="r">Unid.</th></tr></thead>
       <tbody>${movRows}</tbody></table></div>
   </div>
 
   ${hayHist?`<div class="panel">
-    <div class="phead"><h3>Legacy joint buys</h3><span class="hint">old flow · read-only history</span></div>
+    <div class="phead"><h3>Compras conjuntas (hist\u00f3rico)</h3><span class="hint">flujo viejo \u00b7 s\u00f3lo lectura</span></div>
     <div class="table-scroll"><table>
-      <thead><tr><th>Date</th><th>Client</th><th>Ref</th><th class="c">Order</th><th class="r">Swan</th><th class="r">→ AR</th><th class="r">3rd-party</th><th></th></tr></thead>
+      <thead><tr><th>Fecha</th><th>Cliente</th><th>Ref</th><th class="c">Pedido</th><th class="r">Swan</th><th class="r">\u2192 AR</th><th class="r">Tercero</th><th></th></tr></thead>
       <tbody>${histRows}</tbody></table></div>
   </div>`:""}`;
 }
@@ -847,9 +918,9 @@ function openDeliverAllOurs(){
       ${legCostFieldHTML("da_cost","Puerta 3 · Arg freight + local costs","· total for the whole batch, optional")}
       <div class="field" style="grid-column:1/-1"><label>Notes</label><input class="inp" id="da_obs" placeholder="e.g. shipment #, nationalization ref"></div>
     </div>`;
-  buildModal("Deliver all in AR ("+esc(storeName(destino))+")", body, [
-    {label:"Cancel",cls:"btn",act:closeModal},
-    {label:"Deliver all · "+qty(totalU)+" u",cls:"btn up",act:()=>{
+  buildModal("Recibir todo en AR ("+esc(storeName(destino))+")", body, [
+    {label:"Cancelar",cls:"btn",act:closeModal},
+    {label:"Recibir todo · "+qty(totalU)+" u",cls:"btn up",act:()=>{
       const costTot=Math.max(0,parseNum(document.getElementById("da_cost").value)||0);
       const perU = totalU>0 ? round2(costTot/totalU) : 0;
       const obs=(document.getElementById("da_obs").value||"").trim();
@@ -872,7 +943,7 @@ function openRecibirConsignacion(id){
       <div class="field"><label>Notes</label><input class="inp" id="csc_obs" placeholder="e.g. arrival ref"></div>
     </div>`;
   buildModal("Receive third-party in AR", body, [
-    {label:"Cancel",cls:"btn",act:closeModal},
+    {label:"Cancelar",cls:"btn",act:closeModal},
     {label:"Mark received in AR",cls:"btn up",act:()=>{
       const c=Math.max(0,parseNum(document.getElementById("csc_c").value)||0);
       const obs=(document.getElementById("csc_obs").value||"").trim();
@@ -901,46 +972,51 @@ function removeConsignacion(id){
    ============================================================ */
 function remitoCardHTML(g){
   const open   = !!remitoOpen[g.key];
-  const owners = g.ownerNames.length ? g.ownerNames.join(", ") : "—";
+  const owners = g.ownerNames.length ? g.ownerNames.join(", ") : "\u2014";
+  const cur    = g.uTransito>0 ? 0 : 1;   // en transito -> paso 1 (idx 0); ya en AR -> paso 2 (idx 1)
   const pills  = [
-    g.uTransito>0 ? `<span class="rm-pill transit">${qty(g.uTransito)} in transit</span>` : "",
-    g.uAr>0       ? `<span class="rm-pill ar">${qty(g.uAr)} in AR</span>` : ""
-  ].filter(Boolean).join("");
-  const head = `<div class="rm-head" data-remito-toggle="${esc(g.key)}">
-      <span class="rm-caret">${open?"▾":"▸"}</span>
-      <div class="rm-id"><b>${g.codigo?esc(g.codigo):esc(g.ref||"(no ref)")}</b><span class="rm-sub">${g.codigo&&g.ref?esc(g.ref)+" · ":""}${esc(fmtDate(g.fecha))} · ${esc(owners)} · ${g.lineas.length} product(s) · ${qty(g.uTotal)} u</span></div>
-      <div class="rm-pills">${pills}</div>
+    g.uTransito>0 ? `<span class="rl-pill">${qty(g.uTransito)} en tr\u00e1nsito</span>` : "",
+    g.uAr>0       ? `<span class="rl-pill ar">${qty(g.uAr)} en AR</span>` : ""
+  ].filter(Boolean).join(" ");
+  const head = `<div class="rl-rhead" data-remito-toggle="${esc(g.key)}">
+      <span class="rl-caret">${open?"\u25be":"\u25b8"}</span>
+      <div style="flex:1;min-width:0">
+        <div class="rl-code">${g.codigo?esc(g.codigo):esc(g.ref||"(sin ref)")}</div>
+        <div class="rl-meta">${g.codigo&&g.ref?esc(g.ref)+" \u00b7 ":""}${esc(fmtDate(g.fecha))} \u00b7 ${g.lineas.length} producto(s) \u00b7 ${qty(g.uTotal)} u</div>
+      </div>
+      <span class="rl-badge third">Tercero \u00b7 ${esc(owners)}</span>
     </div>`;
-  if(!open) return `<div class="rm-card">${head}</div>`;
 
-  // Expandido: filas COMPACTAS (aplanadas), con checkbox y estado por línea.
   const rows = g.lineas.map(cs=>`<tr>
       <td class="c"><input type="checkbox" class="rm-chk" data-rmsel="${cs.id}" ${remitoSel[cs.id]?"checked":""}></td>
-      <td><span class="sku">${esc(cs.sku||"—")}</span></td>
+      <td><span class="sku">${esc(cs.sku||"\u2014")}</span></td>
       <td>${esc(cs.nombre)}</td>
       <td>${esc(terceroNombre(cs))}</td>
       <td class="c">${estadoPillMini(cs.estado)}</td>
       <td class="r num">${qty(cs.cantidad)}</td>
-      <td class="r"><button class="btn ghost xs" data-cs-del="${cs.id}" title="Remove from tracking" style="color:var(--alert)">✕</button></td>
+      <td class="r"><button class="btn ghost xs" data-cs-del="${cs.id}" title="Sacar del seguimiento" style="color:var(--alert)">\u2715</button></td>
     </tr>`).join("");
+  const tabla = open ? `<div class="table-scroll" style="margin-bottom:10px"><table class="rm-tbl">
+      <thead><tr><th class="c"><input type="checkbox" class="rm-chkall" data-rmall="${esc(g.key)}"></th><th>SKU</th><th>Producto</th><th>Due\u00f1o</th><th class="c">Estado</th><th class="r">Unid.</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>` : "";
 
-  // Acciones: sobre las tildadas de ESTE remito, o sobre todas si no hay ninguna.
-  const selHere    = g.lineas.filter(l=> remitoSel[l.id]);
-  const scopeLines = selHere.length ? selHere : g.lineas;
+  const selHere     = g.lineas.filter(l=> remitoSel[l.id]);
+  const scopeLines  = selHere.length ? selHere : g.lineas;
   const hasTransito = scopeLines.some(l=> l.estado===CONSIGN_ESTADOS.TRANSITO);
   const hasAr       = scopeLines.some(l=> l.estado===CONSIGN_ESTADOS.AR);
-  const bar = `<div class="rm-actions">
-      <span class="rm-scope">${selHere.length?`${selHere.length} selected`:"acting on the whole remito"}</span>
-      ${g.remitoId?`<button class="btn ghost xs" data-rm-pdf="${esc(g.remitoId)}" title="Download remito ${esc(g.codigo)} (US → AR)">⤓ ${esc(g.codigo||"remito")}</button>`:""}
-      <div style="flex:1"></div>
-      ${hasTransito?`<button class="btn up sm" data-rm-receive="${esc(g.key)}" title="Puerta 2 · US transit → AR">Receive in AR ▾</button>`:""}
-      ${hasAr?`<button class="btn sm" data-rm-resolve="${esc(g.key)}" title="Split each product: our commission → Select · rest → owner">Resolve in AR ▾</button>`:""}
+  const foot = `<div class="rl-foot">
+      <span class="rl-next">${selHere.length?`${selHere.length} tildada(s)`:"acci\u00f3n sobre todo el remito"}${hasAr?` \u00b7 <span class="rl-warn">\u26a0 el reparto emite remito A y toca stock</span>`:""}</span>
+      ${g.remitoId?`<button class="btn ghost sm" data-rm-pdf="${esc(g.remitoId)}" title="Descargar remito ${esc(g.codigo||"")}">\u2913 ${esc(g.codigo||"remito")}</button>`:""}
+      ${hasTransito?`<button class="btn up sm" data-rm-receive="${esc(g.key)}" title="Puerta 2 \u00b7 tr\u00e1nsito \u2192 AR">Recibir en AR \u25be</button>`:""}
+      ${hasAr?`<button class="btn up sm" data-rm-resolve="${esc(g.key)}" title="Repartir: comisi\u00f3n \u2192 Select \u00b7 resto \u2192 due\u00f1o">Resolver reparto \u25be</button>`:""}
     </div>`;
 
-  return `<div class="rm-card open">${head}
-    <div class="rm-body"><div class="table-scroll"><table class="rm-tbl">
-      <thead><tr><th class="c"><input type="checkbox" class="rm-chkall" data-rmall="${esc(g.key)}"></th><th>SKU</th><th>Product</th><th>Owner</th><th class="c">State</th><th class="r">Units</th><th></th></tr></thead>
-      <tbody>${rows}</tbody></table></div>${bar}</div>
+  return `<div class="rl-card">
+    ${head}
+    ${rielHTML(["En tr\u00e1nsito<br>a AR","En AR<br>(en nuestras manos)","Resuelto<br>(split / entrega)"], cur)}
+    ${pills?`<div style="margin:0 2px 10px;display:flex;gap:6px;flex-wrap:wrap">${pills}</div>`:""}
+    ${tabla}
+    ${foot}
   </div>`;
 }
 
@@ -965,9 +1041,9 @@ function openRecibirRemito(key){
         </div>
       </div>
     </div>`;
-  buildModal("Receive in AR · third-party", body, [
-    {label:"Cancel",cls:"btn",act:closeModal},
-    {label:"Receive · "+qty(totalU)+" u",cls:"btn up",act:()=>{
+  buildModal("Recibir en AR · terceros", body, [
+    {label:"Cancelar",cls:"btn",act:closeModal},
+    {label:"Recibir · "+qty(totalU)+" u",cls:"btn up",act:()=>{
       const tot = Math.max(0,parseNum(document.getElementById("rr_c").value)||0);
       const perU = totalU>0 ? round2(tot/totalU) : 0;
       const obs = (document.getElementById("rr_obs").value||"").trim();
@@ -1010,9 +1086,9 @@ function openResolverAR(key){
       <div class="field"><label>Owner markup <span class="hint" style="font-weight:400">· % over accumulated cost, optional</span></label><input class="inp num" id="res_mk" value="0" inputmode="decimal"><div class="leg-pu hint" id="res_mk_pu">no markup</div></div>
       <div class="field" style="grid-column:1/-1"><label>Notes</label><input class="inp" id="res_obs" placeholder="e.g. split reason"></div>
     </div>`;
-  buildModal("Resolve in AR · "+esc(store===STORE_IDS[1]?storeName(store):"AR"), body, [
-    {label:"Cancel",cls:"btn",act:closeModal},
-    {label:"Resolve",cls:"btn up",act:()=>{
+  buildModal("Resolver reparto · "+esc(store===STORE_IDS[1]?storeName(store):"AR"), body, [
+    {label:"Cancelar",cls:"btn",act:closeModal},
+    {label:"Resolver",cls:"btn up",act:()=>{
       // contexto del U (antes de mutar)
       const remId  = lines[0] && lines[0].remitoId || null;
       const conjId = lines[0] && lines[0].conjuntaId || null;
@@ -1102,7 +1178,9 @@ function wireConjunta(){
   m.querySelectorAll("[data-cs-recib]").forEach(b=> b.onclick=()=> openRecibirConsignacion(b.dataset.csRecib));
   m.querySelectorAll("[data-cs-entregar]").forEach(b=> b.onclick=()=> entregarConsignacion(b.dataset.csEntregar));
   m.querySelectorAll("[data-cs-del]").forEach(b=> b.onclick=()=> removeConsignacion(b.dataset.csDel));
-  // --- Vista por remito (punto 1) ---
+  // Contadores clickeables: llevan a la seccion correspondiente
+  m.querySelectorAll("[data-scroll]").forEach(c=> c.onclick=()=>{ const el=document.getElementById(c.dataset.scroll); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); });
+  // --- Vista por remito ---
   m.querySelectorAll("[data-remito-toggle]").forEach(h=> h.onclick=()=>{ const k=h.dataset.remitoToggle; remitoOpen[k]=!remitoOpen[k]; render(); });
   m.querySelectorAll("[data-rmsel]").forEach(cb=> cb.onchange=()=>{ if(cb.checked) remitoSel[cb.dataset.rmsel]=true; else delete remitoSel[cb.dataset.rmsel]; render(); });
   m.querySelectorAll("[data-rmall]").forEach(cb=> cb.onchange=()=>{
