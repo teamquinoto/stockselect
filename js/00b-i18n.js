@@ -39,7 +39,12 @@ var I18N = {
     "common.search":"Search", "common.add":"Add", "common.edit":"Edit", "common.confirm":"Confirm",
     "common.download":"Download", "common.optional":"optional", "common.yes":"Yes", "common.no":"No",
     "common.total":"Total", "common.date":"Date", "common.product":"Product", "common.client":"Client",
-    "common.owner":"Owner", "common.units":"Units", "common.none":"None"
+    "common.owner":"Owner", "common.units":"Units", "common.none":"None",
+    "store.title":"My merchandise in transit", "store.sub":"Track your shipments from the US to Argentina and where each one is.",
+    "store.readonly":"Read-only", "store.empty":"You have no merchandise in transit right now.",
+    "store.noacct":"Your store account isn't linked to a customer yet. Ask the admin to set it up.",
+    "store.gate.transit":"In transit<br>to AR", "store.gate.ar":"In AR<br>(arrived)", "store.gate.delivered":"Delivered",
+    "store.units":"units", "store.products":"product(s)", "store.shipment":"Shipment", "store.delivered.title":"Delivered"
   },
   es: {
     "sec.op":"Operaciones", "sec.cat":"Cat\u00e1logo", "sec.fin":"Finanzas", "sec.dat":"Datos",
@@ -57,7 +62,12 @@ var I18N = {
     "common.search":"Buscar", "common.add":"Agregar", "common.edit":"Editar", "common.confirm":"Confirmar",
     "common.download":"Descargar", "common.optional":"opcional", "common.yes":"S\u00ed", "common.no":"No",
     "common.total":"Total", "common.date":"Fecha", "common.product":"Producto", "common.client":"Cliente",
-    "common.owner":"Due\u00f1o", "common.units":"Unidades", "common.none":"Ninguno"
+    "common.owner":"Due\u00f1o", "common.units":"Unidades", "common.none":"Ninguno",
+    "store.title":"Mi mercader\u00eda en viaje", "store.sub":"Segu\u00ed tus env\u00edos de EE.UU. a Argentina y en qu\u00e9 parte del viaje est\u00e1 cada uno.",
+    "store.readonly":"S\u00f3lo lectura", "store.empty":"No ten\u00e9s mercader\u00eda en viaje en este momento.",
+    "store.noacct":"Tu cuenta de tienda todav\u00eda no est\u00e1 vinculada a un cliente. Pedile al admin que la configure.",
+    "store.gate.transit":"En tr\u00e1nsito<br>a AR", "store.gate.ar":"En AR<br>(lleg\u00f3)", "store.gate.delivered":"Entregado",
+    "store.units":"unidades", "store.products":"producto(s)", "store.shipment":"Env\u00edo", "store.delivered.title":"Entregado"
   }
 };
 

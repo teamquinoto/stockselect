@@ -89,10 +89,13 @@ function convertCcy(monto, from, to){
   return monto;
 }
 
-const ROLES = { ADMIN:"admin", SELLER:"seller" };
+const ROLES = { ADMIN:"admin", SELLER:"seller", STORE:"store" };
 function currentRole(){ return (session && session.role) || ROLES.ADMIN; }  // Local mode (no session) = full access
 function isAdmin(){ return currentRole()===ROLES.ADMIN; }
 function isSeller(){ return currentRole()===ROLES.SELLER; }
+function isStore(){ return currentRole()===ROLES.STORE; }
+/* For a store user, the AR client (terceroId) whose merchandise they may track. */
+function storeClienteId(){ return (session && session.store) || ""; }
 /* Vistas reservadas al admin. Un vendedor NO carga compras, no manda a inversión,
    no ve análisis/comisiones globales ni la exportación de datos. Sólo vende. */
 const ADMIN_VIEWS = ["compras","inv","analisis","datos","mov","conjunta","remitos"];
@@ -594,7 +597,7 @@ async function doLogin(){
     const j=await res.json();
     console.log("[login] ok, entrando como", j.user, "role:", j.role);
     const switching = !session || session.user!==j.user;
-    session={ user:j.user, token:j.token, space:j.space||"main", role:j.role||"admin", vendedorId:j.vendedorId||"", name:j.name||j.user }; saveSession();
+    session={ user:j.user, token:j.token, space:j.space||"main", role:j.role||"admin", vendedorId:j.vendedorId||"", store:j.store||"", name:j.name||j.user }; saveSession();
     // El stock es UNO SOLO: todos (admin y vendedores) arrancan en la vista
     // consolidada. Las sociedades son sólo procedencia, no locales de venta.
     activeStore = "all";

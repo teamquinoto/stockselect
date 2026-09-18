@@ -82,10 +82,16 @@ function wireStoreBar(){
 function applyRoleUI(){
   // hide admin-only nav entries for sellers
   document.querySelectorAll("[data-admin-only]").forEach(el=> el.style.display = isAdmin()?"":"none");
+  // store users get a read-only portal: hide the whole navigation.
+  const store = isStore();
+  ["nav","navSections","navMob"].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display = store?"none":""; });
   // role badge (mobile top bar): shows who is logged in and their role
   const admin = isAdmin();
   const nombre = (session && session.name) || (session && session.user) || "";
-  const txt = session ? (admin ? t("role.admin") : (t("role.seller")+" · "+(nombre||"—"))) : t("role.local");
+  const txt = !session ? t("role.local")
+    : (admin ? t("role.admin")
+      : (store ? (t("role.store")+" · "+(nombre||"—"))
+        : (t("role.seller")+" · "+(nombre||"—"))));
   document.querySelectorAll("[data-rolebadge]").forEach(el=>{
     el.textContent = txt;
     el.style.background = admin ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "color-mix(in srgb, var(--up) 18%, transparent)";
@@ -109,6 +115,14 @@ function render(){
   // otra vista el stock es un pool único: forzamos consolidado para que ni la tabla
   // de stock, ni las columnas, ni los conteos arrastren un foco de tienda latente.
   if(!viewUsesSociety()) activeStore = "all";
+  // Store role: read-only portal, one view, no nav, no store/report bar.
+  if(isStore()){
+    m.innerHTML = viewStore();
+    applyRoleUI();
+    if(typeof applyStaticI18n==="function") applyStaticI18n();
+    _lastRenderView = view;
+    return;
+  }
   const bar = storeBarHTML();
   if(view==="dash") m.innerHTML = bar+viewDash();
   else if(view==="analisis") m.innerHTML = bar+viewAnalisis();

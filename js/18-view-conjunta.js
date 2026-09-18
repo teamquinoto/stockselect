@@ -211,17 +211,53 @@ function quedarseParaSelect(consignId, unidades, costoUnit, obs){
    unit. The preview shows instantly how much it adds to each unit, so
    you understand where and how the landed cost is capitalized at each gate.
    ============================================================ */
-function legCostFieldHTML(id, label, hint){
+/* Cost field WITH per-gate currency (USD/ARS). Everything is unified to USD:
+   if ARS is chosen we ask for the rate (ARS per US$1, prefilled from the global
+   tc()) and legCostRead() divides by it. The engine only ever sees USD. */
+function legCostFieldHTML(id, label, hint, opts){
+  opts = opts || {};
+  const val = (opts.value!=null) ? opts.value : "0";
+  const pu  = opts.noPreview ? "" : `<div class="leg-pu hint" id="${id}_pu">= ${money(0,"USD")} per unit</div>`;
   return `<div class="field" style="grid-column:1/-1"><label>${label}${hint?` <span class="hint" style="font-weight:400">${hint}</span>`:""}</label>
-    <input class="inp num" id="${id}" value="0" inputmode="decimal">
-    <div class="leg-pu hint" id="${id}_pu">= ${money(0,"USD")} per unit</div></div>`;
+    <div class="cost-row">
+      <input class="inp num" id="${id}" value="${val}" inputmode="decimal">
+      <div class="ccy-seg" data-ccy-for="${id}">
+        <button type="button" class="ccy-opt on" data-ccy="USD">US$</button>
+        <button type="button" class="ccy-opt" data-ccy="ARS">AR$</button>
+      </div>
+    </div>
+    <div class="rate-row" id="${id}_rate_row" style="display:none;margin-top:6px">
+      <span class="hint">ARS per US$1</span>
+      <input class="inp num" id="${id}_rate" value="${tc()}" inputmode="decimal" style="max-width:130px">
+    </div>
+    ${pu}</div>`;
+}
+/* Read a cost field's amount already converted to USD (base currency). */
+function legCostRead(id){
+  const inp=document.getElementById(id); if(!inp) return 0;
+  const amt=Math.max(0, parseNum(inp.value)||0);
+  const on=document.querySelector('[data-ccy-for="'+id+'"] .ccy-opt.on');
+  const ccy = on ? on.getAttribute("data-ccy") : "USD";
+  if(ccy==="ARS"){ const r=Math.max(0, parseNum((document.getElementById(id+"_rate")||{}).value)||0); return r>0 ? amt/r : 0; }
+  return amt;
+}
+/* Wire the USD/ARS toggle + rate field for a cost input. onChange re-runs any preview. */
+function wireLegCcy(id, onChange){
+  const seg=document.querySelector('[data-ccy-for="'+id+'"]'); if(!seg) return;
+  const rateRow=document.getElementById(id+"_rate_row");
+  seg.querySelectorAll(".ccy-opt").forEach(b=> b.onclick=()=>{
+    seg.querySelectorAll(".ccy-opt").forEach(x=> x.classList.toggle("on", x===b));
+    if(rateRow) rateRow.style.display = (b.getAttribute("data-ccy")==="ARS") ? "" : "none";
+    if(onChange) onChange();
+  });
+  const r=document.getElementById(id+"_rate"); if(r) r.oninput=()=>{ if(onChange) onChange(); };
 }
 function wireLegPreview(inputId, totalUnits){
   const inp=document.getElementById(inputId), out=document.getElementById(inputId+"_pu");
   if(!inp||!out) return;
-  const upd=()=>{ const t=Math.max(0,parseNum(inp.value)||0); const pu = totalUnits>0 ? t/totalUnits : 0;
+  const upd=()=>{ const usd=legCostRead(inputId); const pu = totalUnits>0 ? usd/totalUnits : 0;
     out.textContent = `= ${money(round2(pu),"USD")} per unit  ·  spread across ${qty(totalUnits)} u`; };
-  inp.oninput=upd; upd();
+  inp.oninput=upd; wireLegCcy(inputId, upd); upd();
 }
 function estadoPillMini(e){
   const col = e===CONSIGN_ESTADOS.TRANSITO ? "var(--muted)" : e===CONSIGN_ESTADOS.AR ? "var(--accent)" : "var(--up)";
@@ -537,14 +573,14 @@ function openRecibirTransito(prodId){
     <p class="hint" style="margin:0 0 12px">In transit (Buenos Aires): <b>${qty(held)}</b> u · valued ${money(transValor(p), "USD")}. Delivering moves them into <b>${esc(storeName(destino))}</b> stock (sellable, AR). The <b>operator pays</b> the Argentine leg (freight + nationalization + local costs) and it's <b>capitalized into the landed cost</b>.</p>
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
       <div class="field"><label>Units to receive</label><input class="inp num" id="rt_q" value="${held}"></div>
-      <div class="field"><label>Gate 3 · Arg freight + local costs <span class="hint" style="font-weight:400">· total, optional</span></label><input class="inp num" id="rt_c" value="0" inputmode="decimal"><div class="leg-pu hint" id="rt_c_pu">= ${money(0,"USD")} per unit</div></div>
+      ${legCostFieldHTML("rt_c","Gate 3 · Arg freight + local costs","· total, optional")}
       <div class="field" style="grid-column:1/3"><label>Notes</label><input class="inp" id="rt_obs" placeholder="e.g. shipment #, nationalization ref"></div>
     </div>`;
   buildModal("Deliver in AR ("+esc(storeName(destino))+")", body, [
     {label:"Cancel",cls:"btn",act:closeModal},
     {label:"Mark delivered · "+storeName(destino),cls:"btn up",act:()=>{
       const q=Math.min(Math.max(0,parseNum(document.getElementById("rt_q").value)||0), transUnits(p));
-      const cTot=Math.max(0,parseNum(document.getElementById("rt_c").value)||0);   // arg freight + local costs (total)
+      const cTot=legCostRead("rt_c");   // arg freight + local costs (total), in USD
       const c = q>0 ? round2(cTot/q) : 0;                                           // prorrateo por unidad
       const obs=(document.getElementById("rt_obs").value||"").trim();
       if(q<=0){ toast("Enter a quantity","warn"); return; }
@@ -554,8 +590,8 @@ function openRecibirTransito(prodId){
   ], "mini");
   // landed-per-unit preview = total ÷ units to receive (recomputed when either changes)
   const rtC=document.getElementById("rt_c"), rtQ=document.getElementById("rt_q"), rtPu=document.getElementById("rt_c_pu");
-  const rtUpd=()=>{ const t=Math.max(0,parseNum(rtC.value)||0), u=Math.max(0,parseNum(rtQ.value)||0); rtPu.textContent = `= ${money(u>0?round2(t/u):0,"USD")} per unit  ·  spread across ${qty(u)} u`; };
-  if(rtC&&rtQ&&rtPu){ rtC.oninput=rtUpd; rtQ.oninput=rtUpd; rtUpd(); }
+  const rtUpd=()=>{ const usd=legCostRead("rt_c"), u=Math.max(0,parseNum(rtQ.value)||0); rtPu.textContent = `= ${money(u>0?round2(usd/u):0,"USD")} per unit  ·  spread across ${qty(u)} u`; };
+  if(rtC&&rtQ&&rtPu){ rtC.oninput=rtUpd; rtQ.oninput=rtUpd; wireLegCcy("rt_c",rtUpd); rtUpd(); }
 }
 
 /* ---- Send to transit: moves units from a sellable deposit into the transit bucket.
@@ -572,7 +608,7 @@ function openEnviarTransito(){
       <div class="field" style="grid-column:1/3"><label>Product</label><select class="inp" id="et_prod">${prodOpts}</select></div>
       <div class="field"><label>From deposit</label><select class="inp" id="et_store"></select></div>
       <div class="field"><label>Units</label><input class="inp num" id="et_q" value="0"></div>
-      <div class="field" style="grid-column:1/3"><label>Gate 2 · Intl freight + wire fees <span class="hint" style="font-weight:400">· total (USD), optional</span></label><input class="inp num" id="et_cost" value="0" inputmode="decimal"><div class="leg-pu hint" id="et_cost_pu">= ${money(0,"USD")} per unit</div></div>
+      ${legCostFieldHTML("et_cost","Gate 2 · Intl freight + wire fees","· total, optional")}
       <div class="field" style="grid-column:1/3"><label>Notes</label><input class="inp" id="et_obs"></div>
     </div>`;
   buildModal("Send to transit (to AR)", body, [
@@ -584,7 +620,7 @@ function openEnviarTransito(){
       const q=Math.min(Math.max(0,parseNum(document.getElementById("et_q").value)||0), stockDe(p,st));
       const obs=(document.getElementById("et_obs").value||"").trim();
       if(q<=0){ toast("Enter a quantity (deposit may be empty)","warn"); return; }
-      const costTot=Math.max(0,parseNum(document.getElementById("et_cost").value)||0);   // intl freight + wire fees (total)
+      const costTot=legCostRead("et_cost");   // intl freight + wire fees (total), in USD
       const costPU = q>0 ? round2(costTot/q) : 0;                                          // prorrateo por unidad
       const done = transferStock(p, st, TRANSITO_STORE, q, costPU, obs, "intl");
       if(done>0){
@@ -611,8 +647,8 @@ function openEnviarTransito(){
   fillStores();
   // landed-per-unit preview = total ÷ units
   const etC=document.getElementById("et_cost"), etQ=document.getElementById("et_q"), etPu=document.getElementById("et_cost_pu");
-  const etUpd=()=>{ const t=Math.max(0,parseNum(etC.value)||0), u=Math.max(0,parseNum(etQ.value)||0); etPu.textContent = `= ${money(u>0?round2(t/u):0,"USD")} per unit  ·  spread across ${qty(u)} u`; };
-  if(etC&&etQ&&etPu){ etC.oninput=etUpd; etQ.oninput=etUpd; etUpd(); }
+  const etUpd=()=>{ const usd=legCostRead("et_cost"), u=Math.max(0,parseNum(etQ.value)||0); etPu.textContent = `= ${money(u>0?round2(usd/u):0,"USD")} per unit  ·  spread across ${qty(u)} u`; };
+  if(etC&&etQ&&etPu){ etC.oninput=etUpd; etQ.oninput=etUpd; wireLegCcy("et_cost",etUpd); etUpd(); }
 }
 
 /* ---- Write-off of transit: reduces bucket units due to breakage, customs,
@@ -928,7 +964,7 @@ function openDeliverAllOurs(){
   buildModal("Deliver all in AR ("+esc(storeName(destino))+")", body, [
     {label:"Cancel",cls:"btn",act:closeModal},
     {label:"Deliver all · "+qty(totalU)+" u",cls:"btn up",act:()=>{
-      const costTot=Math.max(0,parseNum(document.getElementById("da_cost").value)||0);
+      const costTot=legCostRead("da_cost");
       const perU = totalU>0 ? round2(costTot/totalU) : 0;
       const obs=(document.getElementById("da_obs").value||"").trim();
       let done=0, items=0;
@@ -946,18 +982,19 @@ function openRecibirConsignacion(id){
   const body = `
     <p class="hint" style="margin:0 0 14px"><b>${esc(cs.nombre)}</b> · owner <b>${esc(terceroNombre(cs))}</b> · <b>${qty(cs.cantidad)}</b> u. Marks them <b>received in AR</b> (still not ours, still tracked). Add courier/financial cost per unit for cost-sharing (optional — doesn't affect margin).</p>
     <div class="grid-form stack" style="padding:0">
-      <div class="field"><label>Courier / financial cost per unit <span class="hint" style="font-weight:400">· optional</span></label><input class="inp num" id="csc_c" value="${cs.costoCourierUnit||0}"></div>
+      ${legCostFieldHTML("csc_c","Courier / financial cost per unit","· optional",{value:(cs.costoCourierUnit||0),noPreview:true})}
       <div class="field"><label>Notes</label><input class="inp" id="csc_obs" placeholder="e.g. arrival ref"></div>
     </div>`;
   buildModal("Receive third-party in AR", body, [
     {label:"Cancel",cls:"btn",act:closeModal},
     {label:"Mark received in AR",cls:"btn up",act:()=>{
-      const c=Math.max(0,parseNum(document.getElementById("csc_c").value)||0);
+      const c=legCostRead("csc_c");
       const obs=(document.getElementById("csc_obs").value||"").trim();
       avanzarConsignacion(id, { costoCourierUnit:c, obs });
       closeModal(); toast("Third-party units received in AR","up"); render();
     }}
   ], "mini");
+  wireLegCcy("csc_c");
 }
 /* ---- Deliver consignment: en_ar → delivered (handoff to the owner) ---- */
 function entregarConsignacion(id){
@@ -1051,7 +1088,7 @@ function openRecibirRemito(key){
   buildModal("Receive in AR · third-party", body, [
     {label:"Cancel",cls:"btn",act:closeModal},
     {label:"Receive · "+qty(totalU)+" u",cls:"btn up",act:()=>{
-      const tot = Math.max(0,parseNum(document.getElementById("rr_c").value)||0);
+      const tot = legCostRead("rr_c");
       const perU = totalU>0 ? round2(tot/totalU) : 0;
       const obs = (document.getElementById("rr_obs").value||"").trim();
       lines.forEach(cs=> avanzarConsignacion(cs.id, { costoCourierUnit:perU, obs }));
@@ -1106,7 +1143,7 @@ function openResolverAR(key){
       // total to Select to prorate the extra
       let totalSelU=0;
       lines.forEach((cs,i)=>{ totalSelU += Math.min(Math.max(0,parseNum(document.getElementById("rq_"+i).value)||0), cs.cantidad); });
-      const extraTot = Math.max(0,parseNum(document.getElementById("res_extra").value)||0);
+      const extraTot = legCostRead("res_extra");
       const extraPU  = totalSelU>0 ? round2(extraTot/totalSelU) : 0;
 
       const selLines=[], terLines=[];
