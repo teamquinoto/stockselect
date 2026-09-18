@@ -1,59 +1,62 @@
   :root{
-    --ink:#1b1725;
-    --ink-soft:#2e2838;
-    --paper:#faf9fc;
+    --ink:#1c1810;
+    --ink-soft:#33291b;
+    --paper:#faf8f5;
     --surface:#ffffff;
-    --surface-2:#f3f0f9;
-    --line:#eae5f2;
-    --line-strong:#d8d0e6;
-    --accent:#7c3aed;
-    --accent-ink:#6d28d9;
-    --up:#7c3aed;
-    --up-bg:#f0e9fc;
+    --surface-2:#f5efe6;
+    --line:#efe7db;
+    --line-strong:#e3d6c3;
+    --accent:#d97706;
+    --accent-ink:#b45309;
+    --accent-rgb:217,119,6;
+    --up:#16a34a;
+    --up-bg:#e6f5ec;
     --down:#dc2626;
     --down-bg:#fbecec;
     --alert:#dc2626;
     --alert-bg:#fbecec;
-    --muted:#78708a;
-    --text:#1b1725;
+    --muted:#857a68;
+    --text:#1c1810;
     --radius:14px;
     --mono:"Spline Sans Mono",ui-monospace,"SF Mono","Menlo","Consolas",monospace;
     --sans:"Inter Tight",-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,sans-serif;
-    --shadow:0 1px 2px rgba(26,26,26,.05);
-    --side-bg:#f2eef9;
-    --side-hover:#e8e1f4;
-    --nav-ink:#6b6280;
+    --shadow:0 1px 2px rgba(28,24,16,.06);
+    --side-bg:#f4ede2;
+    --side-hover:#ece1d0;
+    --nav-ink:#6f6250;
     --topbar-bg:#ffffff;
-    --login-bg:#efeaf7;
+    --login-bg:#f2e9db;
   }
   :root[data-theme="dark"]{
-    --ink:#0c0a13;
-    --paper:#100e18;
-    --surface:#191524;
-    --surface-2:#221c33;
-    --line:#2f2743;
-    --line-strong:#40365a;
-    --accent:#a78bfa;
-    --accent-ink:#c4b5fd;
-    --up:#a78bfa;
-    --up-bg:#241a3b;
+    --ink:#0c0905;
+    --ink-soft:#e0d6c4;
+    --paper:#14100a;
+    --surface:#201a12;
+    --surface-2:#2b2318;
+    --line:#3a3020;
+    --line-strong:#4c4029;
+    --accent:#f59e0b;
+    --accent-ink:#fbbf24;
+    --accent-rgb:245,158,11;
+    --up:#4ade80;
+    --up-bg:#12331f;
     --down:#f16a68;
     --down-bg:#3a1e1e;
     --alert:#f16a68;
     --alert-bg:#3a1e1e;
-    --muted:#968ba8;
-    --text:#eae6f4;
-    --shadow:0 1px 2px rgba(0,0,0,.45);
-    --side-bg:#140f1f;
-    --side-hover:#221c33;
-    --nav-ink:#c7bdd9;
-    --topbar-bg:#140f1f;
-    --login-bg:#0b0912;
+    --muted:#a5967d;
+    --text:#f0e9dc;
+    --shadow:0 1px 2px rgba(0,0,0,.5);
+    --side-bg:#0f0c07;
+    --side-hover:#2b2318;
+    --nav-ink:#cdbfa6;
+    --topbar-bg:#0f0c07;
+    --login-bg:#0c0905;
   }
   :root[data-theme="dark"] .banner.warn{color:#f3b3b3;border-color:#5a2b2b}
-  :root[data-theme="dark"] .banner.ok{color:var(--accent-ink);border-color:#264a6e}
+  :root[data-theme="dark"] .banner.ok{color:var(--accent-ink);border-color:#5a4620}
   :root[data-theme="dark"] .login-card .inp{background:var(--surface-2)}
-  :root[data-theme="dark"] .login-build{color:#5b6472}
+  :root[data-theme="dark"] .login-build{color:#8a7c60}
   :root[data-theme="dark"] .modal{box-shadow:0 20px 60px rgba(0,0,0,.6)}
   *{box-sizing:border-box}
   html,body{margin:0;padding:0}
@@ -94,7 +97,7 @@
   .topbar.scrolled{ background:color-mix(in srgb, var(--paper) 72%, transparent); border-bottom-color:var(--line) }
   @supports not (background:color-mix(in srgb, red, blue)){ .topbar.scrolled{ background:var(--topbar-bg) } }
   .topbar .tb-brand{display:flex;align-items:center;gap:9px;min-width:0}
-  .topbar .tb-mark{width:27px;height:27px;border-radius:7px;flex-shrink:0;object-fit:cover;box-shadow:0 2px 8px rgba(124,58,237,.28)}
+  .topbar .tb-mark{width:27px;height:27px;border-radius:7px;flex-shrink:0;object-fit:cover;box-shadow:0 2px 8px rgba(var(--accent-rgb),.28)}
   .topbar .tb-name{font-size:15px;font-weight:800;color:var(--text);letter-spacing:-.4px;white-space:nowrap}
   .topbar .tb-right{display:flex;align-items:center;gap:14px}
   .topbar .tb-sync{font-size:11.5px;font-weight:700;white-space:nowrap}
@@ -124,7 +127,7 @@
   .theme-switch .ts-hint-moon{right:2px}
   .theme-switch .ts-thumb{position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;color:#e0a11a;transition:transform .22s ease,background .2s,color .2s}
   .theme-switch .ts-thumb svg{width:13px;height:13px}
-  :root[data-theme="dark"] .theme-switch .ts-thumb{transform:translateX(32px);background:#e6e9ee;color:#3b4b66}
+  :root[data-theme="dark"] .theme-switch .ts-thumb{transform:translateX(32px);background:#f0e9dc;color:#4c4029}
   .brand-m-logo{border-radius:6px;align-self:center;margin-right:6px}
   .nav{display:flex;flex-direction:column;gap:2px}
   .nav button{
@@ -144,7 +147,7 @@
   .nav button:hover .ico{transform:scale(1.14)}
   .nav button:not(.on):hover{transform:translateX(3px)}
   .nav button:not(.on):hover::before{height:16px}
-  .nav button.on{background:var(--accent);color:#fff;box-shadow:0 4px 12px rgba(124,58,237,.24)}
+  .nav button.on{background:var(--accent);color:#fff;box-shadow:0 4px 12px rgba(var(--accent-rgb),.24)}
   .nav button.on .ico{opacity:1;animation:navPop .32s cubic-bezier(.34,1.56,.64,1)}
   /* entry stagger: each button appears a touch after the previous one */
   .nav button:nth-child(1){animation-delay:.02s}
@@ -356,7 +359,7 @@
   .drop p{margin:4px 0;color:var(--muted);font-size:13.5px}
   .drop .fn{color:var(--accent-ink);font-weight:600}
 
-  .rawbox{font-family:var(--mono);font-size:11.5px;line-height:1.55;background:var(--ink);color:#cbd5e1;border-radius:8px;padding:12px;max-height:180px;overflow:auto;white-space:pre-wrap;word-break:break-word}
+  .rawbox{font-family:var(--mono);font-size:11.5px;line-height:1.55;background:var(--ink);color:#e0d6c4;border-radius:8px;padding:12px;max-height:180px;overflow:auto;white-space:pre-wrap;word-break:break-word}
   details{margin-top:14px}
   summary{cursor:pointer;font-size:13px;color:var(--accent);font-weight:600}
 
@@ -383,7 +386,7 @@
   .slicer select:focus,.slicer input:focus{outline:none;border-color:var(--accent)}
   .slicer-reset{height:36px;font-size:12px;color:var(--accent);background:none;border:none;cursor:pointer;font-weight:700;padding:0 6px}
   .pill.blocked{background:#7c4a03;color:#ffd9a0}
-  .pill.inv{background:#3a2a6b;color:#d7c9ff}
+  .pill.inv{background:#2f2a22;color:#e8dcc8}
   .inv-badge{display:inline-block;font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap}
   .inv-badge.transit{background:var(--up-bg);color:var(--accent-ink);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent)}
   .inv-badge.received{background:#123a2a;color:#7fe0b8;border:1px solid #1c5a41}
@@ -499,8 +502,8 @@
   .login-aurora{position:absolute;inset:0;overflow:hidden;pointer-events:none}
   .login-aurora span{position:absolute;display:block;border-radius:50%;filter:blur(64px);opacity:.5}
   .login-aurora span:nth-child(1){width:420px;height:420px;left:-90px;top:-120px;background:radial-gradient(circle at 30% 30%,var(--accent),transparent 70%);animation:aurora1 17s ease-in-out infinite}
-  .login-aurora span:nth-child(2){width:380px;height:380px;right:-100px;top:18%;background:radial-gradient(circle at 60% 40%,#6ea8fe,transparent 70%);animation:aurora2 21s ease-in-out infinite}
-  .login-aurora span:nth-child(3){width:340px;height:340px;left:28%;bottom:-150px;background:radial-gradient(circle at 50% 50%,#9db8ff,transparent 70%);animation:aurora3 19s ease-in-out infinite}
+  .login-aurora span:nth-child(2){width:380px;height:380px;right:-100px;top:18%;background:radial-gradient(circle at 60% 40%,#fbbf24,transparent 70%);animation:aurora2 21s ease-in-out infinite}
+  .login-aurora span:nth-child(3){width:340px;height:340px;left:28%;bottom:-150px;background:radial-gradient(circle at 50% 50%,#fb923c,transparent 70%);animation:aurora3 19s ease-in-out infinite}
   :root[data-theme="dark"] .login-aurora span{opacity:.26}
   @keyframes aurora1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(40px,30px) scale(1.12)}}
   @keyframes aurora2{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-30px,40px) scale(1.08)}}
@@ -516,14 +519,14 @@
   @keyframes cardIn{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
   .login-logo-wrap{display:inline-flex;margin-bottom:16px;animation:logoFloat 5s ease-in-out infinite}
   @keyframes logoFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
-  .login-logo{border-radius:18px;box-shadow:0 10px 30px rgba(124,58,237,.28);display:block}
+  .login-logo{border-radius:18px;box-shadow:0 10px 30px rgba(var(--accent-rgb),.28);display:block}
   .login-card h1{color:var(--text);font-size:23px;margin:0 0 6px;letter-spacing:-.6px;font-weight:900}
   .login-sub{color:var(--muted);font-size:13.5px;margin:0 0 24px;line-height:1.5}
   .login-card .field{text-align:left;margin-bottom:14px}
   .login-card .field label{color:var(--muted);font-size:12.5px;font-weight:600}
   .login-card .inp{background:var(--surface);border-color:var(--line-strong);color:var(--text);padding:11px 12px;border-radius:10px;transition:border-color .15s,box-shadow .15s}
   .login-card .inp:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
-  @supports not (background:color-mix(in srgb,red,blue)){.login-card .inp:focus{box-shadow:0 0 0 3px rgba(124,58,237,.18)}}
+  @supports not (background:color-mix(in srgb,red,blue)){.login-card .inp:focus{box-shadow:0 0 0 3px rgba(var(--accent-rgb),.18)}}
   /* password with an "eye" to show/hide */
   .pass-wrap{position:relative}
   .pass-wrap .inp{padding-right:42px}
@@ -697,7 +700,7 @@
 .nav button .ico{width:auto;font-family:var(--mono);font-size:12px;opacity:.7}
 .nav button:hover{background:var(--surface);color:var(--text);border-color:var(--line-strong);transform:none}
 .nav button:not(.on):hover{transform:none}
-.nav button.on{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 4px 12px rgba(124,58,237,.24)}
+.nav button.on{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 4px 12px rgba(var(--accent-rgb),.24)}
 .nav button.on .ico{opacity:1;animation:none}
 .nav button.hide-sec{display:none}
 
@@ -806,7 +809,7 @@
 .origen-bar .seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
 .origen-bar .seg button{border:0;background:transparent;color:var(--muted);font-weight:700;font-size:12.5px;
   padding:7px 14px;border-radius:8px;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s}
-.origen-bar .seg button.on{background:var(--accent);color:#fff;box-shadow:0 3px 10px rgba(124,58,237,.22)}
+.origen-bar .seg button.on{background:var(--accent);color:#fff;box-shadow:0 3px 10px rgba(var(--accent-rgb),.22)}
 /* Point 1: compact summary when type/owner were already chosen in the import */
 .origen-bar.locked{align-items:center;justify-content:space-between;background:var(--surface-2);
   border:1px solid var(--line);border-radius:10px;padding:8px 12px}
