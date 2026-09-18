@@ -797,14 +797,14 @@ function ourTransitCardHTML(p){
   return `<div class="rl-card">
     <div class="rl-head">
       <span class="rl-code">${esc(p.nombre)}</span>
-      <span class="rl-badge ours">Ours \u00b7 enters stock</span>
+      <span class="rl-badge ours">${t("conj.badge.ours")}</span>
       <span class="rl-meta">${esc(p.sku||"\u2014")} \u00b7 ${qty(u)} u \u00b7 ${money(val,"USD")}</span>
     </div>
-    ${rielHTML([{icon:"usa",label:"In USA<br>(Swan)"},{icon:"plane",label:"In transit<br>to AR"},{icon:"store",label:"Sellable<br>in AR (Select)"}], 1)}
+    ${rielHTML([{icon:"usa",label:t("conj.gate.usa")},{icon:"plane",label:t("conj.gate.transit")},{icon:"store",label:t("conj.gate.sellable")}], 1)}
     <div class="rl-foot">
-      <span class="rl-next">In transit to AR \u00b7 next step is to deliver it into Select (AR)</span>
-      <button class="btn ghost sm" data-merma="${p.id}" style="color:var(--alert)">Write-off</button>
-      <button class="btn up sm" data-recib="${p.id}">Deliver in AR \u25be</button>
+      <span class="rl-next">${t("conj.ours.next")}</span>
+      <button class="btn ghost sm" data-merma="${p.id}" style="color:var(--alert)">${t("conj.writeoff")}</button>
+      <button class="btn up sm" data-recib="${p.id}">${t("conj.deliverar")} \u25be</button>
     </div>
   </div>`;
 }
@@ -815,22 +815,22 @@ function viewConjunta(){
     .sort((a,b)=> String(a.nombre||"").localeCompare(String(b.nombre||""),"en"));
   const uNuestraTransito = enTransito.reduce((a,p)=> a + transUnits(p), 0);
   const ourCards = enTransito.map(ourTransitCardHTML).join("")
-    || `<div class="rl-empty">Nothing of ours in transit. Send stock with \u201cSend to transit\u201d.</div>`;
+    || `<div class="rl-empty">${t("conj.ours.empty")}</div>`;
 
   // --- Third-party lane: consignments grouped by remito ---
   const remitos = remitosActivos();
   const remTransito = remitos.filter(g=> g.uTransito>0).length;
   const remAr       = remitos.filter(g=> g.uAr>0).length;
   const remitoCards = remitos.map(remitoCardHTML).join("")
-    || `<div class="rl-empty">No third-party in flow. It comes in from Purchases (type Third-party) or from \u201c\uff0b New joint buy\u201d.</div>`;
+    || `<div class="rl-empty">${t("conj.third.empty")}</div>`;
 
   // --- Actionable counters ---
   const chips = `
-    <p class="hint" style="margin:0 0 6px">What needs doing?</p>
+    <p class="hint" style="margin:0 0 6px">${t("conj.needs")}</p>
     <div class="rl-chips">
-      <div class="rl-chip${enTransito.length?" hot":""}" data-scroll="rl-nuestra"><span class="n">${qty(uNuestraTransito)}</span><span class="l">Ours in transit \u00b7 deliver in AR</span></div>
-      <div class="rl-chip${remTransito?" hot":""}" data-scroll="rl-terceros"><span class="n">${remTransito}</span><span class="l">Third-party remitos \u00b7 receive in AR</span></div>
-      <div class="rl-chip${remAr?" hot":""}" data-scroll="rl-terceros"><span class="n">${remAr}</span><span class="l">Third-party remitos \u00b7 resolve split</span></div>
+      <div class="rl-chip${enTransito.length?" hot":""}" data-scroll="rl-nuestra"><span class="n">${qty(uNuestraTransito)}</span><span class="l">${t("conj.chip.ours")}</span></div>
+      <div class="rl-chip${remTransito?" hot":""}" data-scroll="rl-terceros"><span class="n">${remTransito}</span><span class="l">${t("conj.chip.recv")}</span></div>
+      <div class="rl-chip${remAr?" hot":""}" data-scroll="rl-terceros"><span class="n">${remAr}</span><span class="l">${t("conj.chip.resolve")}</span></div>
     </div>`;
 
   // --- Summary by owner ---
@@ -841,10 +841,10 @@ function viewConjunta(){
       <td class="r num">${qty(r.en_ar||0)}</td>
       <td class="r num">${qty(r.entregado||0)}</td>
       <td class="r num"><b>${qty(r.total||0)}</b></td>
-    </tr>`).join("") || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px">No third-party merchandise yet.</td></tr>`;
+    </tr>`).join("") || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px">${t("conj.empty.owner")}</td></tr>`;
 
   // --- Recent movements between deposits ---
-  const tipos = { "transfer-out":"\u2192 sent", "transfer-in":"\u2190 received", "conjunta":"commission in", "tercero-keep":"kept for Select", "merma":"write-off" };
+  const tipos = { "transfer-out":t("conj.mv.sent"), "transfer-in":t("conj.mv.recv"), "conjunta":t("conj.mv.comm"), "tercero-keep":t("conj.mv.kept"), "merma":t("conj.mv.wo") };
   const movs = (db.movimientos||[]).filter(m=> m.tipo in tipos)
     .slice().sort((a,b)=> String(b.fecha||"").localeCompare(String(a.fecha||""))).slice(0,15);
   const movRows = movs.map(m=>{
@@ -857,7 +857,7 @@ function viewConjunta(){
       <td>${esc(m.ref||tipos[m.tipo]||"")}</td>
       <td class="r num" style="color:${up?'var(--up)':'var(--alert)'}">${up?"+":"\u2212"}${qty(Math.abs(m.delta||m.cantidad||0))}</td>
     </tr>`;
-  }).join("") || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px">No transfers yet.</td></tr>`;
+  }).join("") || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px">${t("conj.empty.mov")}</td></tr>`;
 
   // --- Legacy joint-buys history (read-only) ---
   const hist = (db.conjuntas||[]).slice().sort((a,b)=> String(b.fecha||"").localeCompare(String(a.fecha||"")));
@@ -872,54 +872,54 @@ function viewConjunta(){
       <td class="r num">${qty(sw)}</td>
       <td class="r num">${qty(tr)}</td>
       <td class="r num">${qty(aj)}</td>
-      <td class="r" style="white-space:nowrap"><button class="btn ghost sm" data-remito-doc="${d.id}" title="Internal transfer note (US\u2192AR)">Remito</button> <button class="btn ghost sm" data-cjdel-doc="${d.id}" style="color:var(--alert)">Delete</button></td>
+      <td class="r" style="white-space:nowrap"><button class="btn ghost sm" data-remito-doc="${d.id}" title="${t("conj.remito.tip")}">Remito</button> <button class="btn ghost sm" data-cjdel-doc="${d.id}" style="color:var(--alert)">${t("common.delete")}</button></td>
     </tr>`;
-  }).join("") || `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:18px">No joint buys loaded yet.</td></tr>`;
+  }).join("") || `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:18px">${t("conj.empty.hist")}</td></tr>`;
 
   return `
-  <div class="head"><div class="title"><h2>Merchandise in transit \u00b7 USA \u2192 Argentina</h2><p>Each shipment is a track: see where the merchandise is and tap the one button for the next step. <b>Ours</b> = enters stock. <b>Third-party</b> = only tracked, ends in a split.</p></div>
-    <div class="actions"><button class="btn" data-enviar-transito title="Move own stock USA \u2192 AR">Send to transit</button><button class="btn up" data-new-conj>\uff0b New joint buy</button></div>
+  <div class="head"><div class="title"><h2>${t("conj.title")}</h2><p>${t("conj.sub")}</p></div>
+    <div class="actions"><button class="btn" data-enviar-transito title="${t("conj.sendtransit.tip")}">${t("conj.sendtransit")}</button><button class="btn up" data-new-conj>${t("conj.newjoint")}</button></div>
   </div>
 
   ${chips}
 
   <div class="panel" id="rl-nuestra" style="margin-bottom:18px">
     <div class="phead" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <div><h3>Ours \u00b7 en route to AR</h3><p class="hint" style="margin:2px 0 0">Own stock that already left the US. Receiving it makes it sellable in Select (AR), capitalizing the Argentine leg into the landed cost. Shown per product (that's how transit is stored today).</p></div>
+      <div><h3>${t("conj.ours.title")}</h3><p class="hint" style="margin:2px 0 0">${t("conj.ours.hint")}</p></div>
       <div style="flex:1"></div>
-      ${enTransito.length?`<button class="btn ghost sm" data-deliver-all-ours>Deliver all in AR</button>`:""}
+      ${enTransito.length?`<button class="btn ghost sm" data-deliver-all-ours>${t("conj.deliverall")}</button>`:""}
     </div>
     <div class="rl-wrap">${ourCards}</div>
   </div>
 
   <div class="panel" id="rl-terceros" style="margin-bottom:18px">
     <div class="phead" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <div><h3>Third-party (consignment)</h3><p class="hint" style="margin:2px 0 0">Third-party merchandise we only track (never our stock or P&amp;L). Tap a remito to see its products, tick the ones you want and apply the action to just those.</p></div>
+      <div><h3>${t("conj.third.title")}</h3><p class="hint" style="margin:2px 0 0">${t("conj.third.hint")}</p></div>
       <div style="flex:1"></div>
-      ${remTransito?`<button class="btn ghost sm" data-cs-recib-all>Receive all in AR</button>`:""}
-      ${remAr?`<button class="btn ghost sm" data-cs-entregar-all>Deliver all</button>`:""}
+      ${remTransito?`<button class="btn ghost sm" data-cs-recib-all>${t("conj.recvall")}</button>`:""}
+      ${remAr?`<button class="btn ghost sm" data-cs-entregar-all>${t("conj.deliverallonly")}</button>`:""}
     </div>
     <div class="rl-wrap">${remitoCards}</div>
   </div>
 
   <div class="panel" style="margin-bottom:18px">
-    <div class="phead"><h3>Third-party \u00b7 by owner</h3><span class="hint">who owns it and where</span></div>
+    <div class="phead"><h3>${t("conj.byowner")}</h3><span class="hint">${t("conj.byowner.hint")}</span></div>
     <div class="table-scroll"><table>
-      <thead><tr><th>Owner</th><th class="r">In transit</th><th class="r">In AR</th><th class="r">Delivered</th><th class="r">Total</th></tr></thead>
+      <thead><tr><th>${t("common.owner")}</th><th class="r">${t("conj.h.transit")}</th><th class="r">${t("conj.h.inar")}</th><th class="r">${t("conj.h.delivered")}</th><th class="r">${t("common.total")}</th></tr></thead>
       <tbody>${resRows}</tbody></table></div>
   </div>
 
   <div class="panel"${hayHist?' style="margin-bottom:18px"':''}>
-    <div class="phead"><h3>Recent movements between deposits</h3></div>
+    <div class="phead"><h3>${t("conj.mov.title")}</h3></div>
     <div class="table-scroll"><table>
-      <thead><tr><th>Date</th><th>Product</th><th>Deposit</th><th>Movement</th><th class="r">Units</th></tr></thead>
+      <thead><tr><th>${t("common.date")}</th><th>${t("common.product")}</th><th>${t("conj.h.deposit")}</th><th>${t("conj.h.movement")}</th><th class="r">${t("common.units")}</th></tr></thead>
       <tbody>${movRows}</tbody></table></div>
   </div>
 
   ${hayHist?`<div class="panel">
-    <div class="phead"><h3>Joint buys (history)</h3><span class="hint">old flow \u00b7 read-only</span></div>
+    <div class="phead"><h3>${t("conj.hist.title")}</h3><span class="hint">${t("conj.hist.hint")}</span></div>
     <div class="table-scroll"><table>
-      <thead><tr><th>Date</th><th>Client</th><th>Ref</th><th class="c">Order</th><th class="r">Swan</th><th class="r">\u2192 AR</th><th class="r">Third-party</th><th></th></tr></thead>
+      <thead><tr><th>${t("common.date")}</th><th>${t("common.client")}</th><th>${t("conj.h.ref")}</th><th class="c">${t("conj.h.order")}</th><th class="r">Swan</th><th class="r">\u2192 AR</th><th class="r">${t("conj.h.third")}</th><th></th></tr></thead>
       <tbody>${histRows}</tbody></table></div>
   </div>`:""}`;
 }
@@ -1019,16 +1019,16 @@ function remitoCardHTML(g){
   const owners = g.ownerNames.length ? g.ownerNames.join(", ") : "\u2014";
   const cur    = g.uTransito>0 ? 0 : 1;   // in transit -> step 1 (idx 0); already in AR -> step 2 (idx 1)
   const pills  = [
-    g.uTransito>0 ? `<span class="rl-pill">${qty(g.uTransito)} in transit</span>` : "",
-    g.uAr>0       ? `<span class="rl-pill ar">${qty(g.uAr)} in AR</span>` : ""
+    g.uTransito>0 ? `<span class="rl-pill">${qty(g.uTransito)} ${t("conj.pill.transit")}</span>` : "",
+    g.uAr>0       ? `<span class="rl-pill ar">${qty(g.uAr)} ${t("conj.pill.ar")}</span>` : ""
   ].filter(Boolean).join(" ");
   const head = `<div class="rl-rhead" data-remito-toggle="${esc(g.key)}">
       <span class="rl-caret">${open?"\u25be":"\u25b8"}</span>
       <div style="flex:1;min-width:0">
-        <div class="rl-code">${g.codigo?esc(g.codigo):esc(g.ref||"(no ref)")}</div>
-        <div class="rl-meta">${g.codigo&&g.ref?esc(g.ref)+" \u00b7 ":""}${esc(fmtDate(g.fecha))} \u00b7 ${g.lineas.length} product(s) \u00b7 ${qty(g.uTotal)} u</div>
+        <div class="rl-code">${g.codigo?esc(g.codigo):esc(g.ref||t("conj.noref"))}</div>
+        <div class="rl-meta">${g.codigo&&g.ref?esc(g.ref)+" \u00b7 ":""}${esc(fmtDate(g.fecha))} \u00b7 ${g.lineas.length} ${t("conj.products")} \u00b7 ${qty(g.uTotal)} u</div>
       </div>
-      <span class="rl-badge third">Third-party \u00b7 ${esc(owners)}</span>
+      <span class="rl-badge third">${t("conj.badge.third")}${esc(owners)}</span>
     </div>`;
 
   const rows = g.lineas.map(cs=>`<tr>
@@ -1038,10 +1038,10 @@ function remitoCardHTML(g){
       <td>${esc(terceroNombre(cs))}</td>
       <td class="c">${estadoPillMini(cs.estado)}</td>
       <td class="r num">${qty(cs.cantidad)}</td>
-      <td class="r"><button class="btn ghost xs" data-cs-del="${cs.id}" title="Remove from tracking" style="color:var(--alert)">\u2715</button></td>
+      <td class="r"><button class="btn ghost xs" data-cs-del="${cs.id}" title="${t("conj.untrack")}" style="color:var(--alert)">\u2715</button></td>
     </tr>`).join("");
   const tabla = open ? `<div class="table-scroll" style="margin-bottom:10px"><table class="rm-tbl">
-      <thead><tr><th class="c"><input type="checkbox" class="rm-chkall" data-rmall="${esc(g.key)}"></th><th>SKU</th><th>Product</th><th>Owner</th><th class="c">State</th><th class="r">Units</th><th></th></tr></thead>
+      <thead><tr><th class="c"><input type="checkbox" class="rm-chkall" data-rmall="${esc(g.key)}"></th><th>SKU</th><th>${t("common.product")}</th><th>${t("common.owner")}</th><th class="c">${t("conj.state")}</th><th class="r">${t("common.units")}</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>` : "";
 
   const selHere     = g.lineas.filter(l=> remitoSel[l.id]);
@@ -1049,15 +1049,15 @@ function remitoCardHTML(g){
   const hasTransito = scopeLines.some(l=> l.estado===CONSIGN_ESTADOS.TRANSITO);
   const hasAr       = scopeLines.some(l=> l.estado===CONSIGN_ESTADOS.AR);
   const foot = `<div class="rl-foot">
-      <span class="rl-next">${selHere.length?`${selHere.length} selected`:"acting on the whole remito"}${hasAr?` \u00b7 <span class="rl-warn">\u26a0 resolving issues an A remito and moves stock</span>`:""}</span>
-      ${g.remitoId?`<button class="btn ghost sm" data-rm-pdf="${esc(g.remitoId)}" title="Download remito ${esc(g.codigo||"")}">\u2913 ${esc(g.codigo||"remito")}</button>`:""}
-      ${hasTransito?`<button class="btn up sm" data-rm-receive="${esc(g.key)}" title="Gate 2 \u00b7 transit \u2192 AR">Receive in AR \u25be</button>`:""}
-      ${hasAr?`<button class="btn up sm" data-rm-resolve="${esc(g.key)}" title="Split: commission \u2192 Select \u00b7 rest \u2192 owner">Resolve in AR \u25be</button>`:""}
+      <span class="rl-next">${selHere.length?`${selHere.length} ${t("conj.selected")}`:t("conj.wholeremito")}${hasAr?` \u00b7 <span class="rl-warn">${t("conj.warnresolve")}</span>`:""}</span>
+      ${g.remitoId?`<button class="btn ghost sm" data-rm-pdf="${esc(g.remitoId)}" title="${t("conj.dlremito")} ${esc(g.codigo||"")}">\u2913 ${esc(g.codigo||"remito")}</button>`:""}
+      ${hasTransito?`<button class="btn up sm" data-rm-receive="${esc(g.key)}" title="${t("conj.gate2tip")}">${t("conj.recvar")} \u25be</button>`:""}
+      ${hasAr?`<button class="btn up sm" data-rm-resolve="${esc(g.key)}" title="${t("conj.resolvetip")}">${t("conj.resolvear")} \u25be</button>`:""}
     </div>`;
 
   return `<div class="rl-card">
     ${head}
-    ${rielHTML([{icon:"plane",label:"In transit<br>to AR"},{icon:"pin",label:"In AR<br>(in our hands)"},{icon:"split",label:"Resolved<br>(split / delivery)"}], cur)}
+    ${rielHTML([{icon:"plane",label:t("conj.gate.transit")},{icon:"pin",label:t("conj.gate.arhands")},{icon:"split",label:t("conj.gate.resolved")}], cur)}
     ${pills?`<div style="margin:0 2px 10px;display:flex;gap:6px;flex-wrap:wrap">${pills}</div>`:""}
     ${tabla}
     ${foot}
