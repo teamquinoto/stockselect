@@ -82,7 +82,7 @@
     display:flex;flex-direction:column;gap:4px;position:sticky;top:var(--topbar-h);height:calc(100vh - var(--topbar-h));border-right:1px solid var(--line-strong);
   }
 
-  /* ---------- Barra superior transparente (glass), scrollea por detrás ---------- */
+  /* ---------- Top bar transparent (glass), scrolls behind ---------- */
   .topbar{
     position:fixed;top:0;left:0;right:0;height:var(--topbar-h);z-index:44;
     display:flex;align-items:center;justify-content:space-between;
@@ -134,7 +134,7 @@
     transition:background .18s ease,color .18s ease,transform .16s cubic-bezier(.34,1.56,.64,1);
     animation:navIn .34s ease both;
   }
-  /* barrita de acento a la izquierda: crece al pasar el mouse sobre un ítem inactivo */
+  /* left accent bar: grows on hover over an inactive item */
   .nav button::before{
     content:"";position:absolute;left:2px;top:50%;height:0;width:3px;border-radius:3px;
     background:var(--accent);transform:translateY(-50%);transition:height .2s cubic-bezier(.34,1.56,.64,1);
@@ -146,7 +146,7 @@
   .nav button:not(.on):hover::before{height:16px}
   .nav button.on{background:var(--accent);color:#fff;box-shadow:0 4px 12px rgba(124,58,237,.24)}
   .nav button.on .ico{opacity:1;animation:navPop .32s cubic-bezier(.34,1.56,.64,1)}
-  /* stagger de entrada: cada botón entra un toque después que el anterior */
+  /* entry stagger: each button appears a touch after the previous one */
   .nav button:nth-child(1){animation-delay:.02s}
   .nav button:nth-child(2){animation-delay:.06s}
   .nav button:nth-child(3){animation-delay:.10s}
@@ -156,7 +156,7 @@
   .nav button:nth-child(7){animation-delay:.26s}
   @keyframes navIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
   @keyframes navPop{0%{transform:scale(.82)}55%{transform:scale(1.18)}100%{transform:scale(1.05)}}
-  /* fundido de entrada del contenido al cambiar de pestaña */
+  /* content fade-in when switching tabs */
   #main.view-anim{animation:viewIn .26s ease}
   @keyframes viewIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
   .side .foot{margin-top:auto;padding:0 8px;font-size:11.5px;color:var(--muted);line-height:1.6}
@@ -198,7 +198,7 @@
   .kpi-click{transition:transform .14s ease,box-shadow .14s ease,border-color .14s ease}
   .kpi-click:hover{transform:translateY(-2px);border-color:var(--alert);box-shadow:0 6px 18px rgba(220,38,38,.16)}
   .kpi-click:active{transform:translateY(0)}
-  /* Banner de reposición: pulso suave para que "salte" al entrar al panel */
+  /* Restock banner: soft pulse so it "pops" when entering the panel */
   .banner.alerta-pedido{cursor:pointer;align-items:center;transition:transform .14s ease,box-shadow .14s ease;animation:alertaPulse 1.8s ease-in-out 2}
   .banner.alerta-pedido:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(220,38,38,.18)}
   .banner.alerta-pedido u{text-underline-offset:2px}
@@ -238,14 +238,14 @@
   .stock-cell.neg{color:var(--alert);font-weight:800}
   .stock-cell.zero{color:var(--alert);font-weight:800}
 
-  /* ---------- Headers ordenables (clic en el título ordena) ---------- */
+  /* ---------- Sortable headers (click the title to sort) ---------- */
   th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
   th.sortable:hover{color:var(--text)}
   th .sarr{display:inline-block;margin-left:5px;font-size:10px;opacity:.32;transition:opacity .12s,color .12s;vertical-align:middle}
   th.sortable:hover .sarr{opacity:.65}
   th.sort-asc .sarr,th.sort-desc .sarr{opacity:1;color:var(--accent-ink)}
 
-  /* ---------- Combobox de producto (buscador en línea de venta/compra) ---------- */
+  /* ---------- Product combobox (inline search in sale/purchase line) ---------- */
   .ppick{position:relative}
   .ppick-btn{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left;
     background:var(--surface);border:1px solid var(--line-strong);border-radius:7px;padding:7px 10px;font-size:13.5px;color:var(--text);min-height:34px}
@@ -254,7 +254,7 @@
   .ppick-btn .ppick-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
   .ppick-btn.placeholder .ppick-label{color:var(--muted)}
   .ppick-btn .ppick-caret{color:var(--muted);font-size:10px;flex-shrink:0}
-  /* Botón colapsado con producto elegido: chip de SKU + nombre flexible (igual que el dropdown) */
+  /* Collapsed button with the chosen product: SKU chip + flexible name (same as the dropdown) */
   .ppick-btn .pb-sku{font-family:var(--mono);font-size:11px;color:var(--accent-ink);background:var(--surface-2);
     padding:2px 6px;border-radius:5px;border:1px solid var(--line);flex-shrink:0;white-space:nowrap;
     max-width:120px;overflow:hidden;text-overflow:ellipsis}
@@ -278,7 +278,7 @@
   .seg-btn.on{background:var(--accent);color:#fff}
   .crow[data-saga]:hover .cl{color:var(--accent)}
   .crow[data-saga]:hover .cf{filter:brightness(1.08)}
-  /* Punto 6: el nombre largo no rompe la fila porque el botón/label ya tienen ellipsis.
+  /* Point 6: a long name doesn't break the row because the button/label already have ellipsis.
      La celda de producto queda libre para estirarse con el espacio que sobra en el modal. */
   .line-tbl td:first-child{max-width:none}
   .ppick{min-width:0;max-width:100%}
@@ -303,27 +303,27 @@
   table .inp{padding:6px 8px;font-size:13.5px;border-radius:6px}
   .line-tbl td{padding:7px 10px}
   .line-tbl select.inp{min-width:150px}
-  /* Oculta la columna "Target product" del import cuando el flag SHOW_TARGET_PRODUCT_COL está en false.
-     Scopeado a .hide-target para no tocar la otra .line-tbl (editor de líneas de documento). */
+  /* Hides the "Target product" column of the import when the SHOW_TARGET_PRODUCT_COL flag is false.
+     Scoped to .hide-target so it does not touch the other .line-tbl (document line editor). */
   .line-tbl.hide-target .col-target{display:none}
 
   /* ---------- Modal ---------- */
   .scrim{position:fixed;inset:0;background:rgba(20,26,34,.5);display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;z-index:50;overflow:auto}
   .modal{background:var(--surface);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.28);width:100%;max-width:760px;overflow:hidden}
   .modal.wide{max-width:940px}
-  /* Documento (venta/compra): más ancho para que la grilla respire y no haga falta scroll horizontal */
+  /* Document (sale/purchase): wider so the grid breathes and no horizontal scroll is needed */
   .modal.doc{max-width:1080px}
-  /* Grilla de líneas del documento: table-layout fijo => las columnas encajan exactas dentro del ancho,
-     el navegador reparte el sobrante a la 1ª columna (producto). Sin desborde => sin barra de scroll.
+  /* Document line grid: fixed table-layout => columns fit exactly within the width,
+     the browser gives the slack to the 1st column (product). No overflow => no scrollbar.
      Los anchos reales se definen en el <colgroup> que arma renderLines(). */
   .doc-tbl{table-layout:fixed;width:100%}
   .doc-tbl th, .doc-tbl td{padding:7px 8px}
   .doc-tbl th:first-child, .doc-tbl td:first-child{padding-left:2px}
   .doc-tbl .inp{width:100%;min-width:0}          /* el input llena su columna y nunca la desborda */
   .doc-tbl td.num, .doc-tbl .sub-cell{white-space:nowrap}
-  /* La 1ª fila de controles arranca arriba y mide 34px parejo (igual que el botón de
-     producto). Así el "avail: N" que cuelga bajo el producto extiende SÓLO esa celda
-     hacia abajo, sin centrar/correr las demás columnas. */
+  /* The 1st row of controls starts at the top and is a uniform 34px (same as the
+     product). This way the "avail: N" hanging under the product extends ONLY that cell
+     downward, without centering/shifting the other columns. */
   .doc-tbl tbody td{vertical-align:top}
   .doc-tbl tbody .inp{height:34px;padding-left:7px;padding-right:7px}
   .doc-tbl tbody td.num{height:34px;line-height:34px}
@@ -333,7 +333,7 @@
     .doc-tbl{table-layout:auto}
     .doc-tbl colgroup{display:none}
   }
-  /* Tooltip flotante con el nombre completo del producto (sólo aparece si el texto está truncado) */
+  /* Floating tooltip with the product's full name (only shows if the text is truncated) */
   .name-tip{position:fixed;z-index:200;pointer-events:none;background:var(--ink);color:#fff;
     font-size:12.5px;line-height:1.35;padding:6px 10px;border-radius:8px;max-width:360px;
     border:1px solid rgba(255,255,255,.12);
@@ -404,13 +404,13 @@
   .toast.warn{border-left:3px solid var(--alert)}
   @keyframes slide{from{transform:translateY(10px);opacity:0}to{transform:translateY(0);opacity:1}}
 
-  /* importes y fechas en una sola línea */
+  /* amounts and dates on a single line */
   td.num,th.num{white-space:nowrap}
   .pill{white-space:nowrap}
   .filtros{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line)}
   .filtros .inp{padding:7px 9px;font-size:13px}
-  /* barra de filtros de Compras/Ventas: TODO en una sola línea. El buscador estira
-     y absorbe el sobrante; el resto queda a tamaño fijo. Si la pantalla es muy
+  /* Purchases/Sales filter bar: EVERYTHING on one line. The search box stretches
+     and absorbs the slack; the rest stays fixed-size. If the screen is very
      angosta, se desliza al costado en vez de romper en varias filas. */
   .filtros.docfilt{flex-wrap:nowrap;overflow-x:auto}
   .filtros.docfilt > *{flex:0 0 auto}
@@ -433,12 +433,12 @@
   .btn svg.i{width:15px;height:15px;flex-shrink:0;display:block}
   .btn.sm svg.i{width:14px;height:14px}
 
-  /* ---------- Análisis / gráficos ---------- */
+  /* ---------- Analysis / charts ---------- */
   .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:stretch}
   .chart-grid .panel.chart{display:flex;flex-direction:column;min-height:240px}
-  /* dentro del grid, la regla global .panel + .panel metía un margin-top de 20px
-     al panel de la derecha y lo dejaba 20px más abajo que el de la izquierda
-     (de ahí el "descentrado"). Acá lo anulamos: el gap del grid ya separa. */
+  /* inside the grid, the global .panel + .panel rule added a 20px margin-top
+     to the right panel and left it 20px lower than the left one
+     (hence the off-center look). Here we cancel it: the grid gap already separates. */
   .chart-grid .panel{margin-top:0}
   @media (max-width:860px){.chart-grid{grid-template-columns:1fr}}
   .chart{padding:16px 18px}
@@ -495,7 +495,7 @@
     position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;
     background:var(--login-bg);overflow:hidden;
   }
-  /* Aurora de fondo: tres manchas de color que respiran muy suave detrás de la tarjeta */
+  /* Background aurora: three color blobs breathing very softly behind the card */
   .login-aurora{position:absolute;inset:0;overflow:hidden;pointer-events:none}
   .login-aurora span{position:absolute;display:block;border-radius:50%;filter:blur(64px);opacity:.5}
   .login-aurora span:nth-child(1){width:420px;height:420px;left:-90px;top:-120px;background:radial-gradient(circle at 30% 30%,var(--accent),transparent 70%);animation:aurora1 17s ease-in-out infinite}
@@ -524,7 +524,7 @@
   .login-card .inp{background:var(--surface);border-color:var(--line-strong);color:var(--text);padding:11px 12px;border-radius:10px;transition:border-color .15s,box-shadow .15s}
   .login-card .inp:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
   @supports not (background:color-mix(in srgb,red,blue)){.login-card .inp:focus{box-shadow:0 0 0 3px rgba(124,58,237,.18)}}
-  /* contraseña con "ojito" para mostrar/ocultar */
+  /* password with an "eye" to show/hide */
   .pass-wrap{position:relative}
   .pass-wrap .inp{padding-right:42px}
   .pass-toggle{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:none;border:0;border-radius:8px;color:var(--muted);transition:color .15s,background .15s}
@@ -542,8 +542,8 @@
   /* ============================================================
      Custom dropdown (reemplaza el popup nativo del <select>) y
      calendario custom (reemplaza el date-picker nativo). El control
-     real (<select> / <input type=date>) sigue vivo y oculto detrás,
-     así value/onchange no cambian. Todo pintado con los tokens del tema.
+     real (<select> / <input type=date>) stays alive and hidden behind,
+     so value/onchange do not change. Everything painted with the theme tokens.
      ============================================================ */
   .csel-pop{
     position:fixed;z-index:120;min-width:150px;max-width:min(320px,92vw);
@@ -565,7 +565,7 @@
   .csel-opt.sel::after{content:"✓";margin-left:auto;font-weight:800;color:var(--accent)}
   .csel-opt[data-disabled="1"]{opacity:.4;cursor:default;pointer-events:none}
   .csel-sep{height:1px;background:var(--line);margin:4px 6px}
-  /* Flechita del select nativo cuando está "enhanceado": mantenemos el caret
+  /* Native select arrow when "enhanced": we keep the caret
      visible pero el popup nativo ya no abre. */
   select[data-csel]{cursor:pointer}
 
@@ -596,7 +596,7 @@
   .cal-cell.today{border-color:var(--accent)}
   .cal-cell.sel{background:var(--accent);color:#fff}
   .cal-cell.sel:hover{background:var(--accent)}
-  /* Vista de meses / años al tocar el título */
+  /* Months / years view when tapping the title */
   .cal-mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
   .cal-mcell{padding:11px 4px;text-align:center;font-size:12.5px;font-weight:600;color:var(--text);
     border-radius:8px;cursor:pointer;border:1px solid transparent;transition:.1s;text-transform:capitalize}
@@ -607,7 +607,7 @@
   .cal-foot button{background:none;border:none;font-size:12.5px;font-weight:700;color:var(--accent);
     cursor:pointer;padding:4px 6px;border-radius:6px}
   .cal-foot button:hover{background:var(--surface-2)}
-  /* Ícono de calendario del trigger cuando el input date está enhanceado.
+  /* Calendar icon of the trigger when the date input is enhanced.
      Ocultamos el indicador nativo para que NO abra el picker del sistema. */
   input[data-cdate]::-webkit-calendar-picker-indicator{display:none}
   input[data-cdate]{cursor:pointer;position:relative}
@@ -616,13 +616,13 @@
      (dd/mm/aaaa en AR). Lo hacemos transparente y pintamos NOSOTROS el texto
      en formato americano MM/DD/YYYY encima, para que sea consistente en toda
      la app sin depender de la config del sistema operativo. El valor interno
-     del input sigue siendo ISO (YYYY-MM-DD), así que la lógica no cambia. */
+     of the input stays ISO (YYYY-MM-DD), so the logic does not change. */
   .cdate-wrap input[type="date"]{color:transparent!important;-webkit-text-fill-color:transparent}
   :root[data-theme="dark"] .cdate-wrap input[type="date"]{color:transparent!important}
   .cdate-text{position:absolute;left:12px;top:50%;transform:translateY(-50%);pointer-events:none;
     font-size:14px;color:var(--text);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden}
   .cdate-text.ph{color:var(--muted)}
-  /* Botón flotante de actualización de la PWA */
+  /* PWA floating update button */
   #pwaUpdate{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:9999;
     display:flex;align-items:center;gap:12px;padding:10px 12px 10px 16px;border-radius:999px;
     background:var(--surface);border:1px solid var(--border);box-shadow:0 8px 30px rgba(0,0,0,.28);
@@ -652,7 +652,7 @@
 
 /* ============================================================
    SELECT SHELL — capa de identidad (nav arriba 2 niveles + banner
-   + drawers + kanban + feed). Va AL FINAL: al ser lo último del
+   + drawers + kanban + feed). Goes AT THE END: being the last of the
    archivo, gana en el cascade sin necesidad de !important salvo
    donde hay que vencer una @media previa. Misma paleta violeta.
    ============================================================ */
@@ -662,14 +662,14 @@
 .side{display:none}
 .main{padding:24px 32px 90px;max-width:1560px;width:100%;margin-inline:auto}
 
-/* --- banner de entorno (red de seguridad anti-confusión) --- */
+/* --- environment banner (anti-confusion safety net) --- */
 .envbar{display:flex;align-items:center;gap:10px;background:var(--accent);color:#fff;
   font-family:var(--mono);font-size:11.5px;font-weight:700;letter-spacing:.5px;padding:6px 16px}
 :root[data-theme="dark"] .envbar{color:var(--paper)}
 .envbar .dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex-shrink:0}
 .envbar .env-rt{margin-left:auto;opacity:.92;font-weight:600;white-space:nowrap}
 
-/* --- topbar sólida (deja de ser glass fijo) --- */
+/* --- solid topbar (no longer fixed glass) --- */
 .topbar{position:static;display:flex;align-items:center;justify-content:space-between;
   gap:12px;height:54px;padding:0 18px;background:var(--topbar-bg);
   border-bottom:1px solid var(--line);backdrop-filter:none;-webkit-backdrop-filter:none}
@@ -701,17 +701,17 @@
 .nav button.on .ico{opacity:1;animation:none}
 .nav button.hide-sec{display:none}
 
-/* --- MODAL -> DRAWER lateral (sólo CSS; el JS de modales no se toca) --- */
-.scrim{align-items:stretch;justify-content:flex-end;padding:0}
-.modal{border-radius:0;max-width:560px;width:100%;height:100vh;max-height:100vh;
-  display:flex;flex-direction:column;box-shadow:-24px 0 60px rgba(0,0,0,.28);
-  animation:drawerIn .22s cubic-bezier(.22,1,.36,1)}
-.modal.wide{max-width:720px}
-.modal.doc{max-width:860px}
-.modal .mbody{flex:1;max-height:none}
-@keyframes drawerIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+/* --- MODAL: centered dialog (was a right-side drawer) — CSS only, modal JS untouched --- */
+.scrim{align-items:center;justify-content:center;padding:32px 24px}
+.modal{border-radius:16px;max-width:900px;width:100%;height:auto;max-height:92vh;
+  display:flex;flex-direction:column;box-shadow:0 24px 70px rgba(0,0,0,.30);
+  animation:modalIn .18s cubic-bezier(.22,1,.36,1)}
+.modal.wide{max-width:1080px}
+.modal.doc{max-width:1160px}
+.modal .mbody{flex:1 1 auto;min-height:0;max-height:none;overflow:auto}
+@keyframes modalIn{from{transform:translateY(10px) scale(.985);opacity:0}to{transform:translateY(0) scale(1);opacity:1}}
 
-/* --- KANBAN de tránsito (listo para viewConjunta) --- */
+/* --- Transit KANBAN (ready for viewConjunta) --- */
 .kanban{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-top:1px solid var(--line)}
 .kanban .kcol{padding:14px;border-right:1px solid var(--line)}
 .kanban .kcol:last-child{border-right:0}
@@ -771,13 +771,13 @@
 /* ============================================================
    PUNTO 4 — Editores de COMPRA e IMPORT: modal CENTRADO y ANCHO
    ------------------------------------------------------------
-   El override global de más arriba convierte TODO modal en un cajón (drawer)
+   The global override above turned EVERY modal into a drawer
    lateral angosto (max-width 560/720/860). En pantallas anchas eso dejaba una
-   banda vacía a la izquierda y, peor, recortaba la tabla de la factura a la
+   empty band on the left and, worse, clipped the invoice table to the
    derecha (la columna "List price" quedaba cortada, ver captura). Para el
    editor de compra (.doc) y el de import (.import) volvemos a modal centrado
    que aprovecha el ancho, sin tocar el resto de los modales (siguen drawer).
-   Usamos :has() para pintar el scrim según la clase del modal que contiene.
+   We use :has() to paint the scrim based on the class of the modal it contains.
    ============================================================ */
 .scrim:has(.modal.import), .scrim:has(.modal.doc){
   align-items:flex-start; justify-content:center; padding:44px 20px;
@@ -790,24 +790,24 @@
 }
 .modal.import .mbody, .modal.doc .mbody{ max-height:calc(100vh - 210px); }
 @keyframes modalPop{ from{transform:translateY(10px);opacity:0} to{transform:translateY(0);opacity:1} }
-/* La tabla de líneas de la factura respira: nada recortado con el modal ancho. */
+/* The invoice line table breathes: nothing clipped in the wide modal. */
 .modal.import .line-tbl, .modal.doc .line-tbl{ width:100%; }
 .modal.import .imp-desc{ max-width:none; white-space:normal; }
-/* En mobile, ancho completo (como el resto): más cómodo que centrar. */
+/* On mobile, full width (like the rest): more comfortable than centering. */
 @media (max-width:860px){
   .scrim:has(.modal.import), .scrim:has(.modal.doc){ padding:0; align-items:stretch; justify-content:stretch; }
   .modal.import, .modal.doc{ max-width:none; height:100vh; max-height:100vh; border-radius:0; }
   .modal.import .mbody, .modal.doc .mbody{ max-height:none; }
 }
 
-/* Cabecera propia/terceros del editor (dropdown arriba + dueño) */
+/* Editor ours/third-party header (dropdown on top + owner) */
 .origen-bar{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin:0 0 12px}
 .origen-bar .field{margin:0}
 .origen-bar .seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
 .origen-bar .seg button{border:0;background:transparent;color:var(--muted);font-weight:700;font-size:12.5px;
   padding:7px 14px;border-radius:8px;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s}
 .origen-bar .seg button.on{background:var(--accent);color:#fff;box-shadow:0 3px 10px rgba(124,58,237,.22)}
-/* Punto 1: resumen compacto cuando el tipo/dueño ya se eligieron en el import */
+/* Point 1: compact summary when type/owner were already chosen in the import */
 .origen-bar.locked{align-items:center;justify-content:space-between;background:var(--surface-2);
   border:1px solid var(--line);border-radius:10px;padding:8px 12px}
 .origen-sum{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
@@ -827,8 +827,8 @@
 ::-webkit-scrollbar-button{ display:none !important; height:0 !important; width:0 !important; }
 
 /* ============================================================
-   Modal "mini": diálogo CENTRADO y compacto para acciones cortas
-   (recibir/entregar/enviar a tránsito). El resto sigue como panel lateral.
+   Modal "mini": CENTERED, compact dialog for short actions
+   (receive/deliver/send to transit).
    ============================================================ */
 .scrim:has(.modal.mini){ align-items:center; justify-content:center; padding:24px 16px; }
 .modal.mini{ border-radius:14px; max-width:440px; width:100%; height:auto; max-height:88vh; }
@@ -836,7 +836,7 @@
 .modal.mini .grid-form.stack{ grid-template-columns:1fr; }
 
 /* ============================================================
-   Modal "recv": recibir en AR — más ancho que el mini y en DOS columnas
+   Modal "recv": receive in AR - wider than mini, TWO columns
    (lista de productos | costo + notas). Antes era un mini de 440px con la lista
    apretada en 180px; en una pantalla grande quedaba chico y desperdiciaba lugar.
    Colapsa a una sola columna en pantallas angostas, y a fullscreen en mobile.
