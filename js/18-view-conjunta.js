@@ -1,51 +1,51 @@
 /* ============================================================
    gestordestock — 18-view-conjunta.js
-   Parte de la app. Se carga como <script> en el ORDEN del index.html.
-   Todo vive en scope global (sin módulos), igual que antes.
+   Part of the app. Loaded as a <script> in the ORDER from index.html.
+   Everything lives in global scope (no modules), same as before.
    ============================================================ */
 /* ============================================================
-   COMPRA CONJUNTA (ingreso de comisión en especie) + TRÁNSITO
+   JOINT BUY (commission received in kind) + TRANSIT
    ------------------------------------------------------------
-   Modelo de negocio: uno de los 12 locales de AR le compra a un proveedor
-   de EEUU. Nosotros traemos la mercadería y cobramos comisión EN CARTAS.
-   Del pedido total del cliente sólo nos quedamos con una parte:
-     · unidades que quedan en SELECT (USA)  -> stock vendible en USA al toque.
-     · unidades que van rumbo AR            -> nacen EN TRÁNSITO (bucket no
-       vendible) y se vuelven stock de SWAN cuando se reciben en Argentina.
-   NO cargamos las unidades del cliente: no son nuestras (sólo, opcional, un
-   memo del total del envío para trazabilidad). Costo de entrada default 0
-   (comisión pura; el cliente paga proveedor + importación). Parametrizable.
+   Business model: one of AR's 12 locales buys from a supplier
+   from the US. We bring the merchandise and charge commission IN CARDS.
+   From the client's total order we keep only a part:
+     · units kept in SELECT (USA)  -> sellable stock in the US right away.
+     · units bound for AR            -> born IN TRANSIT (bucket, not
+       sellable) and become SWAN stock when received in Argentina.
+   We do NOT load the client's units: they aren't ours (only, optionally, a
+   memo of the shipment total for traceability). Default entry cost 0
+   (pure commission; the client pays supplier + import). Configurable.
    ============================================================ */
 let conjDraft = null;
 
 /* ============================================================
-   CONSIGNACIONES — mercadería AJENA (de terceros) que sólo se SIGUE
+   CONSIGNMENTS — THIRD-PARTY merchandise (others') that is only TRACKED
    ------------------------------------------------------------
-   Vive 100% aparte del stock vendible: no toca stockPorTienda, ni FIFO,
-   ni valuación, ni P&L (regla del cliente: lo ajeno NO se vende, sólo
-   se rastrea). Cada registro es {producto, dueño (clienteId), cantidad,
-   estado}. Estados = puertas del recorrido: en_transito (despachado en
-   EEUU) → en_ar (recibido en Argentina) → entregado (pasamanos al tercero).
-   costoUnit es un COSTO DE REFERENCIA (para repartir courier/financiero),
-   nunca un COGS. Todo cambio de estado deja rastro en `historial` (auditoría).
+   Lives 100% apart from sellable stock: doesn't touch stockPorTienda, nor FIFO,
+   no valuation, no P&L (client rule: third-party goods are NOT sold, only
+   tracked). Each record is {product, owner (clienteId), quantity,
+   estado}. States = journey gates: en_transito (dispatched in
+   US) → en_ar (received in Argentina) → entregado (handoff to the owner).
+   costoUnit is a REFERENCE COST (to split courier/financial cost),
+   never a COGS. Every state change leaves a trace in `historial` (audit).
    ============================================================ */
 const CONSIGN_ESTADOS = { TRANSITO:"en_transito", AR:"en_ar", ENTREGADO:"entregado" };
 const CONSIGN_ORDEN = [CONSIGN_ESTADOS.TRANSITO, CONSIGN_ESTADOS.AR, CONSIGN_ESTADOS.ENTREGADO];
 function consignLabel(e){
-  return e===CONSIGN_ESTADOS.TRANSITO ? "En tránsito (US→AR)"
-       : e===CONSIGN_ESTADOS.AR       ? "En AR (para resolver)"
-       : e===CONSIGN_ESTADOS.ENTREGADO? "Resuelto / entregado"
+  return e===CONSIGN_ESTADOS.TRANSITO ? "In transit (US→AR)"
+       : e===CONSIGN_ESTADOS.AR       ? "In AR (to deliver)"
+       : e===CONSIGN_ESTADOS.ENTREGADO? "Delivered"
        : (e||"—");
 }
 function consignSiguiente(e){ const i=CONSIGN_ORDEN.indexOf(e); return (i>=0 && i<CONSIGN_ORDEN.length-1) ? CONSIGN_ORDEN[i+1] : null; }
 function consignAll(){ return db.consignaciones || (db.consignaciones=[]); }
-/* Nombre del dueño (tercero) tolerante: usa el snapshot guardado y, si el cliente
+/* Owner (third-party) name, tolerant: uses the saved snapshot and, if the client
    sigue existiendo, su nombre actual. */
 function terceroNombre(cs){
   const c = cs.terceroId ? clienteById(cs.terceroId) : null;
   return (c && (c.nombre + (c.empresa?` · ${c.empresa}`:""))) || cs.terceroNombre || "—";
 }
-/* Alta de una consignación (nace en tránsito). */
+/* Create a consignment (born in transit). */
 function crearConsignacion(o){
   const c = clienteById(o.terceroId);
   const cant = Math.max(0, +o.cantidad||0);
@@ -54,26 +54,26 @@ function crearConsignacion(o){
     fecha: o.fecha || new Date().toISOString().slice(0,10),
     conjuntaId: o.conjuntaId || null,
     envioRef: o.envioRef || "",
-    remitoId: o.remitoId || null,                  // remito U del que salió (numeración interna)
+    remitoId: o.remitoId || null,                  // remito U it left on (internal numbering)
     remitoCodigo: o.remitoCodigo || "",
     terceroId: o.terceroId || null,
     terceroNombre: c ? (c.nombre + (c.empresa?` · ${c.empresa}`:"")) : (o.terceroNombre||""),
     productoId: o.productoId, sku: o.sku||"", nombre: o.nombre||"",
     cantidad: cant,
-    cantidadOrig: cant,                            // unidades con las que nació
-    keptForSelect: 0,                             // acumulado retenido para Select (AR)
-    keptFull: false,                              // se retuvo TODA la línea para Select
+    cantidadOrig: cant,                            // units it was born with
+    keptForSelect: 0,                             // accumulated kept for Select (AR)
+    keptFull: false,                              // whole line was kept for Select
     estado: CONSIGN_ESTADOS.TRANSITO,
-    costoUnit: Math.max(0, +o.costoUnit||0),      // costo de referencia (reparto), NO COGS
-    costoCourierUnit: 0,                           // se agrega al recibir en AR (trazabilidad de costos)
+    costoUnit: Math.max(0, +o.costoUnit||0),      // reference cost (for the split), NOT COGS
+    costoCourierUnit: 0,                           // added when received in AR (cost traceability)
     obs: o.obs||"",
     historial: [ { estado:CONSIGN_ESTADOS.TRANSITO, fecha:new Date().toISOString(), obs:"intake (US)" } ]
   };
   consignAll().push(cs);
   return cs;
 }
-/* Avanza una consignación al siguiente estado, dejando rastro. En el paso a AR se
-   puede sumar un costo de courier/financiero por unidad (sólo para reporte). */
+/* Advances a consignment to the next state, leaving a trace. On the step to AR it
+   can add a courier/financial cost per unit (report only). */
 function avanzarConsignacion(id, opts){
   opts = opts||{};
   const cs = consignAll().find(x=>x.id===id); if(!cs) return null;
@@ -88,7 +88,7 @@ function borrarConsignacion(id){
   const i = consignAll().findIndex(x=>x.id===id); if(i<0) return;
   consignAll().splice(i,1); save();
 }
-/* Resumen por dueño × estado (unidades) para el reporte de trazabilidad. */
+/* Summary by owner × state (units) for the traceability report. */
 function consignResumenPorTercero(){
   const map = {};
   consignAll().forEach(cs=>{
@@ -101,30 +101,30 @@ function consignResumenPorTercero(){
 }
 
 /* ============================================================
-   VISTA POR REMITO (agrupación de terceros) — punto 1
+   PER-REMITO VIEW (third-party grouping) — point 1
    ------------------------------------------------------------
-   En vez de mostrar la mercadería ajena producto por producto (miles de
-   filas gigantes), la agrupamos por REMITO: el envío/factura del que
-   nacieron. Cada remito se puede expandir para ver sus productos, tildar
-   algunos y aplicar la acción SÓLO a esos (o a todos si no tildás ninguno).
-   Así distinguís de qué factura viene cada cosa y no estás obligado a
-   mover el remito entero de una.
+   Instead of showing third-party merchandise product by product (thousands of
+   huge rows), we group it by REMITO: the shipment/invoice it
+   came from. Each remito can be expanded to see its products, tick
+   some and apply the action ONLY to those (or to all if you tick none).
+   That way you tell which invoice each thing comes from and aren't forced to
+   move the whole remito at once.
    ============================================================ */
-let remitoOpen = {};   // remitoKey -> true si está expandido (persiste entre renders)
-let remitoSel  = {};   // consignId -> true si la línea está tildada
+let remitoOpen = {};   // remitoKey -> true if expanded (persists between renders)
+let remitoSel  = {};   // consignId -> true if the line is ticked
 
-/* Clave de agrupación: el REMITO U (numeración interna) es la agrupación real.
-   Si una línea vieja no lo tiene, caemos al documento de origen o a ref+dueño+fecha. */
+/* Grouping key: the REMITO U (internal numbering) is the real grouping.
+   If an old line lacks it, we fall back to the source document or to ref+owner+date. */
 function remitoKey(cs){
   return cs.remitoId ? ("rem:"+cs.remitoId)
        : cs.conjuntaId ? ("doc:"+cs.conjuntaId)
        : ("ref:"+(cs.envioRef||"—")+"|"+(cs.terceroId||"—")+"|"+(cs.fecha||"—"));
 }
-/* Remitos con mercadería ajena todavía EN FLUJO (tránsito o en AR; lo entregado sale). */
+/* Remitos with third-party merchandise still IN FLOW (transit or in AR; delivered drops out). */
 function remitosActivos(){
   const map = {};
   consignAll().forEach(cs=>{
-    if(cs.estado===CONSIGN_ESTADOS.ENTREGADO) return;   // ya cerrado: fuera
+    if(cs.estado===CONSIGN_ESTADOS.ENTREGADO) return;   // already closed: skip
     if((cs.cantidad||0)<=0) return;                      // absorbido por completo
     const k = remitoKey(cs);
     const g = map[k] || (map[k] = { key:k, ref:cs.envioRef||"", fecha:cs.fecha||"", conjuntaId:cs.conjuntaId||null, remitoId:cs.remitoId||null, codigo:cs.remitoCodigo||"", lineas:[], owners:new Set() });
@@ -144,22 +144,22 @@ function remitosActivos(){
     return g;
   }).sort((a,b)=> String(b.fecha).localeCompare(String(a.fecha)) || String(a.codigo||a.ref).localeCompare(String(b.codigo||b.ref),"en"));
 }
-/* ¿Cuántas unidades de este REMITO U NO se retienen para Select? = las que siguen en
-   flujo (tránsito/AR sin retener) + las ya entregadas al dueño. Sirve para decidir si
-   hubo un SPLIT (parte a Select, parte a terceros) → recién ahí se emite el remito A. */
+/* How many units of this REMITO U are NOT kept for Select? = those still in
+   flow (transit/AR not kept) + those already delivered to the owner. Used to decide if
+   there was a SPLIT (part to Select, part to owner) → only then is the A remito issued. */
 function remitoUnidadesNoSelect(remitoId, conjuntaId){
   if(!remitoId && !conjuntaId) return 0;
   return consignAll().reduce((a,cs)=>{
     const match = remitoId ? (cs.remitoId===remitoId) : (cs.conjuntaId===conjuntaId);
     if(!match) return a;
-    // en flujo (todavía sin decidir/entregar) o entregada al dueño (no retenida)
+    // in flow (still undecided/undelivered) or delivered to the owner (not kept)
     if(cs.estado!==CONSIGN_ESTADOS.ENTREGADO) return a + (cs.cantidad||0);
     if(!cs.keptFull) return a + (cs.cantidad||0);   // entregada al tercero (cantidad = lo entregado)
     return a;                                        // retenida entera para Select: no cuenta
   }, 0);
 }
-/* Líneas destino de una acción sobre un remito: las tildadas de ESE remito,
-   o todas si no hay ninguna tildada, filtradas por estado si se pide. */
+/* Target lines of an action on a remito: the ticked ones of THAT remito,
+   or all of them if none is ticked, filtered by state if requested. */
 function remitoTargetLines(key, estadoFiltro){
   const g = remitosActivos().find(x=>x.key===key); if(!g) return [];
   const selHere = g.lineas.filter(l=> remitoSel[l.id]);
@@ -168,13 +168,13 @@ function remitoTargetLines(key, estadoFiltro){
 }
 
 /* ============================================================
-   QUEDARSE MERCADERÍA DE TERCEROS PARA SELECT (AR) — punto 3
+   KEEP THIRD-PARTY MERCHANDISE FOR SELECT (AR) — point 3
    ------------------------------------------------------------
-   Al llegar a Argentina podés quedarte con parte de la mercadería ajena e
-   ingresarla como stock VENDIBLE de Select (AR): deja de ser trazabilidad y
-   pasa a ser inventario propio, entrando al FIFO con su costo (COGS real).
-   Baja las unidades de la consignación (deja rastro en su historial). Si la
-   consignación queda en cero, se marca cerrada.
+   On arrival in Argentina you can keep part of the third-party merchandise and
+   enter it as SELLABLE Select (AR) stock: it stops being just tracking and
+   becomes our own inventory, entering FIFO with its cost (real COGS).
+   Reduces the consignment's units (leaves a trace in its history). If the
+   consignment reaches zero, it's marked closed.
    ============================================================ */
 function quedarseParaSelect(consignId, unidades, costoUnit, obs){
   const cs = consignAll().find(x=>x.id===consignId); if(!cs) return 0;
@@ -186,30 +186,30 @@ function quedarseParaSelect(consignId, unidades, costoUnit, obs){
   const base   = Math.max(0, +cs.costoUnit||0);            // costo de referencia (producto)
   const landed = Math.max(0, round2(+costoUnit||0));       // costo final que entra al FIFO
   const argLeg = round2(Math.max(0, landed - base));       // lo agregado sobre el ref = tramo AR
-  // ingresa a stock vendible de Select con FIFO + kardex (queda en la ficha y en Movimientos)
+  // enters Select's sellable stock with FIFO + kardex (shows in the product card and in Movements)
   fifoEntrada(p, store, q, landed, "Kept for "+storeName(store)+(cs.envioRef?(" · "+cs.envioRef):""), cs.id, { us:base, intl:0, arg:argLeg });
   moverStock(p, +q, landed, "conjunta", cs.id, "Third-party kept for "+storeName(store), { store, tipo:"tercero-keep", obs:obs||"" });
   p.ultimoCosto = landed;
-  // baja de la consignación
+  // reduce the consignment
   cs.cantidad = round4(cs.cantidad - q);
   cs.keptForSelect = round4((cs.keptForSelect||0) + q);
   cs.historial.push({ estado:cs.estado, fecha:new Date().toISOString(), obs:`kept ${qty(q)} u for ${storeName(store)}` });
   if(cs.cantidad<=0.00001){
     cs.cantidad = 0;
-    // La línea se drenó: fue ENTERA para Select sólo si nunca se entregó nada al dueño.
+    // The line drained: it was ENTIRELY for Select only if nothing was ever delivered to the owner.
     cs.keptFull = ((cs.keptForSelect||0) >= (cs.cantidadOrig||cs.keptForSelect||0) - 0.00001);
-    cs.estado = CONSIGN_ESTADOS.ENTREGADO;                 // cerrada
+    cs.estado = CONSIGN_ESTADOS.ENTREGADO;                 // closed
     cs.obs = (cs.obs?cs.obs+" · ":"") + "kept for "+storeName(store);
   }
   return q;
 }
 
 /* ============================================================
-   COSTO POR PUERTA — input con preview en vivo "= $/u" (punto 2)
+   COST PER GATE — input with live "= $/u" preview (point 2)
    ------------------------------------------------------------
-   El costo del tramo se carga como TOTAL del lote y la app lo prorratea por
-   unidad. El preview deja ver al instante cuánto le suma a cada unidad, así
-   se entiende dónde y cómo se capitaliza el landed en cada puerta.
+   The leg cost is entered as the batch TOTAL and the app prorates it per
+   unit. The preview shows instantly how much it adds to each unit, so
+   you understand where and how the landed cost is capitalized at each gate.
    ============================================================ */
 function legCostFieldHTML(id, label, hint){
   return `<div class="field" style="grid-column:1/-1"><label>${label}${hint?` <span class="hint" style="font-weight:400">${hint}</span>`:""}</label>
@@ -229,7 +229,7 @@ function estadoPillMini(e){
 }
 
 function nuevaConjLinea(){ return { key:uid(), productoId:"", sku:"", nombre:"", crear:false, total:0, aSwan:0, aTransito:0, terceroId:"", costoUnit:0, precioSwan:0 }; }
-/* Ajeno de una línea = total del invoice menos lo nuestro (Swan + tránsito). Nunca negativo. */
+/* Third-party of a line = invoice total minus ours (Swan + transit). Never negative. */
 function conjAjenoLinea(l){ return Math.max(0, (parseNum(l.total)||0) - (parseNum(l.aSwan)||0) - (parseNum(l.aTransito)||0)); }
 function conjUnidadesAjenas(){ return conjDraft.lineas.reduce((a,l)=> a + conjAjenoLinea(l), 0); }
 
@@ -261,9 +261,9 @@ function renderConjModal(){
     <button class="btn sm" id="cjAddLine" style="margin-top:10px">+ Add line</button>
     <div class="field" style="margin-top:12px"><label>Notes</label><input class="inp" id="cj_obs" value="${esc(conjDraft.obs)}"></div>
   `;
-  buildModal("＋ Nueva compra conjunta (comisión)", body, [
-    {label:"Cancelar",cls:"btn",act:()=>{ conjDraft=null; closeModal(); }},
-    {label:"Confirmar ingreso (+stock)",cls:"btn up",act:confirmConjunta}
+  buildModal("＋ New joint buy (commission)", body, [
+    {label:"Cancel",cls:"btn",act:()=>{ conjDraft=null; closeModal(); }},
+    {label:"Confirm intake (+stock)",cls:"btn up",act:confirmConjunta}
   ], "wide doc",
   `<div class="totrow"><span style="color:var(--muted)">Units we keep</span><span class="num" id="cjTot">${qty(conjUnidadesNuestras())}</span></div><div class="totrow"><span style="color:var(--muted)">Third-party (tracked)</span><span class="num" id="cjTotAj">${qty(conjUnidadesAjenas())}</span></div>`);
   renderConjLines();
@@ -275,7 +275,7 @@ function renderConjModal(){
   document.getElementById("cj_cli").onclick=(e)=> openConjClientePicker(e.currentTarget);
 }
 
-/* Cliente picker reutilizando el estilo del modal de venta. */
+/* Client picker reusing the sale modal's style. */
 function openConjClientePicker(anchor){
   if(typeof closeProductPicker==="function") closeProductPicker();
   _pickerAnchor = anchor; anchor.classList.add("open");
@@ -302,7 +302,7 @@ function openConjClientePicker(anchor){
   search.focus();
 }
 
-/* Picker del DUEÑO (tercero) del ajeno de UNA línea. Mismo estilo, setea l.terceroId. */
+/* Picker for the OWNER (third-party) of ONE line's third-party units. Same style, sets l.terceroId. */
 function openConjOwnerPicker(i, anchor){
   if(typeof closeProductPicker==="function") closeProductPicker();
   _pickerAnchor = anchor; anchor.classList.add("open");
@@ -371,7 +371,7 @@ function renderConjLines(){
       const l=conjDraft.lineas[i];
       if(k==="total"||k==="aSwan"||k==="aTransito"||k==="costoUnit"||k==="precioSwan") l[k]=parseNum(inp.value);
       else l[k]=inp.value;
-      // refrescar ajeno de la fila + totales del pie, sin re-render (no perder foco)
+      // refresh the row's third-party value + footer totals, without re-render (don't lose focus)
       if(k==="total"||k==="aSwan"||k==="aTransito"){
         const aj = conjAjenoLinea(l);
         const over = (parseNum(l.total)||0) > 0 && (parseNum(l.aSwan)||0)+(parseNum(l.aTransito)||0) > (parseNum(l.total)||0);
@@ -392,8 +392,8 @@ function renderConjLines(){
   });
 }
 
-/* Reusa el picker de productos del modal de venta (mismo estilo), pero aplicando
-   la selección en la línea de la conjunta. Lista TODOS los productos + crear nuevo. */
+/* Reuses the sale modal's product picker (same style), but applying
+   the selection in the joint-buy line. Lists ALL products + create new. */
 function openConjProductPicker(i, anchor){
   closeProductPicker();
   _pickerAnchor = anchor; anchor.classList.add("open");
@@ -432,18 +432,18 @@ function openConjProductPicker(i, anchor){
 
 function confirmConjunta(){
   if(!isAdmin()){ toast("Only admins can load joint buys","warn"); return; }
-  // resolver líneas
+  // resolve lines
   const resolved = [];
   for(const l of conjDraft.lineas){
     const aSw  = Math.max(0, parseNum(l.aSwan)||0);
     const aTr  = Math.max(0, parseNum(l.aTransito)||0);
     const aj   = conjAjenoLinea(l);
-    if(aSw<=0 && aTr<=0 && aj<=0) continue;   // línea vacía: se ignora
-    // over-allocation: lo nuestro no puede superar el total del invoice
+    if(aSw<=0 && aTr<=0 && aj<=0) continue;   // empty line: ignored
+    // over-allocation: our part can't exceed the invoice total
     if((parseNum(l.total)||0)>0 && aSw+aTr>(parseNum(l.total)||0)){
       toast("A line has more 'ours' units than the invoice total","warn"); return;
     }
-    // si hay ajeno, EXIGIMOS dueño (es la única decisión manual del punto 3)
+    // if there's third-party, we REQUIRE an owner (the only manual decision of point 3)
     if(aj>0 && !l.terceroId){ toast("A line has third-party units without an owner","warn"); return; }
     let p=null;
     if(l.crear){
@@ -474,9 +474,9 @@ function confirmConjunta(){
   };
   const refTxt = "Joint buy" + (doc.numero?(" "+doc.numero):"") + (cli?(" · "+cli.nombre):"");
 
-  // Remito U (numerado) del envío US→AR: SÓLO lo de TERCEROS. Lo nuestro (Swan / →AR)
-  // ya es stock propio, no viaja como documento de traslado. Queda guardado en
-  // db.remitos y disponible en la sección Remitos (sin pop-up al guardar).
+  // Remito U (numbered) of the US→AR shipment: ONLY the THIRD-PARTY part. Ours (Swan / →AR)
+  // is already our own stock, it doesn't travel as a transfer document. It stays saved in
+  // db.remitos and available in the Remitos section (no pop-up on save).
   const uRemLineas = resolved.filter(r=> r.ajeno>0 && r.terceroId)
     .map(r=>({ productoId:r.prod.id, sku:r.prod.sku, nombre:r.prod.nombre, cantidad:r.ajeno, rol:"third",
                owner:(clienteById(r.terceroId)||{}).nombre||"" }));
@@ -488,27 +488,27 @@ function confirmConjunta(){
 
   resolved.forEach(r=>{
     const p = r.prod;
-    // Unidades que quedan en SWAN (USA): stock vendible al toque, con kardex.
+    // Units kept in SWAN (USA): sellable stock right away, with kardex.
     if(r.aSwan>0){
       fifoEntrada(p, STORE_IDS[0], r.aSwan, r.costoUnit, refTxt, doc.id);
       moverStock(p, +r.aSwan, r.costoUnit, "conjunta", doc.id, refTxt+" · commission", { store:STORE_IDS[0], tipo:"conjunta-in" });
     }
-    // Unidades NUESTRAS rumbo AR: NACEN EN TRÁNSITO (bucket, sin kardex propio, como el vault).
-    // Se ENTREGAN en Select (AR) al final del recorrido (botón "Deliver in AR").
+    // OUR units bound for AR: BORN IN TRANSIT (bucket, no own kardex, like the vault).
+    // They're DELIVERED into Select (AR) at the end of the journey ("Deliver in AR" button).
     if(r.aTransito>0){
       fifoEntrada(p, TRANSITO_STORE, r.aTransito, r.costoUnit, refTxt, doc.id);
       p.stockPorTienda[TRANSITO_STORE] = round4((p.stockPorTienda[TRANSITO_STORE]||0) + r.aTransito);
     }
-    // Unidades AJENAS (de terceros): NO tocan stock/FIFO/valuación. Van al libro de
-    // consignaciones (nacen en tránsito US→AR) para seguirse por separado.
+    // THIRD-PARTY units: they do NOT touch stock/FIFO/valuation. They go to the
+    // consignments ledger (born in transit US→AR) to be tracked separately.
     if(r.ajeno>0 && r.terceroId){
       crearConsignacion({ conjuntaId:doc.id, envioRef:doc.numero, fecha:doc.fecha, terceroId:r.terceroId,
         remitoId: uRem?uRem.id:null, remitoCodigo: uRem?uRem.codigo:"",
         productoId:p.id, sku:p.sku, nombre:p.nombre, cantidad:r.ajeno, costoUnit:r.costoUnit, obs:refTxt });
     }
-    // último costo landed de referencia (sólo si cargaron un costo > 0)
+    // last reference landed cost (only if a cost > 0 was entered)
     if(r.costoUnit>0){ p.costoNeto=r.costoUnit; p.costoHandling=0; p.costoFlete=0; p.ultimoCosto=r.costoUnit; }
-    // precio de venta de Swan (US$), opcional: fija la lista del depósito Swan (USA)
+    // Swan sale price (US$), optional: sets the Swan (USA) deposit price list
     if(r.precioSwan>0){
       if(!p.precioVentaPorTienda) p.precioVentaPorTienda={};
       p.precioVentaPorTienda[STORE_IDS[0]] = r.precioSwan;
@@ -523,26 +523,26 @@ function confirmConjunta(){
   const remBit = uRem ? ` · remito ${uRem.codigo}` : "";
   toast(`Joint buy saved · +${qty(sw)} Swan · ${qty(tr)} in transit · ${qty(aj)} third-party${remBit}`, "up");
   render();
-  // El remito queda en la sección Remitos (descargá cuando quieras). Sin pop-up.
+  // The remito stays in the Remitos section (download whenever). No pop-up.
 }
 
-/* ---- Recibir en AR: pasa unidades de TRÁNSITO a SWAN (con costo de importación opcional) ---- */
+/* ---- Receive in AR: moves units from TRANSIT to SWAN (with optional import cost) ---- */
 function openRecibirTransito(prodId){
   if(!isAdmin()){ toast("Only admins can receive stock","warn"); return; }
   const p = prodById(prodId); if(!p) return;
   const held = transUnits(p);
   if(held<=0){ toast("Nothing in transit for this product","warn"); return; }
-  const destino = STORE_IDS[1] || STORE_IDS[0];   // depósito de AR (destino del tránsito)
+  const destino = STORE_IDS[1] || STORE_IDS[0];   // AR deposit (transit destination)
   const body = `
     <p class="hint" style="margin:0 0 12px">In transit (Buenos Aires): <b>${qty(held)}</b> u · valued ${money(transValor(p), "USD")}. Delivering moves them into <b>${esc(storeName(destino))}</b> stock (sellable, AR). The <b>operator pays</b> the Argentine leg (freight + nationalization + local costs) and it's <b>capitalized into the landed cost</b>.</p>
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
-      <div class="field"><label>Unidades a recibir</label><input class="inp num" id="rt_q" value="${held}"></div>
-      <div class="field"><label>Puerta 3 · Arg freight + local costs <span class="hint" style="font-weight:400">· total, optional</span></label><input class="inp num" id="rt_c" value="0" inputmode="decimal"><div class="leg-pu hint" id="rt_c_pu">= ${money(0,"USD")} per unit</div></div>
+      <div class="field"><label>Units to receive</label><input class="inp num" id="rt_q" value="${held}"></div>
+      <div class="field"><label>Gate 3 · Arg freight + local costs <span class="hint" style="font-weight:400">· total, optional</span></label><input class="inp num" id="rt_c" value="0" inputmode="decimal"><div class="leg-pu hint" id="rt_c_pu">= ${money(0,"USD")} per unit</div></div>
       <div class="field" style="grid-column:1/3"><label>Notes</label><input class="inp" id="rt_obs" placeholder="e.g. shipment #, nationalization ref"></div>
     </div>`;
-  buildModal("Recibir en AR ("+esc(storeName(destino))+")", body, [
-    {label:"Cancelar",cls:"btn",act:closeModal},
-    {label:"Recibir · "+storeName(destino),cls:"btn up",act:()=>{
+  buildModal("Deliver in AR ("+esc(storeName(destino))+")", body, [
+    {label:"Cancel",cls:"btn",act:closeModal},
+    {label:"Mark delivered · "+storeName(destino),cls:"btn up",act:()=>{
       const q=Math.min(Math.max(0,parseNum(document.getElementById("rt_q").value)||0), transUnits(p));
       const cTot=Math.max(0,parseNum(document.getElementById("rt_c").value)||0);   // arg freight + local costs (total)
       const c = q>0 ? round2(cTot/q) : 0;                                           // prorrateo por unidad
@@ -552,14 +552,14 @@ function openRecibirTransito(prodId){
       if(done>0){ closeModal(); toast(`Delivered ${qty(done)} u into ${storeName(destino)}${cTot>0?` · +${money(c,"USD")}/u landed`:""}`, "up"); render(); }
     }}
   ], "mini");
-  // preview del landed por unidad = total ÷ unidades a recibir (se recalcula al cambiar ambos)
+  // landed-per-unit preview = total ÷ units to receive (recomputed when either changes)
   const rtC=document.getElementById("rt_c"), rtQ=document.getElementById("rt_q"), rtPu=document.getElementById("rt_c_pu");
   const rtUpd=()=>{ const t=Math.max(0,parseNum(rtC.value)||0), u=Math.max(0,parseNum(rtQ.value)||0); rtPu.textContent = `= ${money(u>0?round2(t/u):0,"USD")} per unit  ·  spread across ${qty(u)} u`; };
   if(rtC&&rtQ&&rtPu){ rtC.oninput=rtUpd; rtQ.oninput=rtUpd; rtUpd(); }
 }
 
-/* ---- Enviar a tránsito: pasa unidades de un depósito vendible al bucket de tránsito.
-   Caso secundario (las de AR nacen en tránsito), útil para mandar stock de Swan (USA) a AR. ---- */
+/* ---- Send to transit: moves units from a sellable deposit into the transit bucket.
+   Secondary case (AR ones are born in transit), useful to send Swan (USA) stock to AR. ---- */
 function openEnviarTransito(){
   if(!isAdmin()){ toast("Only admins can move stock","warn"); return; }
   const prods = db.productos.filter(p=> STORE_IDS.some(s=> stockDe(p,s)>0))
@@ -572,12 +572,12 @@ function openEnviarTransito(){
       <div class="field" style="grid-column:1/3"><label>Product</label><select class="inp" id="et_prod">${prodOpts}</select></div>
       <div class="field"><label>From deposit</label><select class="inp" id="et_store"></select></div>
       <div class="field"><label>Units</label><input class="inp num" id="et_q" value="0"></div>
-      <div class="field" style="grid-column:1/3"><label>Puerta 2 · Intl freight + wire fees <span class="hint" style="font-weight:400">· total (USD), optional</span></label><input class="inp num" id="et_cost" value="0" inputmode="decimal"><div class="leg-pu hint" id="et_cost_pu">= ${money(0,"USD")} per unit</div></div>
+      <div class="field" style="grid-column:1/3"><label>Gate 2 · Intl freight + wire fees <span class="hint" style="font-weight:400">· total (USD), optional</span></label><input class="inp num" id="et_cost" value="0" inputmode="decimal"><div class="leg-pu hint" id="et_cost_pu">= ${money(0,"USD")} per unit</div></div>
       <div class="field" style="grid-column:1/3"><label>Notes</label><input class="inp" id="et_obs"></div>
     </div>`;
-  buildModal("Despachar a AR", body, [
-    {label:"Cancelar",cls:"btn",act:closeModal},
-    {label:"Despachar",cls:"btn",act:()=>{
+  buildModal("Send to transit (to AR)", body, [
+    {label:"Cancel",cls:"btn",act:closeModal},
+    {label:"Send to transit",cls:"btn",act:()=>{
       const p=prodById(document.getElementById("et_prod").value);
       const st=document.getElementById("et_store").value;
       if(!p||!st){ toast("Pick a product and deposit","warn"); return; }
@@ -588,7 +588,7 @@ function openEnviarTransito(){
       const costPU = q>0 ? round2(costTot/q) : 0;                                          // prorrateo por unidad
       const done = transferStock(p, st, TRANSITO_STORE, q, costPU, obs, "intl");
       if(done>0){
-        // Remito U del envío propio US → AR (numeración automática)
+        // Remito U of our own US → AR shipment (automatic numbering)
         const uRem = crearRemito({ letra:"U", tipo:"salida-us", fuente:{ tipo:"transito", id:p.id },
           lineas:[{ productoId:p.id, sku:p.sku, nombre:p.nombre, cantidad:done, rol:"ours", owner:"" }],
           obs:obs || ("Own stock "+storeName(st)+" → AR") });
@@ -596,11 +596,11 @@ function openEnviarTransito(){
         closeModal();
         toast(`Sent ${qty(done)} u to transit · remito ${uRem.codigo}${costTot>0?` · +${money(costPU,"USD")}/u landed`:""}`, "up");
         render();
-        // Remito guardado — descargalo desde la sección Remitos (sin pop-up).
+        // Remito saved — download it from the Remitos section (no pop-up).
       }
     }}
   ], "mini");
-  // depósitos con stock del producto elegido (se actualiza al cambiar de producto)
+  // deposits holding stock of the chosen product (updates when product changes)
   const fillStores=()=>{
     const p=prodById(document.getElementById("et_prod").value);
     const sel=document.getElementById("et_store");
@@ -609,15 +609,15 @@ function openEnviarTransito(){
   };
   document.getElementById("et_prod").onchange=fillStores;
   fillStores();
-  // preview del landed por unidad = total ÷ unidades
+  // landed-per-unit preview = total ÷ units
   const etC=document.getElementById("et_cost"), etQ=document.getElementById("et_q"), etPu=document.getElementById("et_cost_pu");
   const etUpd=()=>{ const t=Math.max(0,parseNum(etC.value)||0), u=Math.max(0,parseNum(etQ.value)||0); etPu.textContent = `= ${money(u>0?round2(t/u):0,"USD")} per unit  ·  spread across ${qty(u)} u`; };
   if(etC&&etQ&&etPu){ etC.oninput=etUpd; etQ.oninput=etUpd; etUpd(); }
 }
 
-/* ---- Merma / write-off de tránsito: baja unidades del bucket por rotura, aduana,
-   extravío, etc. Consume FIFO del tránsito y deja un movimiento tipo "merma"
-   (store=tránsito) para trazar la pérdida. No pasa a ningún depósito vendible. ---- */
+/* ---- Write-off of transit: reduces bucket units due to breakage, customs,
+   loss, etc. Consumes transit FIFO and leaves a "merma" (write-off) movement
+   (store=transit) to trace the loss. It doesn't move to any sellable deposit. ---- */
 function openMermaTransito(prodId){
   if(!isAdmin()){ toast("Only admins can write off stock","warn"); return; }
   const p = prodById(prodId); if(!p) return;
@@ -636,17 +636,17 @@ function openMermaTransito(prodId){
         </select></div>
       <div class="field" style="grid-column:1/3"><label>Notes</label><input class="inp" id="mm_obs"></div>
     </div>`;
-  buildModal("Merma de tránsito", body, [
-    {label:"Cancelar",cls:"btn",act:closeModal},
-    {label:"Dar de baja",cls:"btn danger",act:()=>{
+  buildModal("Write-off from transit", body, [
+    {label:"Cancel",cls:"btn",act:closeModal},
+    {label:"Write off",cls:"btn danger",act:()=>{
       const q=Math.min(Math.max(0,parseNum(document.getElementById("mm_q").value)||0), transUnits(p));
       if(q<=0){ toast("Enter a quantity","warn"); return; }
       const motivo=document.getElementById("mm_motivo").value;
       const obs=(document.getElementById("mm_obs").value||"").trim();
       withUndo(`Wrote off ${qty(q)} u from transit`, ()=>{
-        const { unit } = fifoConsumir(p, TRANSITO_STORE, q);            // consume FIFO del tránsito
+        const { unit } = fifoConsumir(p, TRANSITO_STORE, q);            // consume transit FIFO
         p.stockPorTienda[TRANSITO_STORE] = round4(Math.max(0, transUnits(p) - q));
-        // movimiento de merma en el bucket (la ficha lo muestra pero no lo suma al saldo vendible)
+        // write-off movement in the bucket (the product card shows it but doesn't add it to the sellable balance)
         moverStock(p, -q, unit, "merma", null, "Transit write-off · "+motivo, { store:TRANSITO_STORE, tipo:"merma", obs });
         save();
       });
@@ -667,21 +667,21 @@ function deleteConjunta(id){
   withUndo("Joint buy deleted", ()=>{
   d.lineas.forEach(l=>{
     const p = prodById(l.productoId); if(!p) return;
-    // revertir Swan: quitar la capa FIFO de esta conjunta y bajar stock (clamp a 0)
+    // revert Swan: remove this joint buy's FIFO layer and reduce stock (clamp to 0)
     if(l.aSwan>0){
       fifoQuitarCompra(p, STORE_IDS[0], id);
       p.stockPorTienda[STORE_IDS[0]] = round4(Math.max(0, stockDe(p,STORE_IDS[0]) - l.aSwan));
       recalcStockMirror(p);
     }
-    // revertir Tránsito: sólo lo que todavía esté en el bucket
+    // revert Transit: only what's still in the bucket
     if(l.aTransito>0){
       fifoQuitarCompra(p, TRANSITO_STORE, id);
       p.stockPorTienda[TRANSITO_STORE] = round4(Math.max(0, transUnits(p) - l.aTransito));
     }
     if(typeof recomputeUltimoCosto==="function") recomputeUltimoCosto(p);
   });
-  // Consignaciones (ajeno) de esta conjunta: sólo se quitan las que siguen EN TRÁNSITO
-  // (todavía no avanzaron). Las ya recibidas/entregadas son hechos físicos: quedan.
+  // Consignments (third-party) of this joint buy: only remove those still IN TRANSIT
+  // (not advanced yet). Already received/delivered ones are physical facts: they stay.
   db.consignaciones = consignAll().filter(cs=> !(cs.conjuntaId===id && cs.estado===CONSIGN_ESTADOS.TRANSITO));
   db.movimientos = db.movimientos.filter(m=> m.refId!==id);
   const i = db.conjuntas.findIndex(x=>x.id===id); if(i>=0) db.conjuntas.splice(i,1);
@@ -691,13 +691,20 @@ function deleteConjunta(id){
 }
 
 /* ============================================================
-   RIEL GUIADO (prueba de boludo) — presentacion del flujo
+   GUIDED TRACK (foolproof) — flow presentation
    ------------------------------------------------------------
-   Reemplaza el render SIN tocar el motor: cada mercaderia es un
-   riel con la puerta actual encendida y UN boton = el proximo paso.
-   Carril "Nuestra" (por producto, entra a stock) y carril "Tercero"
-   (por remito, solo se sigue, termina en el split).
+   Replaces the render WITHOUT touching the engine: every piece of
+   merchandise is a track with the current gate lit and ONE button =
+   the next step. "Ours" lane (per product, enters stock) and
+   "third-party" lane (per remito, only tracked, ends in the split).
    ============================================================ */
+var RL_ICONS = {
+  usa:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 8.35V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8.35a2 2 0 0 1 1.26-1.86l8-3.2a2 2 0 0 1 1.48 0l8 3.2A2 2 0 0 1 22 8.35Z"/><path d="M6 18h12M6 14h12M6 10h12"/></svg>',
+  plane:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg>',
+  store:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9 4.5 4.5A2 2 0 0 1 6.4 3h11.2a2 2 0 0 1 1.9 1.5L21 9"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M3 9h18M9 20v-5h6v5"/></svg>',
+  pin:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>',
+  split:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg>'
+};
 function ensureRielCSS(){
   if(document.getElementById("rl-css")) return;
   const s = document.createElement("style"); s.id = "rl-css";
@@ -721,12 +728,13 @@ function ensureRielCSS(){
 .rl-badge.third{background:var(--surface-2);color:var(--muted);border:1px solid var(--line-strong)}
 .rl-steps{display:flex;align-items:flex-start;margin:2px 2px 12px}
 .rl-node{display:flex;flex-direction:column;align-items:center;gap:6px;width:100px;text-align:center;flex:0 0 auto}
-.rl-dot{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;border:1.5px solid var(--line-strong);background:var(--surface);color:var(--muted)}
+.rl-dot{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:1.5px solid var(--line-strong);background:var(--surface);color:var(--muted)}
+.rl-dot svg{width:19px;height:19px;display:block}
 .rl-dot.done{background:var(--up-bg);border-color:var(--up);color:var(--accent-ink)}
 .rl-dot.cur{background:var(--accent);border-color:var(--accent);color:var(--paper)}
 .rl-lab{font-size:12px;line-height:1.25;color:var(--muted)}
 .rl-lab.cur{color:var(--accent-ink);font-weight:700}
-.rl-conn{flex:1 1 auto;height:2px;margin-top:16px;border-radius:2px;background:var(--line-strong)}
+.rl-conn{flex:1 1 auto;height:2px;margin-top:18px;border-radius:2px;background:var(--line-strong)}
 .rl-conn.done{background:var(--up)}
 .rl-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:12px}
 .rl-next{font-size:12px;color:var(--muted);flex:1 1 auto;min-width:120px}
@@ -737,60 +745,59 @@ function ensureRielCSS(){
 `;
   document.head.appendChild(s);
 }
-/* Un riel: nodos = array de labels (con <br> si hace falta); cur = indice del paso actual (0-based). */
+/* One track: nodes = array of {icon,label}; cur = index of the current step (0-based). */
 function rielHTML(nodes, cur){
   let h = "";
   nodes.forEach((nd, i)=>{
     if(i>0) h += `<div class="rl-conn ${i<=cur?"done":""}"></div>`;
     const st = i<cur ? "done" : (i===cur ? "cur" : "");
-    const txt = i<cur ? "\u2713" : String(i+1);
-    h += `<div class="rl-node"><div class="rl-dot ${st}">${txt}</div><div class="rl-lab ${i===cur?"cur":""}">${nd}</div></div>`;
+    h += `<div class="rl-node"><div class="rl-dot ${st}">${RL_ICONS[nd.icon]||""}</div><div class="rl-lab ${i===cur?"cur":""}">${nd.label}</div></div>`;
   });
   return `<div class="rl-steps">${h}</div>`;
 }
-/* Tarjeta-riel de mercaderia NUESTRA en transito (por producto: asi vive el dato hoy). */
+/* Track card for OUR OWN merchandise in transit (per product: that's how it's stored today). */
 function ourTransitCardHTML(p){
   const u = transUnits(p), val = transValor(p);
   return `<div class="rl-card">
     <div class="rl-head">
       <span class="rl-code">${esc(p.nombre)}</span>
-      <span class="rl-badge ours">Nuestra \u00b7 entra a stock</span>
+      <span class="rl-badge ours">Ours \u00b7 enters stock</span>
       <span class="rl-meta">${esc(p.sku||"\u2014")} \u00b7 ${qty(u)} u \u00b7 ${money(val,"USD")}</span>
     </div>
-    ${rielHTML(["En USA<br>(Swan)","En tr\u00e1nsito<br>a AR","Vendible<br>en AR (Select)"], 1)}
+    ${rielHTML([{icon:"usa",label:"In USA<br>(Swan)"},{icon:"plane",label:"In transit<br>to AR"},{icon:"store",label:"Sellable<br>in AR (Select)"}], 1)}
     <div class="rl-foot">
-      <span class="rl-next">Ya sali\u00f3 de USA \u00b7 el pr\u00f3ximo paso es recibirla en Select (AR)</span>
-      <button class="btn ghost sm" data-merma="${p.id}" style="color:var(--alert)">Merma</button>
-      <button class="btn up sm" data-recib="${p.id}">Recibir en AR \u25be</button>
+      <span class="rl-next">In transit to AR \u00b7 next step is to deliver it into Select (AR)</span>
+      <button class="btn ghost sm" data-merma="${p.id}" style="color:var(--alert)">Write-off</button>
+      <button class="btn up sm" data-recib="${p.id}">Deliver in AR \u25be</button>
     </div>
   </div>`;
 }
 function viewConjunta(){
   ensureRielCSS();
-  // --- Carril NUESTRA: productos en transito (por producto) ---
+  // --- Ours lane: products in transit (per product) ---
   const enTransito = db.productos.filter(p=> transUnits(p)>0)
     .sort((a,b)=> String(a.nombre||"").localeCompare(String(b.nombre||""),"en"));
   const uNuestraTransito = enTransito.reduce((a,p)=> a + transUnits(p), 0);
   const ourCards = enTransito.map(ourTransitCardHTML).join("")
-    || `<div class="rl-empty">Nada nuestro en tr\u00e1nsito. Mand\u00e1 stock con \u201cDespachar a AR\u201d.</div>`;
+    || `<div class="rl-empty">Nothing of ours in transit. Send stock with \u201cSend to transit\u201d.</div>`;
 
-  // --- Carril TERCEROS: consignaciones agrupadas por remito ---
+  // --- Third-party lane: consignments grouped by remito ---
   const remitos = remitosActivos();
   const remTransito = remitos.filter(g=> g.uTransito>0).length;
   const remAr       = remitos.filter(g=> g.uAr>0).length;
   const remitoCards = remitos.map(remitoCardHTML).join("")
-    || `<div class="rl-empty">No hay mercader\u00eda de terceros en flujo. Entra desde Compras (tipo Tercero) o desde \u201c\uff0b Compra conjunta\u201d.</div>`;
+    || `<div class="rl-empty">No third-party in flow. It comes in from Purchases (type Third-party) or from \u201c\uff0b New joint buy\u201d.</div>`;
 
-  // --- Contadores accionables ---
+  // --- Actionable counters ---
   const chips = `
-    <p class="hint" style="margin:0 0 6px">\u00bfQu\u00e9 hay que hacer?</p>
+    <p class="hint" style="margin:0 0 6px">What needs doing?</p>
     <div class="rl-chips">
-      <div class="rl-chip${enTransito.length?" hot":""}" data-scroll="rl-nuestra"><span class="n">${qty(uNuestraTransito)}</span><span class="l">Nuestro en tr\u00e1nsito \u00b7 recibir en AR</span></div>
-      <div class="rl-chip${remTransito?" hot":""}" data-scroll="rl-terceros"><span class="n">${remTransito}</span><span class="l">Remitos de terceros \u00b7 recibir en AR</span></div>
-      <div class="rl-chip${remAr?" hot":""}" data-scroll="rl-terceros"><span class="n">${remAr}</span><span class="l">Remitos de terceros \u00b7 resolver reparto</span></div>
+      <div class="rl-chip${enTransito.length?" hot":""}" data-scroll="rl-nuestra"><span class="n">${qty(uNuestraTransito)}</span><span class="l">Ours in transit \u00b7 deliver in AR</span></div>
+      <div class="rl-chip${remTransito?" hot":""}" data-scroll="rl-terceros"><span class="n">${remTransito}</span><span class="l">Third-party remitos \u00b7 receive in AR</span></div>
+      <div class="rl-chip${remAr?" hot":""}" data-scroll="rl-terceros"><span class="n">${remAr}</span><span class="l">Third-party remitos \u00b7 resolve split</span></div>
     </div>`;
 
-  // --- Resumen por dueno ---
+  // --- Summary by owner ---
   const resumen = consignResumenPorTercero();
   const resRows = resumen.map(r=>`<tr>
       <td>${esc(r.nombre)}</td>
@@ -798,10 +805,10 @@ function viewConjunta(){
       <td class="r num">${qty(r.en_ar||0)}</td>
       <td class="r num">${qty(r.entregado||0)}</td>
       <td class="r num"><b>${qty(r.total||0)}</b></td>
-    </tr>`).join("") || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px">Todav\u00eda no hay mercader\u00eda de terceros.</td></tr>`;
+    </tr>`).join("") || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px">No third-party merchandise yet.</td></tr>`;
 
-  // --- Movimientos recientes entre depositos ---
-  const tipos = { "transfer-out":"\u2192 enviado", "transfer-in":"\u2190 recibido", "conjunta":"comisi\u00f3n (ingreso)", "tercero-keep":"retenido para Select", "merma":"merma" };
+  // --- Recent movements between deposits ---
+  const tipos = { "transfer-out":"\u2192 sent", "transfer-in":"\u2190 received", "conjunta":"commission in", "tercero-keep":"kept for Select", "merma":"write-off" };
   const movs = (db.movimientos||[]).filter(m=> m.tipo in tipos)
     .slice().sort((a,b)=> String(b.fecha||"").localeCompare(String(a.fecha||""))).slice(0,15);
   const movRows = movs.map(m=>{
@@ -814,9 +821,9 @@ function viewConjunta(){
       <td>${esc(m.ref||tipos[m.tipo]||"")}</td>
       <td class="r num" style="color:${up?'var(--up)':'var(--alert)'}">${up?"+":"\u2212"}${qty(Math.abs(m.delta||m.cantidad||0))}</td>
     </tr>`;
-  }).join("") || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px">Sin traspasos todav\u00eda.</td></tr>`;
+  }).join("") || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px">No transfers yet.</td></tr>`;
 
-  // --- Historico legacy de compras conjuntas (solo lectura) ---
+  // --- Legacy joint-buys history (read-only) ---
   const hist = (db.conjuntas||[]).slice().sort((a,b)=> String(b.fecha||"").localeCompare(String(a.fecha||"")));
   const hayHist = hist.length>0;
   const histRows = hist.map(d=>{
@@ -829,62 +836,62 @@ function viewConjunta(){
       <td class="r num">${qty(sw)}</td>
       <td class="r num">${qty(tr)}</td>
       <td class="r num">${qty(aj)}</td>
-      <td class="r" style="white-space:nowrap"><button class="btn ghost sm" data-remito-doc="${d.id}" title="Remito interno (US\u2192AR)">Remito</button> <button class="btn ghost sm" data-cjdel-doc="${d.id}" style="color:var(--alert)">Borrar</button></td>
+      <td class="r" style="white-space:nowrap"><button class="btn ghost sm" data-remito-doc="${d.id}" title="Internal transfer note (US\u2192AR)">Remito</button> <button class="btn ghost sm" data-cjdel-doc="${d.id}" style="color:var(--alert)">Delete</button></td>
     </tr>`;
-  }).join("") || `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:18px">No hay compras conjuntas cargadas.</td></tr>`;
+  }).join("") || `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:18px">No joint buys loaded yet.</td></tr>`;
 
   return `
-  <div class="head"><div class="title"><h2>Mercader\u00eda en camino \u00b7 USA \u2192 Argentina</h2><p>Cada env\u00edo es un riel: mir\u00e1 d\u00f3nde est\u00e1 la mercader\u00eda y toc\u00e1 el \u00fanico bot\u00f3n del pr\u00f3ximo paso. <b>Nuestra</b> = entra a stock. <b>Tercero</b> = s\u00f3lo se sigue y termina en un reparto.</p></div>
-    <div class="actions"><button class="btn" data-enviar-transito title="Mandar stock propio USA \u2192 AR">Despachar a AR</button><button class="btn up" data-new-conj>\uff0b Compra conjunta</button></div>
+  <div class="head"><div class="title"><h2>Merchandise in transit \u00b7 USA \u2192 Argentina</h2><p>Each shipment is a track: see where the merchandise is and tap the one button for the next step. <b>Ours</b> = enters stock. <b>Third-party</b> = only tracked, ends in a split.</p></div>
+    <div class="actions"><button class="btn" data-enviar-transito title="Move own stock USA \u2192 AR">Send to transit</button><button class="btn up" data-new-conj>\uff0b New joint buy</button></div>
   </div>
 
   ${chips}
 
   <div class="panel" id="rl-nuestra" style="margin-bottom:18px">
     <div class="phead" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <div><h3>Lo nuestro rumbo a AR</h3><p class="hint" style="margin:2px 0 0">Stock propio que ya sali\u00f3 de USA. Al recibirlo se vuelve vendible en Select (AR), sum\u00e1ndole el costo del tramo argentino. Se muestra por producto (as\u00ed se guarda hoy en tr\u00e1nsito).</p></div>
+      <div><h3>Ours \u00b7 en route to AR</h3><p class="hint" style="margin:2px 0 0">Own stock that already left the US. Receiving it makes it sellable in Select (AR), capitalizing the Argentine leg into the landed cost. Shown per product (that's how transit is stored today).</p></div>
       <div style="flex:1"></div>
-      ${enTransito.length?`<button class="btn ghost sm" data-deliver-all-ours>Recibir todo en AR</button>`:""}
+      ${enTransito.length?`<button class="btn ghost sm" data-deliver-all-ours>Deliver all in AR</button>`:""}
     </div>
     <div class="rl-wrap">${ourCards}</div>
   </div>
 
   <div class="panel" id="rl-terceros" style="margin-bottom:18px">
     <div class="phead" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <div><h3>Terceros (consignaci\u00f3n)</h3><p class="hint" style="margin:2px 0 0">Mercader\u00eda ajena que s\u00f3lo seguimos (nunca es stock ni P&amp;L). Toc\u00e1 un remito para ver sus productos, tild\u00e1 los que quieras y aplic\u00e1 la acci\u00f3n s\u00f3lo a esos.</p></div>
+      <div><h3>Third-party (consignment)</h3><p class="hint" style="margin:2px 0 0">Third-party merchandise we only track (never our stock or P&amp;L). Tap a remito to see its products, tick the ones you want and apply the action to just those.</p></div>
       <div style="flex:1"></div>
-      ${remTransito?`<button class="btn ghost sm" data-cs-recib-all>Recibir todo en AR</button>`:""}
-      ${remAr?`<button class="btn ghost sm" data-cs-entregar-all>Entregar todo</button>`:""}
+      ${remTransito?`<button class="btn ghost sm" data-cs-recib-all>Receive all in AR</button>`:""}
+      ${remAr?`<button class="btn ghost sm" data-cs-entregar-all>Deliver all</button>`:""}
     </div>
     <div class="rl-wrap">${remitoCards}</div>
   </div>
 
   <div class="panel" style="margin-bottom:18px">
-    <div class="phead"><h3>Terceros \u00b7 por due\u00f1o</h3><span class="hint">qui\u00e9n es el due\u00f1o y d\u00f3nde est\u00e1</span></div>
+    <div class="phead"><h3>Third-party \u00b7 by owner</h3><span class="hint">who owns it and where</span></div>
     <div class="table-scroll"><table>
-      <thead><tr><th>Due\u00f1o</th><th class="r">En tr\u00e1nsito</th><th class="r">En AR</th><th class="r">Entregado</th><th class="r">Total</th></tr></thead>
+      <thead><tr><th>Owner</th><th class="r">In transit</th><th class="r">In AR</th><th class="r">Delivered</th><th class="r">Total</th></tr></thead>
       <tbody>${resRows}</tbody></table></div>
   </div>
 
   <div class="panel"${hayHist?' style="margin-bottom:18px"':''}>
-    <div class="phead"><h3>Movimientos recientes entre dep\u00f3sitos</h3></div>
+    <div class="phead"><h3>Recent movements between deposits</h3></div>
     <div class="table-scroll"><table>
-      <thead><tr><th>Fecha</th><th>Producto</th><th>Dep\u00f3sito</th><th>Movimiento</th><th class="r">Unid.</th></tr></thead>
+      <thead><tr><th>Date</th><th>Product</th><th>Deposit</th><th>Movement</th><th class="r">Units</th></tr></thead>
       <tbody>${movRows}</tbody></table></div>
   </div>
 
   ${hayHist?`<div class="panel">
-    <div class="phead"><h3>Compras conjuntas (hist\u00f3rico)</h3><span class="hint">flujo viejo \u00b7 s\u00f3lo lectura</span></div>
+    <div class="phead"><h3>Joint buys (history)</h3><span class="hint">old flow \u00b7 read-only</span></div>
     <div class="table-scroll"><table>
-      <thead><tr><th>Fecha</th><th>Cliente</th><th>Ref</th><th class="c">Pedido</th><th class="r">Swan</th><th class="r">\u2192 AR</th><th class="r">Tercero</th><th></th></tr></thead>
+      <thead><tr><th>Date</th><th>Client</th><th>Ref</th><th class="c">Order</th><th class="r">Swan</th><th class="r">\u2192 AR</th><th class="r">Third-party</th><th></th></tr></thead>
       <tbody>${histRows}</tbody></table></div>
   </div>`:""}`;
 }
 
 /* ============================================================
-   ACCIONES MASIVAS (para no ir uno por uno con miles de productos)
+   BULK ACTIONS (so you don't go one by one through thousands of products)
    ============================================================ */
-/* Recibir TODAS las consignaciones en tránsito → AR de una. */
+/* Receive ALL consignments in transit → AR at once. */
 function recibirTodasConsign(){
   if(!isAdmin()){ toast("Only admins can receive stock","warn"); return; }
   const list = consignAll().filter(cs=> cs.estado===CONSIGN_ESTADOS.TRANSITO);
@@ -894,7 +901,7 @@ function recibirTodasConsign(){
   list.forEach(cs=> avanzarConsignacion(cs.id, { obs:"bulk receive in AR" }));
   toast(`Received ${list.length} third-party item(s) in AR`,"up"); render();
 }
-/* Entregar TODAS las consignaciones que están en AR → entregado de una. */
+/* Deliver ALL consignments that are in AR → delivered at once. */
 function entregarTodasConsign(){
   if(!isAdmin()){ toast("Only admins can deliver","warn"); return; }
   const list = consignAll().filter(cs=> cs.estado===CONSIGN_ESTADOS.AR);
@@ -904,8 +911,8 @@ function entregarTodasConsign(){
   list.forEach(cs=> avanzarConsignacion(cs.id, { obs:"bulk delivered" }));
   toast(`Delivered ${list.length} third-party item(s)`,"up"); render();
 }
-/* Entregar en AR TODO el stock PROPIO en tránsito, con un costo Arg total opcional
-   prorrateado sobre el total de unidades (capitalizado, tramo "arg"). */
+/* Deliver into AR ALL OUR OWN stock in transit, with an optional total Arg cost
+   prorated over the total units (capitalized, "arg" leg). */
 function openDeliverAllOurs(){
   if(!isAdmin()){ toast("Only admins can receive stock","warn"); return; }
   const prods = db.productos.filter(p=> transUnits(p)>0);
@@ -915,12 +922,12 @@ function openDeliverAllOurs(){
   const body = `
     <p class="hint" style="margin:0 0 14px">Deliver <b>everything of ours in transit</b> into <b>${esc(storeName(destino))}</b> (sellable): <b>${prods.length}</b> product(s) · <b>${qty(totalU)}</b> u. The Argentine leg cost (freight + local costs) is <b>spread across all units</b> and capitalized.</p>
     <div class="grid-form stack" style="padding:0">
-      ${legCostFieldHTML("da_cost","Puerta 3 · Arg freight + local costs","· total for the whole batch, optional")}
+      ${legCostFieldHTML("da_cost","Gate 3 · Arg freight + local costs","· total for the whole batch, optional")}
       <div class="field" style="grid-column:1/-1"><label>Notes</label><input class="inp" id="da_obs" placeholder="e.g. shipment #, nationalization ref"></div>
     </div>`;
-  buildModal("Recibir todo en AR ("+esc(storeName(destino))+")", body, [
-    {label:"Cancelar",cls:"btn",act:closeModal},
-    {label:"Recibir todo · "+qty(totalU)+" u",cls:"btn up",act:()=>{
+  buildModal("Deliver all in AR ("+esc(storeName(destino))+")", body, [
+    {label:"Cancel",cls:"btn",act:closeModal},
+    {label:"Deliver all · "+qty(totalU)+" u",cls:"btn up",act:()=>{
       const costTot=Math.max(0,parseNum(document.getElementById("da_cost").value)||0);
       const perU = totalU>0 ? round2(costTot/totalU) : 0;
       const obs=(document.getElementById("da_obs").value||"").trim();
@@ -932,7 +939,7 @@ function openDeliverAllOurs(){
   wireLegPreview("da_cost", totalU);
 }
 
-/* ---- Recibir consignación (ajeno) en AR: en_transito → en_ar, con courier opcional ---- */
+/* ---- Receive consignment (third-party) in AR: en_transito → en_ar, with optional courier ---- */
 function openRecibirConsignacion(id){
   if(!isAdmin()){ toast("Only admins can receive stock","warn"); return; }
   const cs = consignAll().find(x=>x.id===id); if(!cs) return;
@@ -943,7 +950,7 @@ function openRecibirConsignacion(id){
       <div class="field"><label>Notes</label><input class="inp" id="csc_obs" placeholder="e.g. arrival ref"></div>
     </div>`;
   buildModal("Receive third-party in AR", body, [
-    {label:"Cancelar",cls:"btn",act:closeModal},
+    {label:"Cancel",cls:"btn",act:closeModal},
     {label:"Mark received in AR",cls:"btn up",act:()=>{
       const c=Math.max(0,parseNum(document.getElementById("csc_c").value)||0);
       const obs=(document.getElementById("csc_obs").value||"").trim();
@@ -952,7 +959,7 @@ function openRecibirConsignacion(id){
     }}
   ], "mini");
 }
-/* ---- Entregar consignación: en_ar → entregado (pasamanos al tercero) ---- */
+/* ---- Deliver consignment: en_ar → delivered (handoff to the owner) ---- */
 function entregarConsignacion(id){
   if(!isAdmin()){ toast("Only admins can deliver","warn"); return; }
   const cs = consignAll().find(x=>x.id===id); if(!cs) return;
@@ -973,18 +980,18 @@ function removeConsignacion(id){
 function remitoCardHTML(g){
   const open   = !!remitoOpen[g.key];
   const owners = g.ownerNames.length ? g.ownerNames.join(", ") : "\u2014";
-  const cur    = g.uTransito>0 ? 0 : 1;   // en transito -> paso 1 (idx 0); ya en AR -> paso 2 (idx 1)
+  const cur    = g.uTransito>0 ? 0 : 1;   // in transit -> step 1 (idx 0); already in AR -> step 2 (idx 1)
   const pills  = [
-    g.uTransito>0 ? `<span class="rl-pill">${qty(g.uTransito)} en tr\u00e1nsito</span>` : "",
-    g.uAr>0       ? `<span class="rl-pill ar">${qty(g.uAr)} en AR</span>` : ""
+    g.uTransito>0 ? `<span class="rl-pill">${qty(g.uTransito)} in transit</span>` : "",
+    g.uAr>0       ? `<span class="rl-pill ar">${qty(g.uAr)} in AR</span>` : ""
   ].filter(Boolean).join(" ");
   const head = `<div class="rl-rhead" data-remito-toggle="${esc(g.key)}">
       <span class="rl-caret">${open?"\u25be":"\u25b8"}</span>
       <div style="flex:1;min-width:0">
-        <div class="rl-code">${g.codigo?esc(g.codigo):esc(g.ref||"(sin ref)")}</div>
-        <div class="rl-meta">${g.codigo&&g.ref?esc(g.ref)+" \u00b7 ":""}${esc(fmtDate(g.fecha))} \u00b7 ${g.lineas.length} producto(s) \u00b7 ${qty(g.uTotal)} u</div>
+        <div class="rl-code">${g.codigo?esc(g.codigo):esc(g.ref||"(no ref)")}</div>
+        <div class="rl-meta">${g.codigo&&g.ref?esc(g.ref)+" \u00b7 ":""}${esc(fmtDate(g.fecha))} \u00b7 ${g.lineas.length} product(s) \u00b7 ${qty(g.uTotal)} u</div>
       </div>
-      <span class="rl-badge third">Tercero \u00b7 ${esc(owners)}</span>
+      <span class="rl-badge third">Third-party \u00b7 ${esc(owners)}</span>
     </div>`;
 
   const rows = g.lineas.map(cs=>`<tr>
@@ -994,10 +1001,10 @@ function remitoCardHTML(g){
       <td>${esc(terceroNombre(cs))}</td>
       <td class="c">${estadoPillMini(cs.estado)}</td>
       <td class="r num">${qty(cs.cantidad)}</td>
-      <td class="r"><button class="btn ghost xs" data-cs-del="${cs.id}" title="Sacar del seguimiento" style="color:var(--alert)">\u2715</button></td>
+      <td class="r"><button class="btn ghost xs" data-cs-del="${cs.id}" title="Remove from tracking" style="color:var(--alert)">\u2715</button></td>
     </tr>`).join("");
   const tabla = open ? `<div class="table-scroll" style="margin-bottom:10px"><table class="rm-tbl">
-      <thead><tr><th class="c"><input type="checkbox" class="rm-chkall" data-rmall="${esc(g.key)}"></th><th>SKU</th><th>Producto</th><th>Due\u00f1o</th><th class="c">Estado</th><th class="r">Unid.</th><th></th></tr></thead>
+      <thead><tr><th class="c"><input type="checkbox" class="rm-chkall" data-rmall="${esc(g.key)}"></th><th>SKU</th><th>Product</th><th>Owner</th><th class="c">State</th><th class="r">Units</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>` : "";
 
   const selHere     = g.lineas.filter(l=> remitoSel[l.id]);
@@ -1005,22 +1012,22 @@ function remitoCardHTML(g){
   const hasTransito = scopeLines.some(l=> l.estado===CONSIGN_ESTADOS.TRANSITO);
   const hasAr       = scopeLines.some(l=> l.estado===CONSIGN_ESTADOS.AR);
   const foot = `<div class="rl-foot">
-      <span class="rl-next">${selHere.length?`${selHere.length} tildada(s)`:"acci\u00f3n sobre todo el remito"}${hasAr?` \u00b7 <span class="rl-warn">\u26a0 el reparto emite remito A y toca stock</span>`:""}</span>
-      ${g.remitoId?`<button class="btn ghost sm" data-rm-pdf="${esc(g.remitoId)}" title="Descargar remito ${esc(g.codigo||"")}">\u2913 ${esc(g.codigo||"remito")}</button>`:""}
-      ${hasTransito?`<button class="btn up sm" data-rm-receive="${esc(g.key)}" title="Puerta 2 \u00b7 tr\u00e1nsito \u2192 AR">Recibir en AR \u25be</button>`:""}
-      ${hasAr?`<button class="btn up sm" data-rm-resolve="${esc(g.key)}" title="Repartir: comisi\u00f3n \u2192 Select \u00b7 resto \u2192 due\u00f1o">Resolver reparto \u25be</button>`:""}
+      <span class="rl-next">${selHere.length?`${selHere.length} selected`:"acting on the whole remito"}${hasAr?` \u00b7 <span class="rl-warn">\u26a0 resolving issues an A remito and moves stock</span>`:""}</span>
+      ${g.remitoId?`<button class="btn ghost sm" data-rm-pdf="${esc(g.remitoId)}" title="Download remito ${esc(g.codigo||"")}">\u2913 ${esc(g.codigo||"remito")}</button>`:""}
+      ${hasTransito?`<button class="btn up sm" data-rm-receive="${esc(g.key)}" title="Gate 2 \u00b7 transit \u2192 AR">Receive in AR \u25be</button>`:""}
+      ${hasAr?`<button class="btn up sm" data-rm-resolve="${esc(g.key)}" title="Split: commission \u2192 Select \u00b7 rest \u2192 owner">Resolve in AR \u25be</button>`:""}
     </div>`;
 
   return `<div class="rl-card">
     ${head}
-    ${rielHTML(["En tr\u00e1nsito<br>a AR","En AR<br>(en nuestras manos)","Resuelto<br>(split / entrega)"], cur)}
+    ${rielHTML([{icon:"plane",label:"In transit<br>to AR"},{icon:"pin",label:"In AR<br>(in our hands)"},{icon:"split",label:"Resolved<br>(split / delivery)"}], cur)}
     ${pills?`<div style="margin:0 2px 10px;display:flex;gap:6px;flex-wrap:wrap">${pills}</div>`:""}
     ${tabla}
     ${foot}
   </div>`;
 }
 
-/* ---- Recibir en AR las líneas EN TRÁNSITO del remito (courier compartido) ---- */
+/* ---- Receive in AR the IN-TRANSIT lines of the remito (shared courier) ---- */
 function openRecibirRemito(key){
   if(!isAdmin()){ toast("Only admins can receive stock","warn"); return; }
   const lines = remitoTargetLines(key, CONSIGN_ESTADOS.TRANSITO);
@@ -1041,9 +1048,9 @@ function openRecibirRemito(key){
         </div>
       </div>
     </div>`;
-  buildModal("Recibir en AR · terceros", body, [
-    {label:"Cancelar",cls:"btn",act:closeModal},
-    {label:"Recibir · "+qty(totalU)+" u",cls:"btn up",act:()=>{
+  buildModal("Receive in AR · third-party", body, [
+    {label:"Cancel",cls:"btn",act:closeModal},
+    {label:"Receive · "+qty(totalU)+" u",cls:"btn up",act:()=>{
       const tot = Math.max(0,parseNum(document.getElementById("rr_c").value)||0);
       const perU = totalU>0 ? round2(tot/totalU) : 0;
       const obs = (document.getElementById("rr_obs").value||"").trim();
@@ -1055,11 +1062,11 @@ function openRecibirRemito(key){
   wireLegPreview("rr_c", totalU);
 }
 
-/* ---- Resolver en AR: repartir cada línea del remito entre Select (comisión
-   nuestra) y el tercero (dueño). Si hay REPARTO (algo a Select Y algo al tercero)
-   se emiten DOS remitos A citando al U: uno para el tercero (con costo acumulado
-   + markup = lo que se cobra) y uno para Select (ingreso a nuestro stock). Si va
-   todo a un solo lado, NO se emite A. ---- */
+/* ---- Resolve in AR: split each remito line between Select (our
+   commission) and the owner. If there's a SPLIT (something to Select AND something to the owner)
+   TWO A remitos are issued citing the U: one for the owner (with accumulated cost
+   + markup = what's charged) and one for Select (enters our stock). If it goes
+   all to a single side, NO A is issued. ---- */
 function openResolverAR(key){
   if(!isAdmin()){ toast("Only admins can move stock","warn"); return; }
   const lines = remitoTargetLines(key, CONSIGN_ESTADOS.AR);
@@ -1078,7 +1085,7 @@ function openResolverAR(key){
   }).join("");
   const body = `
     <p class="hint" style="margin:0 0 10px">Split each product between <b>${esc(storeName(store))}</b> (our commission — enters our sellable stock) and the <b>owner</b> (their goods — delivered, never our stock). The owner is charged the <b>accumulated cost + markup</b>. A split issues two <b>A</b> remitos citing the U; all-to-one-side issues none.</p>
-    <div class="table-scroll" style="max-height:230px;margin-bottom:12px"><table class="rm-tbl">
+    <div class="table-scroll" style="margin-bottom:14px"><table class="rm-tbl">
       <thead><tr><th>Product</th><th class="r">In AR</th><th style="width:84px">→ Select</th><th class="r" style="width:70px">→ Owner</th><th class="r">Acc. cost</th><th style="width:104px">Select cost/u</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
@@ -1086,17 +1093,17 @@ function openResolverAR(key){
       <div class="field"><label>Owner markup <span class="hint" style="font-weight:400">· % over accumulated cost, optional</span></label><input class="inp num" id="res_mk" value="0" inputmode="decimal"><div class="leg-pu hint" id="res_mk_pu">no markup</div></div>
       <div class="field" style="grid-column:1/-1"><label>Notes</label><input class="inp" id="res_obs" placeholder="e.g. split reason"></div>
     </div>`;
-  buildModal("Resolver reparto · "+esc(store===STORE_IDS[1]?storeName(store):"AR"), body, [
-    {label:"Cancelar",cls:"btn",act:closeModal},
-    {label:"Resolver",cls:"btn up",act:()=>{
-      // contexto del U (antes de mutar)
+  buildModal("Resolve in AR · "+esc(store===STORE_IDS[1]?storeName(store):"AR"), body, [
+    {label:"Cancel",cls:"btn",act:closeModal},
+    {label:"Resolve",cls:"btn up",act:()=>{
+      // U context (before mutating)
       const remId  = lines[0] && lines[0].remitoId || null;
       const conjId = lines[0] && lines[0].conjuntaId || null;
       const uRemito = remId ? remitoById(remId) : null;
       const uCodigo = uRemito ? uRemito.codigo : ((lines[0]&&lines[0].remitoCodigo)||"U");
       const mkPct = Math.max(0, parseNum(document.getElementById("res_mk").value)||0);
       const obs   = (document.getElementById("res_obs").value||"").trim();
-      // total a Select para prorratear el extra
+      // total to Select to prorate the extra
       let totalSelU=0;
       lines.forEach((cs,i)=>{ totalSelU += Math.min(Math.max(0,parseNum(document.getElementById("rq_"+i).value)||0), cs.cantidad); });
       const extraTot = Math.max(0,parseNum(document.getElementById("res_extra").value)||0);
@@ -1109,26 +1116,26 @@ function openResolverAR(key){
         const sel  = Math.min(Math.max(0,parseNum(document.getElementById("rq_"+i).value)||0), inAr);
         const ter  = round4(inAr - sel);
         const acc  = round2((cs.costoUnit||0)+(cs.costoCourierUnit||0));
-        // 1) lo del tercero: cobro = costo acumulado + markup (se calcula ANTES de mutar)
+        // 1) the owner's part: charge = accumulated cost + markup (computed BEFORE mutating)
         if(ter>0){
           const chargeU = round2(acc*(1+mkPct/100));
           terLines.push({ productoId:cs.productoId, sku:cs.sku, nombre:cs.nombre, cantidad:ter, rol:"third", owner:terceroNombre(cs), costoUnit:acc, charge:chargeU });
           terU += ter;
         }
-        // 2) lo nuestro a Select: ingresa al stock (reduce la consignación / la cierra)
+        // 2) ours to Select: enters stock (reduces the consignment / closes it)
         if(sel>0){
           const cost = round2((parseNum(document.getElementById("rc_"+i).value)||0) + extraPU);
           const kept = quedarseParaSelect(cs.id, sel, cost, obs);
           if(kept>0){ selLines.push({ productoId:cs.productoId, sku:cs.sku, nombre:cs.nombre, cantidad:kept, rol:"select", owner:terceroNombre(cs), costoUnit:cost }); selU += kept; }
         }
-        // 3) entregar al tercero lo que le queda a la consignación (lo no retenido)
+        // 3) deliver to the owner what remains of the consignment (the non-kept part)
         if(ter>0){ avanzarConsignacion(cs.id, { obs:"delivered (resolve)" }); }
         delete remitoSel[cs.id];
       });
 
       if(selU<=0 && terU<=0){ toast("Nothing to resolve","warn"); return; }
 
-      // Dos remitos A SÓLO si hubo REPARTO (algo a Select Y algo al tercero)
+      // Two A remitos ONLY if there was a SPLIT (something to Select AND something to the owner)
       let aSel=null, aTer=null;
       if(selU>0 && terU>0){
         const origen = uRemito ? { id:uRemito.id, codigo:uRemito.codigo } : { id:null, codigo:uCodigo };
@@ -1138,7 +1145,7 @@ function openResolverAR(key){
       save(); closeModal();
       if(aSel && aTer){
         toast(`Split ${uCodigo} → ${aTer.codigo} (owner) + ${aSel.codigo} (Select) · in Remitos`,"up");
-        // Ambos remitos A quedan guardados y se descargan desde la sección Remitos.
+        // Both A remitos are saved and downloaded from the Remitos section.
       } else if(selU>0){
         toast(`Kept ${qty(selU)} u for ${storeName(store)} · no split, no A`,"up");
       } else {
@@ -1147,7 +1154,7 @@ function openResolverAR(key){
       render();
     }}
   ], "wide");
-  // previews en vivo: "→ Owner" por fila, extra prorrateado y markup
+  // live previews: "→ Owner" per row, prorated extra and markup
   const recalc=()=>{
     let t=0;
     lines.forEach((cs,i)=>{
@@ -1163,7 +1170,7 @@ function openResolverAR(key){
   recalc();
 }
 
-/* Wireo de la vista (lo llama wire() en 16-view-datos.js). */
+/* View wiring (called by wire() in 16-view-datos.js). */
 function wireConjunta(){
   const m = document.getElementById("main"); if(!m) return;
   const nb = m.querySelector("[data-new-conj]"); if(nb) nb.onclick=()=> openConjunta();
@@ -1178,9 +1185,9 @@ function wireConjunta(){
   m.querySelectorAll("[data-cs-recib]").forEach(b=> b.onclick=()=> openRecibirConsignacion(b.dataset.csRecib));
   m.querySelectorAll("[data-cs-entregar]").forEach(b=> b.onclick=()=> entregarConsignacion(b.dataset.csEntregar));
   m.querySelectorAll("[data-cs-del]").forEach(b=> b.onclick=()=> removeConsignacion(b.dataset.csDel));
-  // Contadores clickeables: llevan a la seccion correspondiente
+  // clickable counters: scroll to the matching section
   m.querySelectorAll("[data-scroll]").forEach(c=> c.onclick=()=>{ const el=document.getElementById(c.dataset.scroll); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); });
-  // --- Vista por remito ---
+  // --- per-remito view ---
   m.querySelectorAll("[data-remito-toggle]").forEach(h=> h.onclick=()=>{ const k=h.dataset.remitoToggle; remitoOpen[k]=!remitoOpen[k]; render(); });
   m.querySelectorAll("[data-rmsel]").forEach(cb=> cb.onchange=()=>{ if(cb.checked) remitoSel[cb.dataset.rmsel]=true; else delete remitoSel[cb.dataset.rmsel]; render(); });
   m.querySelectorAll("[data-rmall]").forEach(cb=> cb.onchange=()=>{
