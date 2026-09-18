@@ -134,31 +134,31 @@ function wireSortHeaders(f){
 function filterBarHTML(prefix, f){
   const sagas=sagasUnicas();
   return `<div class="filtros">
-    <input class="inp" id="${prefix}q" placeholder="Search by name or SKU…" value="${esc(f.q)}" style="flex:2;min-width:180px">
+    <input class="inp" id="${prefix}q" placeholder="${t("dash.f.search")}" value="${esc(f.q)}" style="flex:2;min-width:180px">
     <select class="inp" id="${prefix}saga" style="flex:1;min-width:120px">
-      <option value="">All lines</option>
+      <option value="">${t("dash.f.alllines")}</option>
       ${sagas.map(s=>`<option value="${esc(s)}" ${f.saga===s?"selected":""}>${esc(s)}</option>`).join("")}
     </select>
     <select class="inp" id="${prefix}idioma" style="flex:1;min-width:100px">
-      <option value="">All languages</option>
+      <option value="">${t("dash.f.alllang")}</option>
       ${LANGS.map(([v,l])=>`<option value="${v}" ${f.idioma===v?"selected":""}>${esc(l)}</option>`).join("")}
     </select>
     <select class="inp" id="${prefix}estado" style="flex:1;min-width:120px">
-      <option value="" ${f.estado===""?"selected":""}>All stock</option>
-      <option value="pedir" ${f.estado==="pedir"?"selected":""}>To reorder</option>
-      <option value="con" ${f.estado==="con"?"selected":""}>In stock</option>
-      <option value="sin" ${f.estado==="sin"?"selected":""}>Out of stock</option>
-      <option value="bajo" ${f.estado==="bajo"?"selected":""}>Below min</option>
-      <option value="blocked" ${f.estado==="blocked"?"selected":""}>Blocked</option>
+      <option value="" ${f.estado===""?"selected":""}>${t("dash.f.allstock")}</option>
+      <option value="pedir" ${f.estado==="pedir"?"selected":""}>${t("dash.f.reorder")}</option>
+      <option value="con" ${f.estado==="con"?"selected":""}>${t("dash.f.instock")}</option>
+      <option value="sin" ${f.estado==="sin"?"selected":""}>${t("dash.f.outstock")}</option>
+      <option value="bajo" ${f.estado==="bajo"?"selected":""}>${t("dash.f.belowmin")}</option>
+      <option value="blocked" ${f.estado==="blocked"?"selected":""}>${t("dash.f.blocked")}</option>
     </select>
-    <select class="inp" id="${prefix}xstate" style="flex:1;min-width:120px" title="Available vs. incoming (in transit)">
-      <option value="" ${(f.xstate||"")===""?"selected":""}>Avail. + in transit</option>
-      <option value="avail" ${f.xstate==="avail"?"selected":""}>Available only</option>
-      <option value="transit" ${f.xstate==="transit"?"selected":""}>In transit only</option>
+    <select class="inp" id="${prefix}xstate" style="flex:1;min-width:120px" title="${t("dash.f.availtip")}">
+      <option value="" ${(f.xstate||"")===""?"selected":""}>${t("dash.f.availtransit")}</option>
+      <option value="avail" ${f.xstate==="avail"?"selected":""}>${t("dash.f.availonly")}</option>
+      <option value="transit" ${f.xstate==="transit"?"selected":""}>${t("dash.f.transitonly")}</option>
     </select>
-    <input class="inp num" id="${prefix}cmin" placeholder="Min cost" value="${esc(f.cmin)}" style="width:90px">
-    <input class="inp num" id="${prefix}cmax" placeholder="Max cost" value="${esc(f.cmax)}" style="width:90px">
-    <button class="btn ghost sm" id="${prefix}clear" title="Clear filters">Clear</button>
+    <input class="inp num" id="${prefix}cmin" placeholder="${t("dash.f.mincost")}" value="${esc(f.cmin)}" style="width:90px">
+    <input class="inp num" id="${prefix}cmax" placeholder="${t("dash.f.maxcost")}" value="${esc(f.cmax)}" style="width:90px">
+    <button class="btn ghost sm" id="${prefix}clear" title="${t("dash.f.cleartip")}">${t("dash.f.clear")}</button>
   </div>`;
 }
 function wireFilterBar(prefix, f, onChange){
@@ -182,7 +182,7 @@ function irAPedidos(){
   descartarAlerta(firmaReposicion());
   Object.assign(prodFiltros, { q:"", saga:"", idioma:"", estado:"pedir", xstate:"", cmin:"", cmax:"", sortKey:"stock", sortDir:"asc" });
   setView("prod");
-  toast("Filtering products to reorder","warn");
+  toast(t("dash.toast.reorder"),"warn");
 }
 function viewDash(){
   const vend = productosVendibles().filter(enFocoActual);
@@ -191,43 +191,43 @@ function viewDash(){
   const bajoM  = vend.filter(p=> stockEnFoco(p)>0 && bajoStock(p));
   const porPedir = vend.filter(necesitaPedido);
   const subAlerta = porPedir.length
-    ? [ enCero.length?`${enCero.length} out of stock`:"", negs.length?`${negs.length} negative`:"", bajoM.length?`${bajoM.length} below min`:"" ].filter(Boolean).join(" · ")
-    : "all good";
+    ? [ enCero.length?`${enCero.length} ${t("dash.sub.outofstock")}`:"", negs.length?`${negs.length} ${t("dash.sub.negative")}`:"", bajoM.length?`${bajoM.length} ${t("dash.sub.belowmin")}`:"" ].filter(Boolean).join(" · ")
+    : t("dash.sub.allgood");
   const firma = firmaReposicion();
   if(!porPedir.length) limpiarMemoriaAlerta();
   const mostrarBanner = porPedir.length && !alertaDescartada(firma);
   const consolidado = !viewUsesSociety() || activeStore==="all";
-  const foco = consolidado ? "consolidated" : storeName(activeStore);
+  const foco = consolidado ? t("dash.consolidated") : storeName(activeStore);
   const multi = allowedStores().length>1;
   const cc = isAdmin() && STORE_IDS.length>1;
   let heroHTML;
   if(cc){ heroHTML = housesHTML(); }
   else { heroHTML = `  <div class="kpis">
-    <div class="kpi"><div class="lbl">Products</div><div class="val">${vend.length}</div><div class="sub">sellable SKUs</div></div>
-    <div class="kpi"><div class="lbl">Units in stock</div><div class="val">${qty(unidadesTotales())}</div><div class="sub">${esc(foco)}</div></div>
-    <div class="kpi"><div class="lbl">Valuation</div><div class="val">${money(valorizacion())}</div><div class="sub">FIFO cost layers</div></div>
-    ${unidadesEnTransito()>0?`<div class="kpi"><div class="lbl">In transit</div><div class="val">${qty(unidadesEnTransito())}</div><div class="sub">incoming · ${money(vend.reduce((a,p)=>a+transitoValorEnFoco(p),0))}</div></div>`:""}
-    <div class="kpi ${porPedir.length?'warn kpi-click':''}" ${porPedir.length?'data-goto-pedir role="button" tabindex="0" title="See the reorder list"':''}><div class="lbl">Alerts</div><div class="val">${porPedir.length}</div><div class="sub">${subAlerta}</div></div>
+    <div class="kpi"><div class="lbl">${t("dash.kpi.products")}</div><div class="val">${vend.length}</div><div class="sub">${t("dash.kpi.sellableskus")}</div></div>
+    <div class="kpi"><div class="lbl">${t("dash.kpi.unitsstock")}</div><div class="val">${qty(unidadesTotales())}</div><div class="sub">${esc(foco)}</div></div>
+    <div class="kpi"><div class="lbl">${t("dash.kpi.valuation")}</div><div class="val">${money(valorizacion())}</div><div class="sub">${t("dash.kpi.fifolayers")}</div></div>
+    ${unidadesEnTransito()>0?`<div class="kpi"><div class="lbl">${t("dash.kpi.transit")}</div><div class="val">${qty(unidadesEnTransito())}</div><div class="sub">${t("dash.kpi.incoming")} · ${money(vend.reduce((a,p)=>a+transitoValorEnFoco(p),0))}</div></div>`:""}
+    <div class="kpi ${porPedir.length?'warn kpi-click':''}" ${porPedir.length?'data-goto-pedir role="button" tabindex="0" title="${t("dash.kpi.reordertip")}"':''}><div class="lbl">${t("dash.kpi.alerts")}</div><div class="val">${porPedir.length}</div><div class="sub">${subAlerta}</div></div>
   </div>`; }
 
   return `
   <div class="head">
-    <div class="title"><h2>Dashboard</h2><p>Sellable stock valued at FIFO cost${multi?` · <b>${esc(foco)}</b>`:""}.</p></div>
+    <div class="title"><h2>${t("dash.title")}</h2><p>${t("dash.subtitle")}${multi?` · <b>${esc(foco)}</b>`:""}.</p></div>
     <div class="actions">
-      ${puedeComprar()?`<button class="btn up" data-open="compra">+ New purchase</button>`:""}
-      <button class="btn down" data-open="venta">− New sale</button>
+      ${puedeComprar()?`<button class="btn up" data-open="compra">${t("dash.newpurchase")}</button>`:""}
+      <button class="btn down" data-open="venta">${t("dash.newsale")}</button>
     </div>
   </div>
 
-  ${mostrarBanner ? `<div class="banner warn alerta-pedido" data-goto-pedir role="button" tabindex="0" title="See the reorder list">
+  ${mostrarBanner ? `<div class="banner warn alerta-pedido" data-goto-pedir role="button" tabindex="0" title="${t("dash.kpi.reordertip")}">
     <span aria-hidden="true">⚠</span>
-    <span><b>${porPedir.length}</b> product${porPedir.length>1?"s":""} to reorder${subAlerta&&subAlerta!=="all good"?` — ${subAlerta}`:""}. <u>Tap to see what to order.</u></span>
+    <span><b>${porPedir.length}</b> ${t("dash.banner.prodreorder")}${porPedir.length&&subAlerta?` — ${subAlerta}`:""}. <u>${t("dash.banner.tap")}</u></span>
   </div>` : ""}
 
   ${heroHTML}
 
   <div class="panel">
-    <div class="phead"><h3>Stock on hand</h3><span class="hint" id="dashCount">tap a product to see its history</span></div>
+    <div class="phead"><h3>${t("dash.stockonhand")}</h3><span class="hint" id="dashCount">${t("dash.taphistory")}</span></div>
     ${vend.length ? `
     ${filterBarHTML("f", dashFiltros)}
     <div class="table-scroll"><table>
@@ -287,10 +287,10 @@ function renderDashRows(){
       <td class="r num">${money(costo)}</td>
       <td class="r num">${money(val)}</td>
     </tr>`;
-  }).join("") || `<tr><td colspan="${colspan}" style="text-align:center;color:var(--muted);padding:22px">No product matches the filters.</td></tr>`;
+  }).join("") || `<tr><td colspan="${colspan}" style="text-align:center;color:var(--muted);padding:22px">${t("dash.nomatch")}</td></tr>`;
   const cnt=document.getElementById("dashCount");
   const total=productosVendibles().length;
-  if(cnt) cnt.textContent = list.length===total ? "tap a product to see its history" : `showing ${list.length} of ${total}`;
+  if(cnt) cnt.textContent = list.length===total ? t("dash.taphistory") : t("dash.showing",{n:list.length,total});
   body.querySelectorAll("[data-ficha]").forEach(tr=> tr.onclick=()=> openFicha(tr.dataset.ficha));
 }
 function wireDashFiltros(){
@@ -322,23 +322,23 @@ function housesHTML(){
     const flag = storeCcy(s)==="USD" ? "US" : "AR";
     const list = topProdsStore(s,3).map(o=>
       `<div class="li"><span>${esc(o.p.nombre)} <span class="sku">${esc(o.p.sku||"—")}</span></span><span class="q">${qty(o.u)}</span></div>`
-    ).join("") || `<div class="li" style="color:var(--muted)">No stock yet.</div>`;
+    ).join("") || `<div class="li" style="color:var(--muted)">${t("dash.nostock")}</div>`;
     return `<div class="house">
       <div class="hh"><span class="flag">${flag}</span><span class="nm">${esc(storeName(s))}</span><span class="cc">${storeCcy(s)}</span></div>
       <div class="hrow">
-        <div class="stat"><div class="l">Valued (FIFO)</div><div class="v">${money(val, storeCcy(s))}</div></div>
-        <div class="stat"><div class="l">Units</div><div class="v">${qty(un)}</div></div>
-        <div class="stat"><div class="l">SKUs</div><div class="v">${qty(sk)}</div></div>
+        <div class="stat"><div class="l">${t("dash.valuedfifo")}</div><div class="v">${money(val, storeCcy(s))}</div></div>
+        <div class="stat"><div class="l">${t("common.units")}</div><div class="v">${qty(un)}</div></div>
+        <div class="stat"><div class="l">${t("dash.skus")}</div><div class="v">${qty(sk)}</div></div>
       </div>
       <div class="hlist">${list}</div>
     </div>`;
   }).join("");
   const enTr = unidadesEnTransito();
   const strip = enTr>0 ? `<div class="panel" data-goto-transit role="button" tabindex="0" style="cursor:pointer;margin-bottom:22px">
-      <div class="phead"><h3>In transit → AR</h3><span class="hint">tap to open Joint / Transit</span></div>
+      <div class="phead"><h3>${t("dash.transit.title")}</h3><span class="hint">${t("dash.transit.tap")}</span></div>
       <div style="display:flex;gap:34px;padding:14px 18px">
-        <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600;margin-bottom:5px">Incoming units</div><div style="font-size:22px;font-weight:800;font-variant-numeric:tabular-nums">${qty(enTr)}</div></div>
-        <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600;margin-bottom:5px">Value (report)</div><div style="font-size:22px;font-weight:800;font-variant-numeric:tabular-nums">${money(productosVendibles().reduce((a,p)=>a+transitoValorEnFoco(p),0))}</div></div>
+        <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600;margin-bottom:5px">${t("dash.incomingunits")}</div><div style="font-size:22px;font-weight:800;font-variant-numeric:tabular-nums">${qty(enTr)}</div></div>
+        <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600;margin-bottom:5px">${t("dash.valuereport")}</div><div style="font-size:22px;font-weight:800;font-variant-numeric:tabular-nums">${money(productosVendibles().reduce((a,p)=>a+transitoValorEnFoco(p),0))}</div></div>
       </div></div>` : "";
   return `<div class="houses">${houses}</div>${strip}`;
 }

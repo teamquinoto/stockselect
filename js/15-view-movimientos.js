@@ -13,33 +13,33 @@ function viewMov(){
   const showStore = allowedStores().length>1;
   return `
   <div class="head">
-    <div class="title"><h2>Movements</h2><p>Traceability of every entry, exit and adjustment, with its source document and society.</p></div>
-    <div class="actions">${puedeAjustar()?`<button class="btn" data-adjust>⇄ Inventory adjustment</button>`:""}</div>
+    <div class="title"><h2>${t("mov.title")}</h2><p>${t("mov.subtitle")}</p></div>
+    <div class="actions">${puedeAjustar()?`<button class="btn" data-adjust>${t("mov.adjustbtn")}</button>`:""}</div>
   </div>
   <div class="panel">
-    <div class="phead"><h3>Kardex</h3><span class="hint" id="movCount">${movs.length} entries</span></div>
+    <div class="phead"><h3>Kardex</h3><span class="hint" id="movCount">${movs.length} ${t("mov.entries")}</span></div>
     ${movs.length ? `
     <div class="filtros compact">
-      <input class="inp" id="mq" placeholder="Search product, SKU or source…" value="${esc(movFiltros.q)}">
+      <input class="inp" id="mq" placeholder="${t("mov.search")}" value="${esc(movFiltros.q)}">
       <select class="inp" id="mtipo">
-        <option value="" ${movFiltros.tipo===""?"selected":""}>Any type</option>
-        <option value="entrada" ${movFiltros.tipo==="entrada"?"selected":""}>Entries</option>
-        <option value="salida" ${movFiltros.tipo==="salida"?"selected":""}>Exits</option>
-        <option value="ajuste" ${movFiltros.tipo==="ajuste"?"selected":""}>Adjustments</option>
-        <option value="inv" ${movFiltros.tipo==="inv"?"selected":""}>Investments</option>
+        <option value="" ${movFiltros.tipo===""?"selected":""}>${t("mov.anytype")}</option>
+        <option value="entrada" ${movFiltros.tipo==="entrada"?"selected":""}>${t("mov.opt.entries")}</option>
+        <option value="salida" ${movFiltros.tipo==="salida"?"selected":""}>${t("mov.opt.exits")}</option>
+        <option value="ajuste" ${movFiltros.tipo==="ajuste"?"selected":""}>${t("mov.opt.adjustments")}</option>
+        <option value="inv" ${movFiltros.tipo==="inv"?"selected":""}>${t("mov.opt.investments")}</option>
       </select>
       <select class="inp" id="msaga">
-        <option value="">All lines</option>
+        <option value="">${t("dash.f.alllines")}</option>
         ${sagas.map(s=>`<option value="${esc(s)}" ${movFiltros.saga===s?"selected":""}>${esc(s)}</option>`).join("")}
       </select>
-      <span class="fdate">From<input class="inp" id="mdesde" type="date" value="${esc(movFiltros.desde)}"></span>
-      <span class="fdate">To<input class="inp" id="mhasta" type="date" value="${esc(movFiltros.hasta)}"></span>
-      <input class="inp num" id="mvmin" placeholder="Min value" value="${esc(movFiltros.vmin)}" style="width:86px">
-      <input class="inp num" id="mvmax" placeholder="Max value" value="${esc(movFiltros.vmax)}" style="width:86px">
-      <button class="btn ghost sm" id="mclear">Clear</button>
+      <span class="fdate">${t("mov.from")}<input class="inp" id="mdesde" type="date" value="${esc(movFiltros.desde)}"></span>
+      <span class="fdate">${t("mov.to")}<input class="inp" id="mhasta" type="date" value="${esc(movFiltros.hasta)}"></span>
+      <input class="inp num" id="mvmin" placeholder="${t("mov.minval")}" value="${esc(movFiltros.vmin)}" style="width:86px">
+      <input class="inp num" id="mvmax" placeholder="${t("mov.maxval")}" value="${esc(movFiltros.vmax)}" style="width:86px">
+      <button class="btn ghost sm" id="mclear">${t("dash.f.clear")}</button>
     </div>
     <div class="feed" id="movBody"></div>`
-      : emptyState("No movements yet","Every purchase, sale or adjustment leaves its trace here.")}
+      : emptyState(t("mov.empty.title"),t("mov.empty.sub"))}
   </div>`;
 }
 function filtrarMovs(){
@@ -101,11 +101,11 @@ function renderMovRows(){
     const up=signed>=0;
     const d=new Date(m.fecha);
     const fecha=d.toLocaleDateString("en-US")+" "+d.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit",hour12:false});
-    const pill=isInv?`<span class="pill inv">◈ ${m.tipo==="inv-out"?"to vault":"from vault"}</span>`
-               :isAdj?`<span class="pill adj">⇄ adjust</span>`
-               :`<span class="pill ${up?'in':'out'}">${up?'↑ in':'↓ out'}</span>`;
+    const pill=isInv?`<span class="pill inv">◈ ${m.tipo==="inv-out"?t("mov.tovault"):t("mov.fromvault")}</span>`
+               :isAdj?`<span class="pill adj">⇄ ${t("mov.adjust")}</span>`
+               :`<span class="pill ${up?'in':'out'}">${up?t("mov.in"):t("mov.out")}</span>`;
     const deltaCls=isAdj?"flat":(up?'up':'down');
-    const accion=isAdj?`<button class="btn ghost sm" data-delaj="${m.id}" style="color:var(--alert)" title="Delete adjustment">${ICO.trash}</button>`:"";
+    const accion=isAdj?`<button class="btn ghost sm" data-delaj="${m.id}" style="color:var(--alert)" title="${t("mov.deladjust")}">${ICO.trash}</button>`:"";
     return `<div class="fitem">
       <div class="ftime">${fecha}</div>
       <div class="fmain">
@@ -117,7 +117,7 @@ function renderMovRows(){
         <div class="fval">${money(m.valorUnit, storeCcy(m.store))}${accion?` &nbsp;${accion}`:""}</div>
       </div>
     </div>`;
-  }).join("") || `<div class="fitem" style="display:block;text-align:center;color:var(--muted);padding:22px">No movement matches the filters.</div>`;
+  }).join("") || `<div class="fitem" style="display:block;text-align:center;color:var(--muted);padding:22px">${t("mov.nomatch")}</div>`;
   const cnt=document.getElementById("movCount");
   const totalF=db.movimientos.filter(m=>!m.store||effectiveStores().includes(m.store)).length;
   if(cnt) cnt.textContent = (all.length===totalF?`${totalF} entries`:`${all.length} of ${totalF}`)+(list.length<all.length?` · showing 400`:"");
@@ -160,6 +160,6 @@ function deleteAjuste(id){
   if(!confirm(msg)) return;
   if(p) p.stock = +((p.stock||0) - d).toFixed(4);
   db.movimientos = db.movimientos.filter(x=>x.id!==id);
-  save(); toast("Adjustment deleted","warn"); render();
+  save(); toast(t("mov.toast.deleted"),"warn"); render();
 }
 

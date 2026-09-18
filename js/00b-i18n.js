@@ -79,7 +79,33 @@ var I18N = {
     "conj.mv.sent":"→ sent", "conj.mv.recv":"← received", "conj.mv.comm":"commission in", "conj.mv.kept":"kept for Select", "conj.mv.wo":"write-off",
     "conj.hist.title":"Joint buys (history)", "conj.hist.hint":"old flow · read-only",
     "conj.h.ref":"Ref", "conj.h.order":"Order", "conj.h.third":"Third-party",
-    "conj.remito.tip":"Internal transfer note (US→AR)", "conj.empty.hist":"No joint buys loaded yet."
+    "conj.remito.tip":"Internal transfer note (US→AR)", "conj.empty.hist":"No joint buys loaded yet.",
+    // --- Dashboard ---
+    "dash.f.search":"Search by name or SKU…", "dash.f.alllines":"All lines", "dash.f.alllang":"All languages",
+    "dash.f.allstock":"All stock", "dash.f.reorder":"To reorder", "dash.f.instock":"In stock", "dash.f.outstock":"Out of stock",
+    "dash.f.belowmin":"Below min", "dash.f.blocked":"Blocked", "dash.f.availtip":"Available vs. incoming (in transit)",
+    "dash.f.availtransit":"Avail. + in transit", "dash.f.availonly":"Available only", "dash.f.transitonly":"In transit only",
+    "dash.f.mincost":"Min cost", "dash.f.maxcost":"Max cost", "dash.f.cleartip":"Clear filters", "dash.f.clear":"Clear",
+    "dash.toast.reorder":"Filtering products to reorder",
+    "dash.kpi.products":"Products", "dash.kpi.sellableskus":"sellable SKUs", "dash.kpi.unitsstock":"Units in stock",
+    "dash.kpi.valuation":"Valuation", "dash.kpi.fifolayers":"FIFO cost layers", "dash.kpi.transit":"In transit",
+    "dash.kpi.incoming":"incoming", "dash.kpi.alerts":"Alerts", "dash.kpi.reordertip":"See the reorder list",
+    "dash.sub.outofstock":"out of stock", "dash.sub.negative":"negative", "dash.sub.belowmin":"below min", "dash.sub.allgood":"all good",
+    "dash.title":"Dashboard", "dash.subtitle":"Sellable stock valued at FIFO cost", "dash.newpurchase":"+ New purchase", "dash.newsale":"− New sale",
+    "dash.banner.prodreorder":"product(s) to reorder", "dash.banner.tap":"Tap to see what to order.",
+    "dash.stockonhand":"Stock on hand", "dash.taphistory":"tap a product to see its history",
+    "dash.nomatch":"No product matches the filters.", "dash.nostock":"No stock yet.",
+    "dash.valuedfifo":"Valued (FIFO)", "dash.skus":"SKUs", "dash.transit.title":"In transit → AR",
+    "dash.transit.tap":"tap to open Joint / Transit", "dash.incomingunits":"Incoming units", "dash.valuereport":"Value (report)",
+    "dash.consolidated":"consolidated", "dash.showing":"showing {n} of {total}",
+    // --- Movements ---
+    "mov.title":"Movements", "mov.subtitle":"Traceability of every entry, exit and adjustment, with its source document and society.",
+    "mov.adjustbtn":"⇄ Inventory adjustment", "mov.entries":"entries", "mov.search":"Search product, SKU or source…",
+    "mov.anytype":"Any type", "mov.opt.entries":"Entries", "mov.opt.exits":"Exits", "mov.opt.adjustments":"Adjustments", "mov.opt.investments":"Investments",
+    "mov.from":"From", "mov.to":"To", "mov.minval":"Min value", "mov.maxval":"Max value",
+    "mov.empty.title":"No movements yet", "mov.empty.sub":"Every purchase, sale or adjustment leaves its trace here.",
+    "mov.tovault":"to vault", "mov.fromvault":"from vault", "mov.adjust":"adjust", "mov.in":"↑ in", "mov.out":"↓ out",
+    "mov.deladjust":"Delete adjustment", "mov.nomatch":"No movement matches the filters.", "mov.toast.deleted":"Adjustment deleted"
   },
   es: {
     "sec.op":"Operaciones", "sec.cat":"Cat\u00e1logo", "sec.fin":"Finanzas", "sec.dat":"Datos",
@@ -137,7 +163,33 @@ var I18N = {
     "conj.mv.sent":"→ enviado", "conj.mv.recv":"← recibido", "conj.mv.comm":"comisi\u00f3n (ingreso)", "conj.mv.kept":"retenido para Select", "conj.mv.wo":"merma",
     "conj.hist.title":"Compras conjuntas (hist\u00f3rico)", "conj.hist.hint":"flujo viejo · s\u00f3lo lectura",
     "conj.h.ref":"Ref", "conj.h.order":"Pedido", "conj.h.third":"Tercero",
-    "conj.remito.tip":"Remito interno (US→AR)", "conj.empty.hist":"No hay compras conjuntas cargadas."
+    "conj.remito.tip":"Remito interno (US→AR)", "conj.empty.hist":"No hay compras conjuntas cargadas.",
+    // --- Panel ---
+    "dash.f.search":"Buscar por nombre o SKU…", "dash.f.alllines":"Todas las l\u00edneas", "dash.f.alllang":"Todos los idiomas",
+    "dash.f.allstock":"Todo el stock", "dash.f.reorder":"Para reponer", "dash.f.instock":"Con stock", "dash.f.outstock":"Sin stock",
+    "dash.f.belowmin":"Bajo m\u00ednimo", "dash.f.blocked":"Bloqueado", "dash.f.availtip":"Disponible vs. en camino (en tr\u00e1nsito)",
+    "dash.f.availtransit":"Disp. + en tr\u00e1nsito", "dash.f.availonly":"S\u00f3lo disponible", "dash.f.transitonly":"S\u00f3lo en tr\u00e1nsito",
+    "dash.f.mincost":"Costo m\u00edn", "dash.f.maxcost":"Costo m\u00e1x", "dash.f.cleartip":"Limpiar filtros", "dash.f.clear":"Limpiar",
+    "dash.toast.reorder":"Filtrando productos para reponer",
+    "dash.kpi.products":"Productos", "dash.kpi.sellableskus":"SKUs vendibles", "dash.kpi.unitsstock":"Unidades en stock",
+    "dash.kpi.valuation":"Valuaci\u00f3n", "dash.kpi.fifolayers":"capas de costo FIFO", "dash.kpi.transit":"En tr\u00e1nsito",
+    "dash.kpi.incoming":"en camino", "dash.kpi.alerts":"Alertas", "dash.kpi.reordertip":"Ver la lista de reposici\u00f3n",
+    "dash.sub.outofstock":"sin stock", "dash.sub.negative":"en negativo", "dash.sub.belowmin":"bajo m\u00ednimo", "dash.sub.allgood":"todo en orden",
+    "dash.title":"Panel", "dash.subtitle":"Stock vendible valuado a costo FIFO", "dash.newpurchase":"+ Nueva compra", "dash.newsale":"− Nueva venta",
+    "dash.banner.prodreorder":"producto(s) para reponer", "dash.banner.tap":"Toc\u00e1 para ver qu\u00e9 pedir.",
+    "dash.stockonhand":"Stock disponible", "dash.taphistory":"toc\u00e1 un producto para ver su historial",
+    "dash.nomatch":"Ning\u00fan producto coincide con los filtros.", "dash.nostock":"Sin stock todav\u00eda.",
+    "dash.valuedfifo":"Valuado (FIFO)", "dash.skus":"SKUs", "dash.transit.title":"En tr\u00e1nsito → AR",
+    "dash.transit.tap":"toc\u00e1 para abrir Terceros / Tr\u00e1nsito", "dash.incomingunits":"Unidades en camino", "dash.valuereport":"Valor (reporte)",
+    "dash.consolidated":"consolidado", "dash.showing":"mostrando {n} de {total}",
+    // --- Movimientos ---
+    "mov.title":"Movimientos", "mov.subtitle":"Trazabilidad de cada entrada, salida y ajuste, con su documento de origen y sociedad.",
+    "mov.adjustbtn":"⇄ Ajuste de inventario", "mov.entries":"registros", "mov.search":"Buscar producto, SKU u origen…",
+    "mov.anytype":"Cualquier tipo", "mov.opt.entries":"Entradas", "mov.opt.exits":"Salidas", "mov.opt.adjustments":"Ajustes", "mov.opt.investments":"Inversiones",
+    "mov.from":"Desde", "mov.to":"Hasta", "mov.minval":"Valor mín", "mov.maxval":"Valor máx",
+    "mov.empty.title":"Sin movimientos todavía", "mov.empty.sub":"Cada compra, venta o ajuste deja su rastro acá.",
+    "mov.tovault":"a bóveda", "mov.fromvault":"de bóveda", "mov.adjust":"ajuste", "mov.in":"↑ entra", "mov.out":"↓ sale",
+    "mov.deladjust":"Eliminar ajuste", "mov.nomatch":"Ningún movimiento coincide con los filtros.", "mov.toast.deleted":"Ajuste eliminado"
   }
 };
 
