@@ -19,12 +19,12 @@
 var I18N = {
   en: {
     // sections (nav level 1)
-    "sec.op":"Operations", "sec.cat":"Catalog", "sec.fin":"Finance", "sec.dat":"Data",
+    "sec.op":"Operations", "sec.cat":"Catalog", "sec.fin":"Finance", "sec.dat":"Settings",
     // views (nav level 2)
     "nav.dash":"Dashboard", "nav.ventas":"Sales", "nav.compras":"Purchases",
     "nav.conjunta":"Third-party", "nav.remitos":"Remitos", "nav.mov":"Movements",
     "nav.prod":"Products", "nav.clientes":"Customers", "nav.analisis":"Analysis",
-    "nav.inv":"Investments", "nav.datos":"Settings", "nav.usuarios":"Users",
+    "nav.inv":"Investments", "nav.datos":"General", "nav.usuarios":"Users",
     "nav.mov.short":"Movem.", "nav.clientes.short":"Cust.",
     // top bar
     "tb.sync":"Sync", "tb.theme":"Toggle theme", "tb.logout":"Sign out", "tb.lang":"Toggle language",
@@ -612,7 +612,7 @@ var I18N = {
     "usr.f.vendedor.pick":"Link to seller", "usr.f.vendedor.new":"➕ new seller",
     "usr.f.cliente.pick":"Link to client", "usr.f.cliente.none":"— choose —",
     "usr.add":"+ Add / update", "usr.remove":"Remove", "usr.loading":"Loading users…",
-    "usr.err":"Couldn't load users", "usr.none":"No users yet — add one below.",
+    "usr.err":"Couldn't load users", "usr.none":"No users yet — add one above.",
     "usr.novend":"Sellers without a login (kept for commission attribution):",
     "usr.linkedcli":"Client: {name}",
     "usr.tt.added":"User saved", "usr.tt.removed":"User removed",
@@ -664,11 +664,11 @@ var I18N = {
     "cmdk.kind.product":"Product", "cmdk.kind.customer":"Customer", "cmdk.kind.sale":"Sale", "cmdk.kind.purchase":"Purchase",
   },
   es: {
-    "sec.op":"Operaciones", "sec.cat":"Cat\u00e1logo", "sec.fin":"Finanzas", "sec.dat":"Datos",
+    "sec.op":"Operaciones", "sec.cat":"Cat\u00e1logo", "sec.fin":"Finanzas", "sec.dat":"Configuraci\u00f3n",
     "nav.dash":"Panel", "nav.ventas":"Ventas", "nav.compras":"Compras",
     "nav.conjunta":"Terceros", "nav.remitos":"Remitos", "nav.mov":"Movimientos",
     "nav.prod":"Productos", "nav.clientes":"Clientes", "nav.analisis":"An\u00e1lisis",
-    "nav.inv":"Inversiones", "nav.datos":"Configuración", "nav.usuarios":"Usuarios",
+    "nav.inv":"Inversiones", "nav.datos":"General", "nav.usuarios":"Usuarios",
     "nav.mov.short":"Movim.", "nav.clientes.short":"Client.",
     "tb.sync":"Sincronizar", "tb.theme":"Cambiar tema", "tb.logout":"Cerrar sesi\u00f3n", "tb.lang":"Cambiar idioma",
     "role.admin":"Admin", "role.seller":"Vendedor", "role.store":"Tienda", "role.local":"Local",
@@ -1252,7 +1252,7 @@ var I18N = {
     "usr.f.vendedor.pick":"Vincular a vendedor", "usr.f.vendedor.new":"➕ vendedor nuevo",
     "usr.f.cliente.pick":"Vincular a cliente", "usr.f.cliente.none":"— elegir —",
     "usr.add":"+ Agregar / actualizar", "usr.remove":"Quitar", "usr.loading":"Cargando usuarios…",
-    "usr.err":"No se pudieron cargar los usuarios", "usr.none":"Todavía no hay usuarios — agregá uno abajo.",
+    "usr.err":"No se pudieron cargar los usuarios", "usr.none":"Todavía no hay usuarios — agregá uno arriba.",
     "usr.novend":"Vendedores sin acceso (se conservan para atribuir comisión):",
     "usr.linkedcli":"Cliente: {name}",
     "usr.tt.added":"Usuario guardado", "usr.tt.removed":"Usuario quitado",

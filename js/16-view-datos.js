@@ -190,30 +190,32 @@ function viewUsuarios(){
     <div class="phead"><h3>${t("usr.h.new")}</h3></div>
     <div class="grid-form">
       <p style="margin:0;color:var(--muted);font-size:13px">${t("usr.desc")}</p>
-      <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0;gap:12px 16px">
-        <div class="field"><label>${t("usr.f.name")}</label><input class="inp" id="uNewName"></div>
-        <div class="field"><label>${t("usr.f.user")}</label><input class="inp" id="uNewUser" placeholder="${t("usr.f.user.ph")}"></div>
-        <div class="field"><label>${t("usr.f.pass")}</label><input class="inp" id="uNewPass" type="password"></div>
-        <div class="field"><label>${t("usr.f.role")}</label>
+      <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+        <div class="field" style="flex:1 1 150px"><label>${t("usr.f.name")}</label><input class="inp" id="uNewName"></div>
+        <div class="field" style="flex:1 1 130px"><label>${t("usr.f.user")}</label><input class="inp" id="uNewUser" placeholder="${t("usr.f.user.ph")}"></div>
+        <div class="field" style="flex:1 1 130px"><label>${t("usr.f.pass")}</label><input class="inp" id="uNewPass" type="password"></div>
+        <div class="field" style="flex:0 0 130px"><label>${t("usr.f.role")}</label>
           <select class="inp" id="uNewRole">
             <option value="seller">${t("usr.role.seller")}</option>
             <option value="store">${t("usr.role.store")}</option>
             <option value="admin">${t("usr.role.admin")}</option>
           </select></div>
-        <div class="field u-when-seller"><label>${t("usr.f.comm")}</label><input class="inp num" id="uComm" placeholder="${esc(String(round2((db.config.commissionRate||0)*100)))}"></div>
-        <div class="field u-when-store" style="display:none"><label>${t("usr.f.cliente.pick")}</label>
+        <div class="field u-when-seller" style="flex:0 0 90px"><label>${t("usr.f.comm")}</label><input class="inp num" id="uComm" placeholder="${esc(String(round2((db.config.commissionRate||0)*100)))}"></div>
+        <div class="field u-when-store" style="flex:1 1 180px;display:none"><label>${t("usr.f.cliente.pick")}</label>
           <select class="inp" id="uCli">
             <option value="">${t("usr.f.cliente.none")}</option>${cliOpts}
           </select></div>
-        <div style="grid-column:1/3;margin-top:4px"><button class="btn primary" id="uAdd">${t("usr.add")}</button></div>
+        <button class="btn primary" id="uAdd" style="flex:0 0 auto">${t("usr.add")}</button>
       </div>
     </div>
   </div>
 
   <div class="panel">
     <div class="phead"><h3>${t("usr.h.active")}</h3></div>
-    <div id="usrCards"><p class="hint">${t("usr.loading")}</p></div>
-    <div id="vendOrphans"></div>
+    <div style="padding:18px">
+      <div id="usrCards"><p class="hint">${t("usr.loading")}</p></div>
+      <div id="vendOrphans"></div>
+    </div>
   </div>`;
 }
 
