@@ -12,7 +12,7 @@
    ACTUALIZACIÓN CONTROLADA: no auto-activamos con skipWaiting; cuando hay
    versión nueva el SW queda "waiting" y la app muestra el botón "Update".
    ============================================================ */
-const CACHE = "mayor-stock-v63";   // v63: paleta ámbar (styles.css), logo/iconos recoloreados y theme_color/manifest en ámbar
+const CACHE = "mayor-stock-v64";   // v64: fix theme-color (JS pisaba el violeta en cada arranque) y acento del PDF a ámbar
 
 const ASSETS = [
   "./",
