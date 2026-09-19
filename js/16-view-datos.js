@@ -85,12 +85,6 @@ function viewDatos(){
             <option value="admin">${t("usr.role.admin")}</option>
           </select></div>
         <div class="field"><label>${t("usr.f.name")}</label><input class="inp" id="uNewName" style="max-width:160px"></div>
-        <div class="field u-when-seller"><label>${t("usr.f.vendedor.pick")}</label>
-          <select class="inp" id="uVend" style="max-width:170px">
-            ${vendedores().map(v=>`<option value="${esc(v.id)}">${esc(v.nombre)} (${esc(v.id)})</option>`).join("")}
-            <option value="__new">${t("usr.f.vendedor.new")}</option>
-          </select></div>
-        <div class="field u-when-seller u-when-newvend" style="display:none"><label>${t("dat.sellers.newid")}</label><input class="inp" id="uVendId" placeholder="${t("dat.sellers.newid.ph")}" style="max-width:130px"></div>
         <div class="field u-when-seller"><label>${t("usr.f.comm")}</label><input class="inp num" id="uComm" placeholder="${esc(String(round2((db.config.commissionRate||0)*100)))}" style="max-width:90px"></div>
         <div class="field u-when-store" style="display:none"><label>${t("usr.f.cliente.pick")}</label>
           <select class="inp" id="uCli" style="max-width:200px">
@@ -192,15 +186,12 @@ function wire(){
   if(isAdmin()){
     loadUsuarios();
     const roleSel=document.getElementById("uNewRole");
-    const uVendSel=document.getElementById("uVend");
     const applyRoleUI=()=>{
       const r=roleSel?roleSel.value:"seller";
       m.querySelectorAll(".u-when-seller").forEach(el=> el.style.display = r==="seller"?"":"none");
       m.querySelectorAll(".u-when-store").forEach(el=> el.style.display = r==="store"?"":"none");
-      m.querySelectorAll(".u-when-newvend").forEach(el=> el.style.display = (r==="seller"&&uVendSel&&uVendSel.value==="__new")?"":"none");
     };
     if(roleSel) roleSel.onchange=applyRoleUI;
-    if(uVendSel) uVendSel.onchange=applyRoleUI;
     applyRoleUI();
 
     const uAdd=document.getElementById("uAdd");
@@ -215,12 +206,8 @@ function wire(){
       const body={ user, role, name };
       if(pass) body.pass=pass;
       if(role==="seller"){
-        const sel=document.getElementById("uVend").value;
-        let vid=sel;
-        if(sel==="__new"){
-          vid=((document.getElementById("uVendId").value||user)).trim().toLowerCase().replace(/[^a-z0-9_-]/g,"");
-          if(!vid){ toast(t("dat.tt.enterid"),"warn"); return; }
-        }
+        // el vendedor se crea SIEMPRE nuevo, con el mismo id del usuario
+        const vid=user;
         const commPct=parseNum(document.getElementById("uComm").value);
         const rate=isNaN(commPct)?(db.config.commissionRate||0):Math.min(1,Math.max(0,round2(commPct)/100));
         const v=vendedorById(vid);
@@ -236,7 +223,7 @@ function wire(){
       try{
         await apiUsers("POST", body);
         toast(t("usr.tt.added"));
-        ["uNewUser","uNewPass","uNewName","uVendId","uComm"].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=""; });
+        ["uNewUser","uNewPass","uNewName","uComm"].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=""; });
         loadUsuarios();
       }catch(e){ toast(String(e&&e.message||e),"warn"); }
     };
@@ -249,11 +236,6 @@ function wire(){
 
 /* ============================================================
    USUARIOS (admin) — ABM contra el Worker (tabla D1 "usuarios")
-   ------------------------------------------------------------
-   Las credenciales NO viven en el db sincronizado: se gestionan
-   por API admin-only (/users). El % de comisión del vendedor SÍ
-   sigue en db.config.vendedores (lo referencian las ventas); acá
-   sólo se linkea/edita.
    ============================================================ */
 let _usrCache = null;
 
