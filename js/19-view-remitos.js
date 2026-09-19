@@ -14,10 +14,10 @@ let remitoQ = "";
 
 /* Etiqueta legible del tipo de remito. */
 function remitoTipoLabel(r){
-  if(r.letra==="U") return "US → AR";
-  if(r.tipo==="ar-tercero") return "AR · to owner";
-  if(r.tipo==="ar-select")  return "AR · Select";
-  return "AR split";
+  if(r.letra==="U") return t("rem.type.usar");
+  if(r.tipo==="ar-tercero") return t("rem.type.owner");
+  if(r.tipo==="ar-select")  return t("rem.type.select");
+  return t("rem.type.split");
 }
 /* Líneas que REALMENTE figuran en el PDF: mismo criterio que 30-pdf.js — si el
    remito lleva algo de terceros, lo "ours" no se cuenta (ya es stock propio).
@@ -32,7 +32,7 @@ function remitoUnidades(r){ return remitoLineasVisibles(r).reduce((a,l)=> a+(l.c
 function remitoDetalle(r){
   const owners = [...new Set(remitoLineasVisibles(r).map(l=> (l.owner||"").trim()).filter(Boolean))];
   if(owners.length) return owners.join(", ");
-  if(r.letra==="U") return "Own stock → AR";
+  if(r.letra==="U") return t("rem.detail.own");
   return (r.obs||"").trim() || "—";
 }
 
@@ -56,26 +56,26 @@ function viewRemitos(){
   return `
   <div class="head">
     <div class="title">
-      <h2>Remitos</h2>
-      <p>Internal transfer notes (US → AR) and AR split notes, numbered by series. Download any one on demand — no pop-ups on save.</p>
+      <h2>${t("nav.remitos")}</h2>
+      <p>${t("rem.sub")}</p>
     </div>
   </div>
   <div class="panel">
-    <div class="phead"><h3>Issued remitos</h3><span class="hint">${all.length} total · ${uCount} U · ${aCount} A</span></div>
+    <div class="phead"><h3>${t("rem.issued")}</h3><span class="hint">${all.length} total · ${uCount} U · ${aCount} A</span></div>
     ${all.length ? `
     <div class="filtros">
-      <input class="inp" id="rmq" placeholder="Search by code, owner, type…" value="${esc(remitoQ)}" style="flex:1 1 180px;min-width:130px">
-      ${q?`<button class="btn ghost sm" id="rmclear">Clear</button>`:""}
-      ${q?`<span class="hint" style="font-size:11.5px;white-space:nowrap">${list.length} match(es)</span>`:""}
+      <input class="inp" id="rmq" placeholder="${t('rem.ph.search')}" value="${esc(remitoQ)}" style="flex:1 1 180px;min-width:130px">
+      ${q?`<button class="btn ghost sm" id="rmclear">${t("dash.f.clear")}</button>`:""}
+      ${q?`<span class="hint" style="font-size:11.5px;white-space:nowrap">${t("rem.match",{n:list.length})}</span>`:""}
     </div>
     <div class="table-scroll"><table>
       <thead><tr>
-        <th>Remito</th>
-        <th>Date</th>
-        <th>Type</th>
-        <th>From</th>
-        <th>Detail</th>
-        <th class="r">Units</th>
+        <th>${t("nav.remitos")}</th>
+        <th>${t("common.date")}</th>
+        <th>${t("rem.th.type")}</th>
+        <th>${t("rem.th.from")}</th>
+        <th>${t("rem.th.detail")}</th>
+        <th class="r">${t("common.units")}</th>
         <th></th>
       </tr></thead>
       <tbody>
@@ -86,11 +86,11 @@ function viewRemitos(){
         <td style="white-space:nowrap">${r.origenCodigo?esc(r.origenCodigo):`<span class="hint">—</span>`}</td>
         <td>${esc(remitoDetalle(r))}</td>
         <td class="r num">${qty(remitoUnidades(r))}</td>
-        <td class="r" style="white-space:nowrap"><button class="btn ghost sm" data-rmdoc="${esc(r.id)}" title="Download ${esc(r.codigo)} PDF">⤓ PDF</button></td>
+        <td class="r" style="white-space:nowrap"><button class="btn ghost sm" data-rmdoc="${esc(r.id)}" title="${t('rem.dl',{code:esc(r.codigo)})}">⤓ PDF</button></td>
       </tr>`).join("")}
       </tbody></table></div>`
-    : emptyState("No remitos yet",
-        "They're created automatically when you load a third-party purchase, send your own stock to AR, or split a shipment in AR. This is where they'll live.")}
+    : emptyState(t("rem.empty.title"),
+        t("rem.empty.sub"))}
   </div>`;
 }
 
@@ -102,6 +102,6 @@ function wireRemitos(){
   const cl=m.querySelector("#rmclear"); if(cl) cl.onclick=()=>{ remitoQ=""; render(); };
   m.querySelectorAll("[data-rmdoc]").forEach(b=> b.onclick=()=>{
     if(typeof generarRemitoDocPDF==="function") generarRemitoDocPDF(b.dataset.rmdoc);
-    else toast("Couldn't load the PDF generator (try once with internet)","warn");
+    else toast(t("rem.tt.nopdf"),"warn");
   });
 }

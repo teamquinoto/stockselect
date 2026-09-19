@@ -15,9 +15,8 @@ function viewDocs(tipo){
   return `
   <div class="head">
     <div class="title">
-      <h2>${isC?"Purchases":"Sales"}</h2>
-      <p>${isC?"Add stock and set each product's last cost. COGS stays FIFO."
-              :"Reduce stock from the unified pool (FIFO across societies)."}</p>
+      <h2>${isC?t("nav.compras"):t("nav.ventas")}</h2>
+      <p>${isC?t("doc.sub.purch"):t("doc.sub.sales")}</p>
     </div>
     <div class="actions">
       ${(isC&&puedeComprar())?`<button class="btn" data-import>⤒ Import PDF</button>`:""}
@@ -26,37 +25,37 @@ function viewDocs(tipo){
   </div>
   ${list.length ? `<div class="kpis" id="docKpis">${docKpisHTML(tipo, filtrarDocs(tipo))}</div>` : ""}
   <div class="panel">
-    <div class="phead"><h3>${isC?"Purchase invoices":"Sales invoices"}</h3><span class="hint" id="docCount">${list.length} documents</span></div>
+    <div class="phead"><h3>${isC?t("doc.h.purch"):t("doc.h.sales")}</h3><span class="hint" id="docCount">${t("doc.count",{n:list.length})}</span></div>
     ${list.length ? `
     <div class="filtros docfilt">
-      <input class="inp" id="dq" placeholder="${isC?'Search by supplier or #…':'Search by customer or #…'}" value="${esc(f.q)}" style="flex:1 1 140px;min-width:110px">
-      ${(!isC && isAdmin()) ? `<select class="inp" id="dvend" style="min-width:130px;max-width:160px" title="Filter by seller">
-        <option value="">All sellers</option>
+      <input class="inp" id="dq" placeholder="${isC?t('doc.ph.purch'):t('doc.ph.sales')}" value="${esc(f.q)}" style="flex:1 1 140px;min-width:110px">
+      ${(!isC && isAdmin()) ? `<select class="inp" id="dvend" style="min-width:130px;max-width:160px" title="${t('doc.tip.filterseller')}">
+        <option value="">${t("doc.o.allsellers")}</option>
         ${vendedores().map(v=>`<option value="${esc(v.id)}" ${f.vend===v.id?"selected":""}>${esc(v.nombre)}</option>`).join("")}
-        <option value="__none" ${f.vend==="__none"?"selected":""}>— House (no seller) —</option>
+        <option value="__none" ${f.vend==="__none"?"selected":""}>${t("doc.o.house")}</option>
       </select>` : ""}
       <label style="font-size:12px;color:var(--muted)">From <input class="inp" id="ddesde" type="date" value="${esc(f.desde)}" style="width:128px"></label>
       <label style="font-size:12px;color:var(--muted)">To <input class="inp" id="dhasta" type="date" value="${esc(f.hasta)}" style="width:128px"></label>
-      <button class="btn ghost sm" id="dclear">Clear</button>
-      <span class="hint" style="font-size:11.5px;white-space:nowrap">Tap a header to sort ↑ ↓</span>
+      <button class="btn ghost sm" id="dclear">${t("dash.f.clear")}</button>
+      <span class="hint" style="font-size:11.5px;white-space:nowrap">${t("doc.sorthint")}</span>
     </div>
     <div class="table-scroll"><table>
       <thead><tr>
         ${sortTh(f,"numero","#","")}
-        ${sortTh(f,"fecha","Date","")}
-        ${showSocCol?sortTh(f,"store","Society",""):""}
-        ${showVendCol?sortTh(f,"vendedor","Sold by",""):""}
-        ${sortTh(f,"contraparte",isC?"Supplier":"Customer","")}
-        ${sortTh(f,"items","Items","c")}
-        ${sortTh(f,"total","Total","r")}
-        ${isC?sortTh(f,"status","Status","c"):""}
-        ${(!isC && isAdmin())?sortTh(f,"commission","Commission","r"):""}
+        ${sortTh(f,"fecha",t("common.date"),"")}
+        ${showSocCol?sortTh(f,"store",t("bar.society"),""):""}
+        ${showVendCol?sortTh(f,"vendedor",t("doc.th.soldby"),""):""}
+        ${sortTh(f,"contraparte",isC?t("doc.th.supplier"):t("doc.th.customer"),"")}
+        ${sortTh(f,"items",t("doc.th.items"),"c")}
+        ${sortTh(f,"total",t("common.total"),"r")}
+        ${isC?sortTh(f,"status",t("doc.th.status"),"c"):""}
+        ${(!isC && isAdmin())?sortTh(f,"commission",t("doc.th.commission"),"r"):""}
         <th></th>
       </tr></thead>
       <tbody id="docBody"></tbody></table></div>`
-      : emptyState(isC?"No purchases yet":"No sales yet",
-          isC?"Import an invoice PDF or load it by hand. Each line adds stock and updates the cost."
-             :"Build a sales invoice: pick products, quantities and price, and stock drops on confirm.")}
+      : emptyState(isC?t("doc.empty.purch.title"):t("doc.empty.sales.title"),
+          isC?t("doc.empty.purch.sub")
+             :t("doc.empty.sales.sub"))}
   </div>`;
 }
 /* Documentos visibles según rol/foco:
@@ -109,20 +108,20 @@ function docKpisHTML(tipo, list){
   const n = list.length;
   if(isC){
     return `
-    <div class="kpi"><div class="lbl">Purchases</div><div class="val">${n}</div><div class="sub">documents in range</div></div>
-    <div class="kpi"><div class="lbl">Units bought</div><div class="val">${qty(uds)}</div><div class="sub">items in</div></div>
-    <div class="kpi"><div class="lbl">Total bought</div><div class="val">${money(total)}</div><div class="sub">sum of invoices</div></div>
-    <div class="kpi"><div class="lbl">Avg ticket</div><div class="val">${n?money(total/n):"—"}</div><div class="sub">per purchase</div></div>`;
+    <div class="kpi"><div class="lbl">${t("doc.kpi.purch")}</div><div class="val">${n}</div><div class="sub">${t("doc.kpi.inrange")}</div></div>
+    <div class="kpi"><div class="lbl">${t("doc.kpi.unitsb")}</div><div class="val">${qty(uds)}</div><div class="sub">${t("doc.kpi.itemsin")}</div></div>
+    <div class="kpi"><div class="lbl">${t("doc.kpi.totalb")}</div><div class="val">${money(total)}</div><div class="sub">${t("doc.kpi.suminv")}</div></div>
+    <div class="kpi"><div class="lbl">${t("doc.kpi.avgticket")}</div><div class="val">${n?money(total/n):"—"}</div><div class="sub">${t("doc.kpi.perpurch")}</div></div>`;
   }
   const margen = total - cogs;
   const margenPct = total>0 ? (margen/total*100) : 0;
   const commKpi = isAdmin() ? `
-    <div class="kpi"><div class="lbl">Commission</div><div class="val">${money(list.reduce((a,d)=>a+convertCcy(saleCommission(d), storeCcy(d.storeVenta||d.store||STORE_IDS[0]), rep),0))}</div><div class="sub">seller earnings on margin</div></div>` : "";
+    <div class="kpi"><div class="lbl">${t("doc.kpi.comm")}</div><div class="val">${money(list.reduce((a,d)=>a+convertCcy(saleCommission(d), storeCcy(d.storeVenta||d.store||STORE_IDS[0]), rep),0))}</div><div class="sub">${t("doc.kpi.commsub")}</div></div>` : "";
   return `
-    <div class="kpi"><div class="lbl">Sales</div><div class="val">${n}</div><div class="sub">documents in range</div></div>
-    <div class="kpi"><div class="lbl">Units sold</div><div class="val">${qty(uds)}</div><div class="sub">items out</div></div>
-    <div class="kpi"><div class="lbl">Total sold</div><div class="val">${money(total)}</div><div class="sub">${n?`avg ticket ${money(total/n)}`:"—"}</div></div>
-    <div class="kpi"><div class="lbl">Gross margin (FIFO)</div><div class="val">${money(margen)}</div><div class="sub">${total>0?`${nf0.format(margenPct)}% on revenue`:"load sales to see margin"}</div></div>
+    <div class="kpi"><div class="lbl">${t("doc.kpi.sales")}</div><div class="val">${n}</div><div class="sub">${t("doc.kpi.inrange")}</div></div>
+    <div class="kpi"><div class="lbl">${t("doc.kpi.unitss")}</div><div class="val">${qty(uds)}</div><div class="sub">${t("doc.kpi.itemsout")}</div></div>
+    <div class="kpi"><div class="lbl">${t("doc.kpi.totals")}</div><div class="val">${money(total)}</div><div class="sub">${n?t("doc.kpi.avgticketv",{m:money(total/n)}):"—"}</div></div>
+    <div class="kpi"><div class="lbl">${t("doc.kpi.gross")}</div><div class="val">${money(margen)}</div><div class="sub">${total>0?t("doc.kpi.onrev",{p:nf0.format(margenPct)}):t("doc.kpi.loadsales")}</div></div>
     ${commKpi}`;
 }
 
@@ -178,7 +177,7 @@ function renderDocRows(tipo){
     const items=d.lineas.reduce((a,l)=>a+l.cantidad,0);
     const dCcy = storeCcy(isC ? (d.store||STORE_IDS[0]) : (d.storeVenta||d.store||STORE_IDS[0]));
     const received = d.status===INVOICE_STATUS.RECEIVED;
-    const statusCell = isC ? `<td class="c"><span class="inv-badge ${received?'received':'transit'}">${received?'✓ Received':'⋯ In transit'}</span></td>` : "";
+    const statusCell = isC ? `<td class="c"><span class="inv-badge ${received?'received':'transit'}">${received?t('doc.badge.received'):t('doc.badge.transit')}</span></td>` : "";
     const commCell = showComm ? `<td class="r num">${money(saleCommission(d), dCcy)}</td>` : "";
     return `<tr>
       <td class="num">${esc(d.numero||"—")}</td>
@@ -190,9 +189,9 @@ function renderDocRows(tipo){
       <td class="r num">${money(d.total, dCcy)}</td>
       ${statusCell}
       ${commCell}
-      <td class="r" style="white-space:nowrap">${(isC&&puedeComprar())?`<button class="btn ghost sm" data-invstatus="${d.id}">${received?'Mark in transit':'Mark received'}</button>`:""}<button class="btn ghost sm" data-vdoc="${tipo}:${d.id}">View</button>${tipo==="venta"?`<button class="btn ghost sm" data-copydoc="${tipo}:${d.id}">Copy</button>`:""}<button class="btn ghost sm" data-editdoc="${tipo}:${d.id}">Edit</button><button class="btn ghost sm" data-deldoc="${tipo}:${d.id}" style="color:var(--alert)">Delete</button></td>
+      <td class="r" style="white-space:nowrap">${(isC&&puedeComprar())?`<button class="btn ghost sm" data-invstatus="${d.id}">${received?t('doc.act.marktransit'):t('doc.act.markreceived')}</button>`:""}<button class="btn ghost sm" data-vdoc="${tipo}:${d.id}">${t("doc.act.view")}</button>${tipo==="venta"?`<button class="btn ghost sm" data-copydoc="${tipo}:${d.id}">${t("doc.act.copy")}</button>`:""}<button class="btn ghost sm" data-editdoc="${tipo}:${d.id}">${t("common.edit")}</button><button class="btn ghost sm" data-deldoc="${tipo}:${d.id}" style="color:var(--alert)">${t("common.delete")}</button></td>
     </tr>`;
-  }).join("") || `<tr><td colspan="${cols}" style="text-align:center;color:var(--muted);padding:22px">No document matches the filters.</td></tr>`;
+  }).join("") || `<tr><td colspan="${cols}" style="text-align:center;color:var(--muted);padding:22px">${t("doc.nomatch")}</td></tr>`;
   const cnt=document.getElementById("docCount");
   if(cnt) cnt.textContent = list.length===total ? `${total} documents` : `showing ${list.length} of ${total}`;
   const kp=document.getElementById("docKpis");
@@ -214,15 +213,15 @@ function toggleInvoiceStatus(id){
     const enRiesgo = c.lineas.filter(l=>{ const p=prodById(l.productoId); return p && stockDe(p,store) < l.cantidad; });
     if(enRiesgo.length){
       const det = enRiesgo.map(l=>`· ${l.nombre}`).join("\n");
-      if(!confirm(`Some of this shipment was already sold, so moving it back to “in transit” will push stock negative at ${storeName(store)}:\n\n${det}\n\nContinue anyway?`)) return;
+      if(!confirm(t("doc.cf.negative",{store:storeName(store),det:det}))) return;
     }
     unreceiveInvoice(c);
     c.status = INVOICE_STATUS.IN_TRANSIT;
-    toast("Invoice back in transit — stock removed", "warn");
+    toast(t("doc.tt.backtransit"), "warn");
   } else {
     receiveInvoice(c);
     c.status = INVOICE_STATUS.RECEIVED;
-    toast("Received — stock added to inventory", "up");
+    toast(t("doc.tt.received"), "up");
   }
   save();
   if(document.getElementById("docBody")) renderDocRows("compra");

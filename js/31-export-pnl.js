@@ -12,7 +12,7 @@
    y el detalle por producto. Built from sales in the selected period.
    ============================================================ */
 function exportPnL(desde, hasta){
-  if(!window.XLSX){ toast("Couldn't load the Excel engine (try once with internet)","warn"); return; }
+  if(!window.XLSX){ toast(t("pnl.tt.noxlsx"),"warn"); return; }
   const d0 = desde ? new Date(desde+"T00:00:00") : null;
   const d1 = hasta ? new Date(hasta+"T23:59:59") : null;
   const inRange = v=>{ const f=new Date((normISO(v.fecha)||v.fecha)+"T12:00:00"); if(d0&&f<d0) return false; if(d1&&f>d1) return false; return true; };
@@ -137,16 +137,16 @@ function exportPnL(desde, hasta){
   XLSX.utils.book_append_sheet(wb, ws3, "Detail Consolidated");
 
   XLSX.writeFile(wb, `income-statement-${new Date().toISOString().slice(0,10)}.xlsx`);
-  toast("Income statement exported (Excel)");
+  toast(t("pnl.tt.exported"));
 }
 function openPnLExport(){
   const today=new Date().toISOString().slice(0,10);
   const first=today.slice(0,8)+"01";
-  buildModal("Export income statement", `
-    <p class="hint" style="margin:0 0 12px">Consolidated multi-step income statement (net revenue → FIFO COGS → gross profit), a per-seller breakdown and product detail. Excel workbook for the selected period.</p>
+  buildModal(t("pnl.md.title"), `
+    <p class="hint" style="margin:0 0 12px">${t("pnl.hint")}</p>
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
-      <div class="field"><label>From</label><input class="inp" type="date" id="pnl_d0" value="${first}"></div>
-      <div class="field"><label>To</label><input class="inp" type="date" id="pnl_d1" value="${today}"></div>
+      <div class="field"><label>${t("mov.from")}</label><input class="inp" type="date" id="pnl_d0" value="${first}"></div>
+      <div class="field"><label>${t("mov.to")}</label><input class="inp" type="date" id="pnl_d1" value="${today}"></div>
     </div>
   `, [
     {label:"Cancel",cls:"btn",act:closeModal},

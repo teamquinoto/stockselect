@@ -49,8 +49,8 @@ const INV_STORE = "__inv";
    la valuación. Se ve en la vista Joint/Transit y en la ficha del producto. */
 const TRANSITO_STORE = "__transito";
 function storeName(id){
-  if(id===INV_STORE) return "Investment vault";
-  if(id===TRANSITO_STORE) return "In transit · Buenos Aires";
+  if(id===INV_STORE) return t("core.store.vault");
+  if(id===TRANSITO_STORE) return t("core.store.transit");
   const s=STORES.find(x=>x.id===id); return s?s.name:(id||"—");
 }
 function isStore(id){ return STORE_IDS.includes(id); }
@@ -134,7 +134,7 @@ function effectiveStores(){
 const PRODUCT_STATES = { SALE:"sale", BLOCKED:"blocked", INVESTMENT:"investment" };
 /* Estado de envío de una factura de COMPRA (tracking, no toca stock). */
 const INVOICE_STATUS = { IN_TRANSIT:"in_transit", RECEIVED:"received" };
-function invoiceStatusLabel(s){ return s===INVOICE_STATUS.RECEIVED ? "Received" : "In transit"; }
+function invoiceStatusLabel(s){ return s===INVOICE_STATUS.RECEIVED ? t("core.inv.received") : t("core.inv.transit"); }
 const LANGS = [["JP","JP"],["ESP","SP/ESP"]];
 function langLabel(v){ const l=LANGS.find(x=>x[0]===v); return l?l[1]:(v||"—"); }
 
@@ -515,8 +515,8 @@ async function pushNow(force=false){
   setSyncState("saving");
   try{
     const res=await fetch(stateUrl(),{ method:"PUT", headers:authHeaders(), body:JSON.stringify({ data:db, baseRev:syncMeta.syncedRev, force }) });
-    if(res.status===401){ toast("Session expired, sign in again","warn"); forceLogout(); return; }
-    if(res.status===409){ conflictPayload=await res.json(); setSyncState("conflict"); toast("There is a newer version on the server","warn"); if(view==="datos") render(); return; }
+    if(res.status===401){ toast(t("core.tt.expired"),"warn"); forceLogout(); return; }
+    if(res.status===409){ conflictPayload=await res.json(); setSyncState("conflict"); toast(t("core.tt.newer"),"warn"); if(view==="datos") render(); return; }
     if(!res.ok) throw new Error("HTTP "+res.status);
     const j=await res.json();
     syncMeta.syncedRev=j.rev; syncMeta.dirty=false; saveSyncMeta();
@@ -529,7 +529,7 @@ async function pullNow(){
   setSyncState("saving");
   try{
     const res=await fetch(stateUrl(),{ method:"GET", headers:authHeaders() });
-    if(res.status===401){ toast("Session expired, sign in again","warn"); forceLogout(); return; }
+    if(res.status===401){ toast(t("core.tt.expired"),"warn"); forceLogout(); return; }
     if(!res.ok) throw new Error("HTTP "+res.status);
     const j=await res.json();
     const serverRev=j.rev||0;
@@ -537,7 +537,7 @@ async function pullNow(){
     if(serverRev===syncMeta.syncedRev && !syncMeta.dirty){ setSyncState("idle"); return; }
     if(serverRev>syncMeta.syncedRev && !syncMeta.dirty){
       db=j.data; syncMeta.syncedRev=serverRev; syncMeta.dirty=false; saveSyncMeta(); persistLocal();
-      setSyncState("idle"); render(); toast("Data updated from the server"); return;
+      setSyncState("idle"); render(); toast(t("core.tt.updated")); return;
     }
     if(syncMeta.dirty && serverRev!==syncMeta.syncedRev){ conflictPayload=j; setSyncState("conflict"); if(view==="datos") render(); return; }
     if(syncMeta.dirty){ await pushNow(); return; }
@@ -552,25 +552,25 @@ function resolveConflict(keepLocal){
   if(keepLocal){ syncMeta.syncedRev=conflictPayload.rev; saveSyncMeta(); pushNow(true); }
   else{
     db=conflictPayload.data; syncMeta.syncedRev=conflictPayload.rev; syncMeta.dirty=false; saveSyncMeta(); persistLocal();
-    render(); toast("Took the server version");
+    render(); toast(t("core.tt.tookserver"));
   }
   conflictPayload=null; setSyncState("idle");
 }
 
 function paintSync(){
   const map={
-    off:["●","Offline","var(--muted)"],
-    idle:["●","Synced","var(--up)"],
-    saving:["◐","Saving…","var(--accent)"],
-    offline:["●","No connection","var(--down)"],
-    conflict:["▲","Conflict","var(--alert)"]
+    off:["●",t("core.sync.off"),"var(--muted)"],
+    idle:["●",t("core.sync.idle"),"var(--up)"],
+    saving:["◐",t("core.sync.saving"),"var(--accent)"],
+    offline:["●",t("core.sync.offline"),"var(--down)"],
+    conflict:["▲",t("core.sync.conflict"),"var(--alert)"]
   };
   const [dot,txt,col]=map[syncState]||map.off;
   document.querySelectorAll("[data-syncchip]").forEach(el=>{ el.style.color=col; el.textContent=dot+" "+txt; });
   document.querySelectorAll("[data-syncicon]").forEach(el=>{
     el.style.color = (syncState==="idle"||syncState==="off") ? "" : col;
     el.classList.toggle("spin", syncState==="saving");
-    el.title = "Sync · "+txt.toLowerCase();
+    el.title = t("tb.sync")+" · "+txt.toLowerCase();
   });
 }
 
@@ -581,15 +581,15 @@ async function doLogin(){
   const errEl=document.getElementById("loginErr");
   const btn=document.getElementById("loginBtn");
   errEl.textContent="";
-  if(!user||!pass){ errEl.textContent="Enter your username and password"; return; }
-  btn.disabled=true; btn.textContent="Signing in…";
+  if(!user||!pass){ errEl.textContent=t("core.login.enter"); return; }
+  btn.disabled=true; btn.textContent=t("core.login.signingin");
   try{
     console.log("[login] POST", apiBase()+"/login", "user:", user);
     const res=await fetch(apiBase()+"/login",{ method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({user,pass}) });
     console.log("[login] status", res.status);
-    if(res.status===401){ errEl.textContent="Wrong username or password"; return; }
+    if(res.status===401){ errEl.textContent=t("core.login.wrong"); return; }
     if(!res.ok){
-      let msg="Error "+res.status;
+      let msg=t("core.login.error",{code:res.status});
       try{ const ej=await res.json(); if(ej.error) msg=ej.error; if(ej.detalle) msg+=" — "+ej.detalle; }catch(_){}
       errEl.textContent=msg;
       return;
@@ -611,11 +611,11 @@ async function doLogin(){
     setSyncState("idle");
     hideLogin(); render(); paintSync();
     await pullNow();
-  }catch(e){ console.error("[login] fallo:", e); errEl.textContent="Couldn't reach the server ("+(e&&e.message||e)+")"; }
-  finally{ btn.disabled=false; btn.textContent="Sign in"; }
+  }catch(e){ console.error("[login] fallo:", e); errEl.textContent=t("core.login.noreach",{msg:(e&&e.message||e)}); }
+  finally{ btn.disabled=false; btn.textContent=t("core.login.signin"); }
 }
 function logout(){
-  if(!confirm("Sign out on this device. Your data stays on the server. Continue?")) return;
+  if(!confirm(t("core.login.logout"))) return;
   forceLogout();
 }
 /* Cierre forzado (token vencido / 401): sin confirmación, va derecho al login.
@@ -731,7 +731,7 @@ function doUndo(){
   Object.assign(db, s);                                          // repone el estado anterior
   save();
   if(typeof render==="function") render();
-  toast("Restored");
+  toast(t("core.tt.restored"));
 }
 function toastUndo(label){
   const cont = document.getElementById("toasts"); if(!cont){ toast(label,"warn"); return; }
