@@ -67,23 +67,40 @@ function viewDatos(){
   </div>
 
   ${isAdmin()?`<div class="panel">
-    <div class="phead"><h3>${t("dat.sellers")}</h3><span class="hint">${t("dat.sellers.hint")}</span></div>
+    <div class="phead"><h3>${t("usr.title")}</h3><span class="hint">${t("usr.hint")}</span></div>
     <div class="grid-form">
-      <p style="margin:0;color:var(--muted);font-size:13px">${t("dat.sellers.desc")}</p>
-      <div id="vendList" style="display:flex;flex-direction:column;gap:8px">
-        ${vendedores().map(v=>`<div class="vend-row" data-vrow="${esc(v.id)}" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <span class="sku" style="min-width:70px">${esc(v.id)}</span>
-          <input class="inp" data-vname="${esc(v.id)}" value="${esc(v.nombre)}" style="max-width:200px" placeholder="${t("dat.sellers.dispname")}">
-          <span style="display:inline-flex;align-items:center;gap:4px"><input class="inp num" data-vrate="${esc(v.id)}" value="${esc(String(round2((v.rate!=null?v.rate:(db.config.commissionRate||0))*100)))}" style="max-width:80px" placeholder="%"><span class="hint" style="font-size:12px">${t("dat.sellers.comm")}</span></span>
-          <button class="btn ghost sm" data-vdel="${esc(v.id)}" style="color:var(--alert)">${t("dat.sellers.remove")}</button>
-        </div>`).join("") || `<p class="hint">${t("dat.sellers.none")}</p>`}
+      <p style="margin:0;color:var(--muted);font-size:13px">${t("usr.desc")}</p>
+
+      <div id="usrList" style="display:flex;flex-direction:column;gap:8px">
+        <p class="hint">${t("usr.loading")}</p>
       </div>
-      <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:4px">
-        <div class="field"><label>${t("dat.sellers.newid")}</label><input class="inp" id="vNewId" placeholder="${t("dat.sellers.newid.ph")}" style="max-width:170px"></div>
-        <div class="field"><label>${t("dat.sellers.dispname")}</label><input class="inp" id="vNewName" placeholder="${t("dat.sellers.fullname")}" style="max-width:180px"></div>
-        <div class="field"><label>${t("dat.sellers.commpct")}</label><input class="inp num" id="vNewRate" placeholder="${esc(String(round2((db.config.commissionRate||0)*100)))}" style="max-width:110px"></div>
-        <button class="btn" id="vAdd" style="margin-bottom:2px">${t("dat.sellers.add")}</button>
+
+      <div style="border-top:1px solid var(--line,#e5e5e5);margin-top:6px;padding-top:12px;display:flex;gap:8px;align-items:end;flex-wrap:wrap">
+        <div class="field"><label>${t("usr.f.user")}</label><input class="inp" id="uNewUser" placeholder="${t("usr.f.user.ph")}" style="max-width:140px"></div>
+        <div class="field"><label>${t("usr.f.pass")}</label><input class="inp" id="uNewPass" type="password" placeholder="${t("usr.f.pass.keep")}" style="max-width:140px"></div>
+        <div class="field"><label>${t("usr.f.role")}</label>
+          <select class="inp" id="uNewRole" style="max-width:130px">
+            <option value="seller">${t("usr.role.seller")}</option>
+            <option value="store">${t("usr.role.store")}</option>
+            <option value="admin">${t("usr.role.admin")}</option>
+          </select></div>
+        <div class="field"><label>${t("usr.f.name")}</label><input class="inp" id="uNewName" style="max-width:160px"></div>
+        <div class="field u-when-seller"><label>${t("usr.f.vendedor.pick")}</label>
+          <select class="inp" id="uVend" style="max-width:170px">
+            ${vendedores().map(v=>`<option value="${esc(v.id)}">${esc(v.nombre)} (${esc(v.id)})</option>`).join("")}
+            <option value="__new">${t("usr.f.vendedor.new")}</option>
+          </select></div>
+        <div class="field u-when-seller u-when-newvend" style="display:none"><label>${t("dat.sellers.newid")}</label><input class="inp" id="uVendId" placeholder="${t("dat.sellers.newid.ph")}" style="max-width:130px"></div>
+        <div class="field u-when-seller"><label>${t("usr.f.comm")}</label><input class="inp num" id="uComm" placeholder="${esc(String(round2((db.config.commissionRate||0)*100)))}" style="max-width:90px"></div>
+        <div class="field u-when-store" style="display:none"><label>${t("usr.f.cliente.pick")}</label>
+          <select class="inp" id="uCli" style="max-width:200px">
+            <option value="">${t("usr.f.cliente.none")}</option>
+            ${(db.clientes||[]).slice().sort((a,b)=>String(a.nombre||"").localeCompare(String(b.nombre||""))).map(c=>`<option value="${esc(c.id)}">${esc(c.nombre||c.id)}</option>`).join("")}
+          </select></div>
+        <button class="btn" id="uAdd" style="margin-bottom:2px">${t("usr.add")}</button>
       </div>
+
+      <div id="vendOrphans"></div>
     </div>
   </div>`:""}
 
@@ -171,7 +188,157 @@ function wire(){
   const cl=m.querySelector("[data-conflocal]"); if(cl) cl.onclick=()=>resolveConflict(true);
   const cs=m.querySelector("[data-confserver]"); if(cs) cs.onclick=()=>resolveConflict(false);
 
-  // --- vendedores (ABM, admin) ---
+  // --- usuarios (ABM, admin) ---
+  if(isAdmin()){
+    loadUsuarios();
+    const roleSel=document.getElementById("uNewRole");
+    const uVendSel=document.getElementById("uVend");
+    const applyRoleUI=()=>{
+      const r=roleSel?roleSel.value:"seller";
+      m.querySelectorAll(".u-when-seller").forEach(el=> el.style.display = r==="seller"?"":"none");
+      m.querySelectorAll(".u-when-store").forEach(el=> el.style.display = r==="store"?"":"none");
+      m.querySelectorAll(".u-when-newvend").forEach(el=> el.style.display = (r==="seller"&&uVendSel&&uVendSel.value==="__new")?"":"none");
+    };
+    if(roleSel) roleSel.onchange=applyRoleUI;
+    if(uVendSel) uVendSel.onchange=applyRoleUI;
+    applyRoleUI();
+
+    const uAdd=document.getElementById("uAdd");
+    if(uAdd) uAdd.onclick=async()=>{
+      const user=(document.getElementById("uNewUser").value||"").trim().toLowerCase().replace(/[^a-z0-9_.-]/g,"");
+      const pass=document.getElementById("uNewPass").value||"";
+      const role=document.getElementById("uNewRole").value;
+      const name=(document.getElementById("uNewName").value||"").trim();
+      if(!user){ toast(t("usr.tt.needuser"),"warn"); return; }
+      const existe=(_usrCache||[]).some(u=>u.user===user);
+      if(!existe && !pass){ toast(t("usr.tt.needpass"),"warn"); return; }
+      const body={ user, role, name };
+      if(pass) body.pass=pass;
+      if(role==="seller"){
+        const sel=document.getElementById("uVend").value;
+        let vid=sel;
+        if(sel==="__new"){
+          vid=((document.getElementById("uVendId").value||user)).trim().toLowerCase().replace(/[^a-z0-9_-]/g,"");
+          if(!vid){ toast(t("dat.tt.enterid"),"warn"); return; }
+        }
+        const commPct=parseNum(document.getElementById("uComm").value);
+        const rate=isNaN(commPct)?(db.config.commissionRate||0):Math.min(1,Math.max(0,round2(commPct)/100));
+        const v=vendedorById(vid);
+        if(!v){ db.config.vendedores=vendedores().concat([{ id:vid, nombre:name||vid, rate }]); }
+        else { if(name) v.nombre=name; if(!isNaN(commPct)) v.rate=rate; }
+        save();
+        body.vendedorId=vid;
+      } else if(role==="store"){
+        const cid=document.getElementById("uCli").value;
+        if(!cid){ toast(t("usr.tt.needcliente"),"warn"); return; }
+        body.clienteId=cid;
+      }
+      try{
+        await apiUsers("POST", body);
+        toast(t("usr.tt.added"));
+        ["uNewUser","uNewPass","uNewName","uVendId","uComm"].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=""; });
+        loadUsuarios();
+      }catch(e){ toast(String(e&&e.message||e),"warn"); }
+    };
+  }
+
+  paintSync();
+}
+
+
+
+/* ============================================================
+   USUARIOS (admin) — ABM contra el Worker (tabla D1 "usuarios")
+   ------------------------------------------------------------
+   Las credenciales NO viven en el db sincronizado: se gestionan
+   por API admin-only (/users). El % de comisión del vendedor SÍ
+   sigue en db.config.vendedores (lo referencian las ventas); acá
+   sólo se linkea/edita.
+   ============================================================ */
+let _usrCache = null;
+
+async function apiUsers(method, body, qs){
+  const res = await fetch(apiBase()+"/users"+(qs||""), {
+    method, headers: authHeaders(), body: body?JSON.stringify(body):undefined
+  });
+  if(res.status===401){ forceLogout(); throw new Error("401"); }
+  const j = await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(j.error||("HTTP "+res.status));
+  return j;
+}
+
+function usrRoleLabel(r){ return r==="admin"?t("usr.role.admin"):(r==="store"?t("usr.role.store"):t("usr.role.seller")); }
+function clienteNombre(id){ const c=(db.clientes||[]).find(x=>x.id===id); return c?(c.nombre||c.id):(id||"\u2014"); }
+
+function renderUsrRows(users){
+  if(!users || !users.length) return `<p class="hint">${t("usr.none")}</p>`;
+  return users.map(u=>{
+    let link="\u2014";
+    if(u.role==="seller"){
+      const v=vendedorById(u.vendedorId);
+      const rate=v?round2((v.rate!=null?v.rate:(db.config.commissionRate||0))*100):"";
+      link=`<span class="sku">${esc(u.vendedorId||"\u2014")}</span>
+        <span style="display:inline-flex;align-items:center;gap:4px">
+          <input class="inp num" data-urate="${esc(u.vendedorId)}" value="${esc(String(rate))}" style="max-width:70px" placeholder="%">
+          <span class="hint" style="font-size:12px">${t("dat.sellers.comm")}</span></span>`;
+    } else if(u.role==="store"){
+      link=esc(t("usr.linkedcli",{name:clienteNombre(u.clienteId)}));
+    }
+    return `<div class="vend-row" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span class="sku" style="min-width:80px">${esc(u.user)}</span>
+      <span class="rl-badge" style="min-width:72px;text-align:center">${esc(usrRoleLabel(u.role))}</span>
+      <span style="flex:1;min-width:150px">${link}</span>
+      <span class="hint">${esc(u.name||"")}</span>
+      <button class="btn ghost sm" data-udel="${esc(u.user)}" style="color:var(--alert)">${t("usr.remove")}</button>
+    </div>`;
+  }).join("");
+}
+
+function renderVendOrphans(users){
+  const used=new Set((users||[]).filter(u=>u.role==="seller").map(u=>String(u.vendedorId||"").toLowerCase()));
+  const orphans=vendedores().filter(v=> !used.has(String(v.id).toLowerCase()));
+  if(!orphans.length) return "";
+  return `<div style="border-top:1px solid var(--line,#e5e5e5);margin-top:6px;padding-top:12px">
+    <p class="hint" style="margin:0 0 8px">${t("usr.novend")}</p>
+    ${orphans.map(v=>`<div class="vend-row" data-vrow="${esc(v.id)}" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span class="sku" style="min-width:70px">${esc(v.id)}</span>
+      <input class="inp" data-vname="${esc(v.id)}" value="${esc(v.nombre)}" style="max-width:180px">
+      <span style="display:inline-flex;align-items:center;gap:4px"><input class="inp num" data-vrate="${esc(v.id)}" value="${esc(String(round2((v.rate!=null?v.rate:(db.config.commissionRate||0))*100)))}" style="max-width:80px" placeholder="%"><span class="hint" style="font-size:12px">${t("dat.sellers.comm")}</span></span>
+      <button class="btn ghost sm" data-vdel="${esc(v.id)}" style="color:var(--alert)">${t("dat.sellers.remove")}</button>
+    </div>`).join("")}
+  </div>`;
+}
+
+async function loadUsuarios(){
+  const box=document.getElementById("usrList");
+  const orphanBox=document.getElementById("vendOrphans");
+  if(!box) return;
+  try{
+    const j=await apiUsers("GET");
+    _usrCache=j.users||[];
+    box.innerHTML=renderUsrRows(_usrCache);
+    if(orphanBox) orphanBox.innerHTML=renderVendOrphans(_usrCache);
+    wireUsrRows();
+  }catch(e){
+    box.innerHTML=`<p class="hint" style="color:var(--alert)">${t("usr.err")}: ${esc(String(e&&e.message||e))}</p>`;
+  }
+}
+
+function wireUsrRows(){
+  const m=document.getElementById("main");
+  m.querySelectorAll("[data-urate]").forEach(inp=> inp.onchange=()=>{
+    const v=vendedorById(inp.dataset.urate); if(!v) return;
+    const pct=parseNum(inp.value);
+    if(isNaN(pct)){ inp.value=String(round2((v.rate||0)*100)); return; }
+    v.rate=Math.min(1,Math.max(0,round2(pct)/100)); save();
+    toast(t("dat.tt.commset",{name:v.nombre,p:round2(v.rate*100)}));
+  });
+  m.querySelectorAll("[data-udel]").forEach(b=> b.onclick=async()=>{
+    const u=b.dataset.udel;
+    if(!confirm(t("usr.cf.del",{u}))) return;
+    try{ await apiUsers("DELETE",null,"?user="+encodeURIComponent(u)); toast(t("usr.tt.removed"),"warn"); loadUsuarios(); }
+    catch(e){ toast(String(e&&e.message||e),"warn"); }
+  });
   m.querySelectorAll("[data-vname]").forEach(inp=> inp.onchange=()=>{
     const v=vendedorById(inp.dataset.vname); if(v){ v.nombre=(inp.value||"").trim()||v.id; save(); toast(t("dat.tt.renamed")); }
   });
@@ -179,26 +346,12 @@ function wire(){
     const v=vendedorById(inp.dataset.vrate); if(!v) return;
     const pct=parseNum(inp.value);
     if(isNaN(pct)){ inp.value=String(round2((v.rate||0)*100)); return; }
-    v.rate = Math.min(1, Math.max(0, round2(pct)/100));
-    save(); toast(t("dat.tt.commset",{name:v.nombre,p:round2(v.rate*100)}));
+    v.rate=Math.min(1,Math.max(0,round2(pct)/100)); save();
+    toast(t("dat.tt.commset",{name:v.nombre,p:round2(v.rate*100)}));
   });
   m.querySelectorAll("[data-vdel]").forEach(b=> b.onclick=()=>{
     const id=b.dataset.vdel;
     if(!confirm(t("dat.cf.delseller",{name:vendedorNombre(id)}))) return;
-    db.config.vendedores = vendedores().filter(v=>v.id!==id);
-    save(); toast(t("dat.tt.sellerremoved"),"warn"); render();
+    db.config.vendedores=vendedores().filter(v=>v.id!==id); save(); toast(t("dat.tt.sellerremoved"),"warn"); loadUsuarios();
   });
-  const vAdd=m.querySelector("#vAdd"); if(vAdd) vAdd.onclick=()=>{
-    let id=(document.getElementById("vNewId").value||"").trim().toLowerCase().replace(/[^a-z0-9_-]/g,"");
-    const nombre=(document.getElementById("vNewName").value||"").trim();
-    const rpct=parseNum(document.getElementById("vNewRate").value);
-    const rate = isNaN(rpct) ? (db.config.commissionRate||0) : Math.min(1, Math.max(0, round2(rpct)/100));
-    if(!id){ toast(t("dat.tt.enterid"),"warn"); return; }
-    if(vendedorById(id)){ toast(t("dat.tt.ididexists"),"warn"); return; }
-    db.config.vendedores = vendedores().concat([{ id, nombre: nombre||id, rate }]);
-    save(); toast(t("dat.tt.selleradded")); render();
-  };
-
-  paintSync();
 }
-
