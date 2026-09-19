@@ -340,7 +340,7 @@ function renderCostos(){
    ============================================================ */
 let adjDraft = null;
 function openAjuste(prodId){
-  if(!puedeAjustar()){ toast("Only admins can adjust inventory","warn"); return; }
+  if(!puedeAjustar()){ toast(t("md.err.adminajuste"),"warn"); return; }
   adjDraft = { productoId: prodId||"", store: effectiveStores()[0]||STORE_IDS[0], modo:"delta", cantidad:"", fecha:new Date().toISOString().slice(0,10), obs:"" };
   renderAjuste();
 }

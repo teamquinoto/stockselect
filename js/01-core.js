@@ -677,12 +677,14 @@ function normISO(s){
   if(m){ const y=m[3].length===2?"20"+m[3]:m[3]; return `${y}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`; }
   return "";
 }
-/* Formato de display: SIEMPRE americano MM/DD/YYYY en toda la app. */
+/* Formato de display por idioma:  es (AR) -> DD/MM/YYYY  ·  en -> MM/DD/YYYY.
+   El dato guardado NO cambia: la fuente sigue siendo el ISO (normISO). */
 function fmtDate(s){
   const iso = normISO(s);
   if(!iso) return s || "—";
   const [y,mo,d] = iso.split("-");
-  return `${mo}/${d}/${y}`;
+  const es = (typeof lang==="function") && lang()==="es";
+  return es ? `${d}/${mo}/${y}` : `${mo}/${d}/${y}`;
 }
 
 /* Parseo tolerante de números en formato AR (1.234,56) o US (1,234.56) */

@@ -100,7 +100,8 @@ function renderMovRows(){
     const signed=(m.delta!=null)?m.delta:(m.tipo==="entrada"?m.cantidad:-m.cantidad);
     const up=signed>=0;
     const d=new Date(m.fecha);
-    const fecha=d.toLocaleDateString("en-US")+" "+d.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit",hour12:false});
+    const _lc=(typeof lang==="function"&&lang()==="es")?"es-AR":"en-US";
+    const fecha=d.toLocaleDateString(_lc)+" "+d.toLocaleTimeString(_lc,{hour:"2-digit",minute:"2-digit",hour12:false});
     const pill=isInv?`<span class="pill inv">◈ ${m.tipo==="inv-out"?t("mov.tovault"):t("mov.fromvault")}</span>`
                :isAdj?`<span class="pill adj">⇄ ${t("mov.adjust")}</span>`
                :`<span class="pill ${up?'in':'out'}">${up?t("mov.in"):t("mov.out")}</span>`;
@@ -120,7 +121,7 @@ function renderMovRows(){
   }).join("") || `<div class="fitem" style="display:block;text-align:center;color:var(--muted);padding:22px">${t("mov.nomatch")}</div>`;
   const cnt=document.getElementById("movCount");
   const totalF=db.movimientos.filter(m=>!m.store||effectiveStores().includes(m.store)).length;
-  if(cnt) cnt.textContent = (all.length===totalF?`${totalF} entries`:`${all.length} of ${totalF}`)+(list.length<all.length?` · showing 400`:"");
+  if(cnt) cnt.textContent = (all.length===totalF?`${totalF} ${t("mov.entries")}`:t("mov.showing",{n:all.length,total:totalF}))+(list.length<all.length?t("mov.cap400"):"");
   body.querySelectorAll("[data-delaj]").forEach(b=> b.onclick=()=> deleteAjuste(b.dataset.delaj));
 }
 function wireMovFiltros(){
@@ -155,8 +156,8 @@ function deleteAjuste(id){
   const p=prodById(m.productoId);
   const d=(m.delta!=null)?m.delta:0;
   const msg = p
-    ? `Delete this adjustment?\n\n${p.nombre}\nReverts ${d>=0?'+':'−'}${qty(Math.abs(d))} u → stock ${qty(p.stock)} becomes ${qty(+((p.stock||0)-d).toFixed(4))}.`
-    : `Delete this adjustment? (the product no longer exists in the master)`;
+    ? t("mov.cf.deladj",{name:p.nombre,delta:`${d>=0?'+':'−'}${qty(Math.abs(d))}`,from:qty(p.stock),to:qty(+((p.stock||0)-d).toFixed(4))})
+    : t("mov.cf.deladj.gone");
   if(!confirm(msg)) return;
   if(p) p.stock = +((p.stock||0) - d).toFixed(4);
   db.movimientos = db.movimientos.filter(x=>x.id!==id);

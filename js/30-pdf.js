@@ -378,7 +378,7 @@ function exportListaPrecios(prods){
   doc.setFont("helvetica","bold"); doc.setFontSize(18); doc.setTextColor(20);
   doc.text(em.nombre?t("pdf.pl.titleName",{name:em.nombre}):t("pdf.pl.title"), M, y); y+=18;
   doc.setFont("helvetica","normal"); doc.setFontSize(9.5); doc.setTextColor(120);
-  doc.text(new Date().toLocaleDateString("en-US"), M, y); y+=20;
+  doc.text(new Date().toLocaleDateString((typeof lang==="function"&&lang()==="es")?"es-AR":"en-US"), M, y); y+=20;
 
   const cSKU=M, cName=M+90, cPrice=W-M;
   doc.setFillColor(245); doc.rect(M, y-12, W-2*M, 22, "F");

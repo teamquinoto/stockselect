@@ -22,7 +22,8 @@ function openFicha(id){
     if(!esBucketMov){ bal += signed; }
     serie.push(bal);
     const d=new Date(m.fecha);
-    const fecha = d.toLocaleDateString("en-US") + " " + d.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit",hour12:false});
+    const _lc=(typeof lang==="function"&&lang()==="es")?"es-AR":"en-US";
+    const fecha = d.toLocaleDateString(_lc) + " " + d.toLocaleTimeString(_lc,{hour:"2-digit",minute:"2-digit",hour12:false});
     const origen = (m.refTipo==="compra"||m.refTipo==="venta") && m.refId
       ? `<button class="btn ghost sm" data-fdoc="${m.refTipo}:${m.refId}">${esc(m.ref||t("fi.viewinvoice"))}</button>`
       : `<span style="color:var(--muted)">${esc(m.ref||"—")}</span>`;

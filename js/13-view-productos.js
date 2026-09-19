@@ -71,7 +71,7 @@ function renderProdRows(){
   }).join("") || `<tr><td colspan="${cols}" style="text-align:center;color:var(--muted);padding:22px">${t("pr.nomatch")}</td></tr>`;
   const cnt=document.getElementById("prodCount");
   const total=productosVendibles().length;
-  if(cnt) cnt.textContent = list.length===total ? `${total} items` : `showing ${list.length} of ${total}`;
+  if(cnt) cnt.textContent = list.length===total ? t("pr.items",{n:total}) : t("pr.showing",{n:list.length,total});
   body.querySelectorAll("[data-ficha]").forEach(tr=> tr.onclick=()=> openFicha(tr.dataset.ficha));
   body.querySelectorAll("[data-editp]").forEach(b=> b.onclick=(e)=>{ e.stopPropagation(); openProd(b.dataset.editp); });
   body.querySelectorAll("[data-nofic]").forEach(td=> td.onclick=e=>e.stopPropagation());
@@ -88,7 +88,7 @@ function refreshSelbar(){
   if(bar) bar.style.display = selMode ? "flex" : "none";
   if(acts) acts.style.display = n===0 ? "none" : "flex";
   if(count) count.textContent = n===0 ? t("pr.tickhint")
-                                       : (n===1?"1 selected":`${n} selected`);
+                                       : t("pr.selected",{n});
   if(count) count.className = n===0 ? "sel-hint" : "";
   if(all){ const vis=filtrarProds(prodFiltros); all.checked = vis.length>0 && vis.every(p=>selProd.has(p.id)); }
 }
@@ -123,12 +123,12 @@ function deleteSelProd(){
   const conStock=prods.filter(p=>stockTotalP(p)!==0).length;
   const conMovs=prods.filter(p=>db.movimientos.some(m=>m.productoId===p.id)).length;
   let msg=t("pr.cf.delete",{n:prods.length});
-  if(conStock) msg+=`\n\n⚠ ${conStock} have non-zero stock: deleting them removes those units from the valuation.`;
-  if(conMovs) msg+=`\n\n⚠ ${conMovs} have kardex movements. History stays (name and SKU), but you won't be able to open their card.`;
-  msg+="\n\nYou'll have 5 seconds to undo.";
+  if(conStock) msg+=`\n\n⚠ ${t("pr.del.warnstock",{n:conStock})}`;
+  if(conMovs) msg+=`\n\n⚠ ${t("pr.del.warnmovs",{n:conMovs})}`;
+  msg+=`\n\n${t("pr.del.undo")}`;
   if(!confirm(msg)) return;
   const n = prods.length;
-  withUndo(`${n} product(s) deleted`, ()=>{
+  withUndo(t("pr.toast.deleted",{n}), ()=>{
     db.productos = db.productos.filter(p=>!selProd.has(p.id));
     selProd.clear(); selMode=false;
     save();

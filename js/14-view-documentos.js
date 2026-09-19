@@ -193,7 +193,7 @@ function renderDocRows(tipo){
     </tr>`;
   }).join("") || `<tr><td colspan="${cols}" style="text-align:center;color:var(--muted);padding:22px">${t("doc.nomatch")}</td></tr>`;
   const cnt=document.getElementById("docCount");
-  if(cnt) cnt.textContent = list.length===total ? `${total} documents` : `showing ${list.length} of ${total}`;
+  if(cnt) cnt.textContent = list.length===total ? t("doc.count",{n:total}) : t("doc.showing",{n:list.length,total});
   const kp=document.getElementById("docKpis");
   if(kp) kp.innerHTML = docKpisHTML(tipo, list);
   body.querySelectorAll("[data-vdoc]").forEach(b=> b.onclick=()=>{ const[t,id]=b.dataset.vdoc.split(":"); verDoc(t,id); });

@@ -209,11 +209,13 @@ function closeModal(){
     document.addEventListener('scroll', onDocScroll, true);
   }
 
-  // Formatea un valor ISO (YYYY-MM-DD) a MM/DD/YYYY para el texto visible.
+  // Formatea un ISO (YYYY-MM-DD) al texto visible según idioma:
+  //   es -> DD/MM/YYYY  ·  en -> MM/DD/YYYY   (el value real del input sigue en ISO)
   function fmtUSDate(iso){
     if(!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return "";
     const [y,mo,d] = iso.split("-");
-    return mo+"/"+d+"/"+y;
+    const es = (typeof lang==="function") && lang()==="es";
+    return es ? d+"/"+mo+"/"+y : mo+"/"+d+"/"+y;
   }
   function enhanceDates(root){
     (root||document).querySelectorAll('input[type="date"]:not([data-cdate])').forEach(inp=>{
@@ -241,7 +243,7 @@ function closeModal(){
         // pinta/actualiza el texto visible según el valor ISO del input
         const paint = ()=>{
           const us = fmtUSDate(inp.value);
-          txt.textContent = us || 'mm/dd/yyyy';
+          txt.textContent = us || ((typeof lang==="function"&&lang()==="es")?'dd/mm/aaaa':'mm/dd/yyyy');
           txt.classList.toggle('ph', !us);
         };
         paint();

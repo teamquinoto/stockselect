@@ -664,6 +664,18 @@ var I18N = {
     "cal.clear":"Clear", "cal.today":"Today",
     "cmdk.ph":"Search products, customers, invoices…", "cmdk.nomatch":"No matches", "cmdk.type":"Type to search products, customers, invoices",
     "cmdk.kind.product":"Product", "cmdk.kind.customer":"Customer", "cmdk.kind.sale":"Sale", "cmdk.kind.purchase":"Purchase",
+    // --- i18n loose-ends: login screen, list counters, delete flows ---
+    "core.login.sub":"Your inventory, synced across all your devices.",
+    "core.login.user":"Username", "core.login.user.ph":"your username",
+    "core.login.pass":"Password", "core.login.showpass":"Show password",
+    "pr.showing":"showing {n} of {total}", "pr.selected":"{n} selected",
+    "pr.del.warnstock":"{n} have non-zero stock: deleting them removes those units from the valuation.",
+    "pr.del.warnmovs":"{n} have kardex movements. History stays (name and SKU), but you won't be able to open their card.",
+    "pr.del.undo":"You'll have 5 seconds to undo.", "pr.toast.deleted":"{n} product(s) deleted",
+    "doc.count":"{n} documents", "doc.showing":"showing {n} of {total}",
+    "mov.showing":"{n} of {total}", "mov.cap400":" \u00b7 showing 400",
+    "mov.cf.deladj":"Delete this adjustment?\n\n{name}\nReverts {delta} u \u2192 stock {from} becomes {to}.",
+    "mov.cf.deladj.gone":"Delete this adjustment? (the product no longer exists in the master)",
   },
   es: {
     "sec.op":"Operaciones", "sec.cat":"Cat\u00e1logo", "sec.fin":"Finanzas", "sec.dat":"Configuraci\u00f3n",
@@ -1306,6 +1318,18 @@ var I18N = {
     "cal.clear":"Limpiar", "cal.today":"Hoy",
     "cmdk.ph":"Buscar productos, clientes, facturas…", "cmdk.nomatch":"Sin coincidencias", "cmdk.type":"Escribí para buscar productos, clientes, facturas",
     "cmdk.kind.product":"Producto", "cmdk.kind.customer":"Cliente", "cmdk.kind.sale":"Venta", "cmdk.kind.purchase":"Compra",
+    // --- i18n loose-ends: login screen, list counters, delete flows ---
+    "core.login.sub":"Tu inventario, sincronizado en todos tus dispositivos.",
+    "core.login.user":"Usuario", "core.login.user.ph":"tu usuario",
+    "core.login.pass":"Contrase\u00f1a", "core.login.showpass":"Mostrar contrase\u00f1a",
+    "pr.showing":"mostrando {n} de {total}", "pr.selected":"{n} seleccionado(s)",
+    "pr.del.warnstock":"{n} tienen stock distinto de cero: al borrarlos, esas unidades salen de la valuaci\u00f3n.",
+    "pr.del.warnmovs":"{n} tienen movimientos de kardex. El historial queda (nombre y SKU), pero no vas a poder abrir su ficha.",
+    "pr.del.undo":"Vas a tener 5 segundos para deshacer.", "pr.toast.deleted":"{n} producto(s) eliminado(s)",
+    "doc.count":"{n} documentos", "doc.showing":"mostrando {n} de {total}",
+    "mov.showing":"{n} de {total}", "mov.cap400":" \u00b7 mostrando 400",
+    "mov.cf.deladj":"\u00bfEliminar este ajuste?\n\n{name}\nRevierte {delta} u \u2192 stock {from} pasa a {to}.",
+    "mov.cf.deladj.gone":"\u00bfEliminar este ajuste? (el producto ya no existe en el maestro)",
   }
 };
 
