@@ -27,8 +27,8 @@ function viewDatos(){
         </div>
       </div>`:""}
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn" data-syncnow>${t("dat.syncnow")}</button>
-        <button class="btn danger" data-logout>${t("tb.logout")}</button>
+        <button class="btn" data-syncnow>${ICO.sync}${t("dat.syncnow")}</button>
+        <button class="btn danger" data-logout>${ICO.logout}${t("tb.logout")}</button>
       </div>
       <p style="font-size:12px;color:var(--muted);margin:0">
         ${t("dat.inv.line",{sp:`<b>${esc(session?session.space:"main")}</b>`,rev:syncMeta.syncedRev,dirty:syncMeta.dirty?t("dat.inv.dirty"):""})}.
@@ -41,9 +41,9 @@ function viewDatos(){
     <div class="grid-form">
       <p style="margin:0;color:var(--muted);font-size:14px">${t("dat.backup.sub")}</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn" data-export>${t("dat.exportjson")}</button>
-        <button class="btn" data-import-json>${t("dat.importjson")}</button>
-        ${isAdmin()?`<button class="btn danger" data-reset>${t("dat.deleteall")}</button>`:""}
+        <button class="btn" data-export>${ICO.export}${t("dat.exportjson")}</button>
+        <button class="btn" data-import-json>${ICO.upload}${t("dat.importjson")}</button>
+        ${isAdmin()?`<button class="btn danger" data-reset>${ICO.reset}${t("dat.deleteall")}</button>`:""}
       </div>
     </div>
   </div>
@@ -62,7 +62,7 @@ function viewDatos(){
       <div class="field"><label>${t("dat.set.rema")} <span class="hint" style="font-weight:400">${t("dat.set.rema.hint")}</span></label><input class="inp num" id="cfgRemA" value="${esc(String(remitoSeqInicio("A")))}"></div>`:""}
       ${isAdmin()?`<div class="field"><label>${t("dat.set.defcomm")}</label><input class="inp num" id="cfgComm" value="${esc(String(round2((db.config.commissionRate||0)*100)))}"></div>
       <div class="field" style="justify-content:flex-end"><p class="hint" style="font-size:11.5px;margin:0 0 8px">${t("dat.set.defcomm.hint")}</p></div>`:""}
-      <button class="btn" data-savecfg style="justify-self:start;margin-top:4px">${t("common.save")}</button>
+      <button class="btn" data-savecfg style="justify-self:start;margin-top:4px">${ICO.save}${t("common.save")}</button>
     </div>
   </div>
 
@@ -74,7 +74,7 @@ function viewDatos(){
       <div class="field" style="grid-column:1/3"><label>${t("dat.issuer.addr")}</label><input class="inp" id="cfgEmDir" value="${esc((db.config.emisor||{}).direccion||"")}"></div>
       <div class="field"><label>${t("dat.issuer.email")}</label><input class="inp" id="cfgEmMail" value="${esc((db.config.emisor||{}).email||"")}"></div>
       <div class="field"><label>${t("dat.issuer.phone")}</label><input class="inp" id="cfgEmTel" value="${esc((db.config.emisor||{}).tel||"")}"></div>
-      <button class="btn" data-savecfg style="justify-self:start;margin-top:4px">${t("common.save")}</button>
+      <button class="btn" data-savecfg style="justify-self:start;margin-top:4px">${ICO.save}${t("common.save")}</button>
     </div>
   </div>`;
 }
@@ -82,11 +82,7 @@ function viewDatos(){
 /* ---------- utilidades UI ---------- */
 function esc(s){ return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 /* Iconos SVG minimalistas (stroke = currentColor), para reemplazar emojis/glyphs feos */
-const ICO = {
-  select: `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 12l3 3 5-6"/></svg>`,
-  x:      `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>`,
-  trash:  `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M10 11v6M14 11v6"/></svg>`
-};
+/* ICO ahora vive en js/00c-icons.js (biblioteca global compartida). */
 function emptyState(t,h){ return `<div class="empty"><div class="big">∅</div><p style="font-weight:600;color:var(--text)">${t}</p><p class="hint">${h}</p></div>`; }
 
 /* ============================================================
@@ -205,7 +201,7 @@ function viewUsuarios(){
           <select class="inp" id="uCli">
             <option value="">${t("usr.f.cliente.none")}</option>${cliOpts}
           </select></div>
-        <button class="btn primary" id="uAdd" style="flex:0 0 auto">${t("usr.add")}</button>
+        <button class="btn primary" id="uAdd" style="flex:0 0 auto">${ICO.adduser}${t("usr.add")}</button>
       </div>
     </div>
   </div>

@@ -214,8 +214,8 @@ function viewDash(){
   <div class="head">
     <div class="title"><h2>${t("dash.title")}</h2><p>${t("dash.subtitle")}${multi?` · <b>${esc(foco)}</b>`:""}.</p></div>
     <div class="actions">
-      ${puedeComprar()?`<button class="btn up" data-open="compra">${t("dash.newpurchase")}</button>`:""}
-      <button class="btn down" data-open="venta">${t("dash.newsale")}</button>
+      ${puedeComprar()?`<button class="btn up" data-open="compra">${ICO.buy}${t("dash.newpurchase")}</button>`:""}
+      <button class="btn down" data-open="venta">${ICO.sale}${t("dash.newsale")}</button>
     </div>
   </div>
 

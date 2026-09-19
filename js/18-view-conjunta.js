@@ -804,7 +804,7 @@ function ourTransitCardHTML(p){
     <div class="rl-foot">
       <span class="rl-next">${t("conj.ours.next")}</span>
       <button class="btn ghost sm" data-merma="${p.id}" style="color:var(--alert)">${t("conj.writeoff")}</button>
-      <button class="btn up sm" data-recib="${p.id}">${t("conj.deliverar")} \u25be</button>
+      <button class="btn up sm" data-recib="${p.id}">${ICO.deliver}${t("conj.deliverar")} \u25be</button>
     </div>
   </div>`;
 }
@@ -878,7 +878,7 @@ function viewConjunta(){
 
   return `
   <div class="head"><div class="title"><h2>${t("conj.title")}</h2><p>${t("conj.sub")}</p></div>
-    <div class="actions"><button class="btn" data-enviar-transito title="${t("conj.sendtransit.tip")}">${t("conj.sendtransit")}</button><button class="btn up" data-new-conj>${t("conj.newjoint")}</button></div>
+    <div class="actions"><button class="btn" data-enviar-transito title="${t("conj.sendtransit.tip")}">${ICO.plane}${t("conj.sendtransit")}</button><button class="btn up" data-new-conj>${ICO.plus}${t("conj.newjoint")}</button></div>
   </div>
 
   ${chips}
@@ -887,7 +887,7 @@ function viewConjunta(){
     <div class="phead" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <div><h3>${t("conj.ours.title")}</h3><p class="hint" style="margin:2px 0 0">${t("conj.ours.hint")}</p></div>
       <div style="flex:1"></div>
-      ${enTransito.length?`<button class="btn ghost sm" data-deliver-all-ours>${t("conj.deliverall")}</button>`:""}
+      ${enTransito.length?`<button class="btn ghost sm" data-deliver-all-ours>${ICO.deliver}${t("conj.deliverall")}</button>`:""}
     </div>
     <div class="rl-wrap">${ourCards}</div>
   </div>
@@ -896,8 +896,8 @@ function viewConjunta(){
     <div class="phead" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <div><h3>${t("conj.third.title")}</h3><p class="hint" style="margin:2px 0 0">${t("conj.third.hint")}</p></div>
       <div style="flex:1"></div>
-      ${remTransito?`<button class="btn ghost sm" data-cs-recib-all>${t("conj.recvall")}</button>`:""}
-      ${remAr?`<button class="btn ghost sm" data-cs-entregar-all>${t("conj.deliverallonly")}</button>`:""}
+      ${remTransito?`<button class="btn ghost sm" data-cs-recib-all>${ICO.receive}${t("conj.recvall")}</button>`:""}
+      ${remAr?`<button class="btn ghost sm" data-cs-entregar-all>${ICO.deliver}${t("conj.deliverallonly")}</button>`:""}
     </div>
     <div class="rl-wrap">${remitoCards}</div>
   </div>
@@ -1050,9 +1050,9 @@ function remitoCardHTML(g){
   const hasAr       = scopeLines.some(l=> l.estado===CONSIGN_ESTADOS.AR);
   const foot = `<div class="rl-foot">
       <span class="rl-next">${selHere.length?`${selHere.length} ${t("conj.selected")}`:t("conj.wholeremito")}${hasAr?` \u00b7 <span class="rl-warn">${t("conj.warnresolve")}</span>`:""}</span>
-      ${g.remitoId?`<button class="btn ghost sm" data-rm-pdf="${esc(g.remitoId)}" title="${t("conj.dlremito")} ${esc(g.codigo||"")}">\u2913 ${esc(g.codigo||"remito")}</button>`:""}
-      ${hasTransito?`<button class="btn up sm" data-rm-receive="${esc(g.key)}" title="${t("conj.gate2tip")}">${t("conj.recvar")} \u25be</button>`:""}
-      ${hasAr?`<button class="btn up sm" data-rm-resolve="${esc(g.key)}" title="${t("conj.resolvetip")}">${t("conj.resolvear")} \u25be</button>`:""}
+      ${g.remitoId?`<button class="btn ghost sm" data-rm-pdf="${esc(g.remitoId)}" title="${t("conj.dlremito")} ${esc(g.codigo||"")}">${ICO.pdf}${esc(g.codigo||"remito")}</button>`:""}
+      ${hasTransito?`<button class="btn up sm" data-rm-receive="${esc(g.key)}" title="${t("conj.gate2tip")}">${ICO.receive}${t("conj.recvar")} \u25be</button>`:""}
+      ${hasAr?`<button class="btn up sm" data-rm-resolve="${esc(g.key)}" title="${t("conj.resolvetip")}">${ICO.resolve}${t("conj.resolvear")} \u25be</button>`:""}
     </div>`;
 
   return `<div class="rl-card">

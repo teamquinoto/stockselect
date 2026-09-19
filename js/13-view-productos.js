@@ -12,10 +12,10 @@ function viewProd(){
   <div class="head">
     <div class="title"><h2>${t("pr.title")}</h2><p>${t("pr.sub")}</p></div>
     <div class="actions">
-      ${total?`<button class="btn" id="btnExpPrecios">${t("pr.btn.pricelist")}</button>`:""}
-      ${(total&&isAdmin())?`<button class="btn" id="btnLanded" title="${t('pr.btn.landed.tip')}">${t("pr.btn.landed")}</button>`:""}
+      ${total?`<button class="btn" id="btnExpPrecios">${ICO.price}${t("pr.btn.pricelist")}</button>`:""}
+      ${(total&&isAdmin())?`<button class="btn" id="btnLanded" title="${t('pr.btn.landed.tip')}">${ICO.landed}${t("pr.btn.landed")}</button>`:""}
       ${(total&&isAdmin())?`<button class="btn" id="btnSel">${selMode?ICO.x+t("common.cancel"):ICO.select+t("pr.btn.select")}</button>`:""}
-      ${puedeEditarProductos()?`<button class="btn primary" data-newp>${t("pr.btn.newprod")}</button>`:""}
+      ${puedeEditarProductos()?`<button class="btn primary" data-newp>${ICO.plus}${t("pr.btn.newprod")}</button>`:""}
     </div>
   </div>
   <div class="panel">
@@ -66,7 +66,7 @@ function renderProdRows(){
       <td class="r ${cls}">${stockDisplay(p,units)}</td>
       <td class="r num">${money(cost)}</td>
       <td class="r num">${priceCell}</td>
-      <td class="r"><button class="btn ghost sm" data-editp="${p.id}">${t("common.edit")}</button></td>
+      <td class="r"><button class="btn ghost sm" data-editp="${p.id}">${ICO.edit}${t("common.edit")}</button></td>
     </tr>`;
   }).join("") || `<tr><td colspan="${cols}" style="text-align:center;color:var(--muted);padding:22px">${t("pr.nomatch")}</td></tr>`;
   const cnt=document.getElementById("prodCount");

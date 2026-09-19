@@ -14,7 +14,7 @@ function viewMov(){
   return `
   <div class="head">
     <div class="title"><h2>${t("mov.title")}</h2><p>${t("mov.subtitle")}</p></div>
-    <div class="actions">${puedeAjustar()?`<button class="btn" data-adjust>${t("mov.adjustbtn")}</button>`:""}</div>
+    <div class="actions">${puedeAjustar()?`<button class="btn" data-adjust>${ICO.adjust}${t("mov.adjustbtn")}</button>`:""}</div>
   </div>
   <div class="panel">
     <div class="phead"><h3>Kardex</h3><span class="hint" id="movCount">${movs.length} ${t("mov.entries")}</span></div>

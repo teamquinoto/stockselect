@@ -86,7 +86,7 @@ function viewRemitos(){
         <td style="white-space:nowrap">${r.origenCodigo?esc(r.origenCodigo):`<span class="hint">—</span>`}</td>
         <td>${esc(remitoDetalle(r))}</td>
         <td class="r num">${qty(remitoUnidades(r))}</td>
-        <td class="r" style="white-space:nowrap"><button class="btn ghost sm" data-rmdoc="${esc(r.id)}" title="${t('rem.dl',{code:esc(r.codigo)})}">⤓ PDF</button></td>
+        <td class="r" style="white-space:nowrap"><button class="btn ghost sm" data-rmdoc="${esc(r.id)}" title="${t('rem.dl',{code:esc(r.codigo)})}">${ICO.pdf}PDF</button></td>
       </tr>`).join("")}
       </tbody></table></div>`
     : emptyState(t("rem.empty.title"),

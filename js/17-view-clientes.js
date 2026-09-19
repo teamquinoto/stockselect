@@ -51,7 +51,7 @@ function viewClientes(){
     : emptyState(t("cl.empty.title"),t("cl.empty.sub"));
   return `
   <div class="head"><div class="title"><h2>${t("cl.title")}</h2><p>${t("cl.sub",{n:db.clientes.length})}</p></div>
-    <div class="actions"><button class="btn primary" data-clinew>${t("cl.btn.new")}</button></div>
+    <div class="actions"><button class="btn primary" data-clinew>${ICO.adduser}${t("cl.btn.new")}</button></div>
   </div>
   <div class="panel">
     <div class="phead" style="gap:10px"><input class="inp" id="cliSearch" placeholder="${t("cl.ph.search")}" value="${esc(cliFiltro)}" style="max-width:420px">
@@ -858,7 +858,7 @@ function verDoc(tipo,id){
       <span style="color:var(--muted)">${t("cl.v.shipstatus")}</span>
       <span style="display:flex;gap:10px;align-items:center">
         <span class="inv-badge ${received?'received':'transit'}">${received?t("cl.v.received"):t("cl.v.intransit")}</span>
-        <button class="btn ghost sm" data-invstatus-modal="${d.id}">${received?t("cl.v.markintransit"):t("cl.v.markreceived")}</button>
+        <button class="btn ghost sm" data-invstatus-modal="${d.id}">${received?ICO.plane+t("cl.v.markintransit"):ICO.receive+t("cl.v.markreceived")}</button>
       </span></div>` : "";
   // Punto 6: quién vendió (sólo ventas, sólo admin)
   const vendBlock = (!isC && isAdmin()) ? `<div class="totrow"><span style="color:var(--muted)">${t("cl.v.soldby")}</span><span class="num">${esc(saleVendedorNombre(d))}</span></div>` : "";

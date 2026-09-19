@@ -19,8 +19,8 @@ function viewDocs(tipo){
       <p>${isC?t("doc.sub.purch"):t("doc.sub.sales")}</p>
     </div>
     <div class="actions">
-      ${(isC&&puedeComprar())?`<button class="btn" data-import>⤒ Import PDF</button>`:""}
-      <button class="btn ${isC?'up':'down'}" data-open="${tipo}">${isC?"+ Manual purchase":"− New sale"}</button>
+      ${(isC&&puedeComprar())?`<button class="btn" data-import>${ICO.importpdf}Import PDF</button>`:""}
+      <button class="btn ${isC?'up':'down'}" data-open="${tipo}">${isC?ICO.buy+"Manual purchase":ICO.sale+"New sale"}</button>
     </div>
   </div>
   ${list.length ? `<div class="kpis" id="docKpis">${docKpisHTML(tipo, filtrarDocs(tipo))}</div>` : ""}
@@ -189,7 +189,7 @@ function renderDocRows(tipo){
       <td class="r num">${money(d.total, dCcy)}</td>
       ${statusCell}
       ${commCell}
-      <td class="r" style="white-space:nowrap">${(isC&&puedeComprar())?`<button class="btn ghost sm" data-invstatus="${d.id}">${received?t('doc.act.marktransit'):t('doc.act.markreceived')}</button>`:""}<button class="btn ghost sm" data-vdoc="${tipo}:${d.id}">${t("doc.act.view")}</button>${tipo==="venta"?`<button class="btn ghost sm" data-copydoc="${tipo}:${d.id}">${t("doc.act.copy")}</button>`:""}<button class="btn ghost sm" data-editdoc="${tipo}:${d.id}">${t("common.edit")}</button><button class="btn ghost sm" data-deldoc="${tipo}:${d.id}" style="color:var(--alert)">${t("common.delete")}</button></td>
+      <td class="r" style="white-space:nowrap">${(isC&&puedeComprar())?`<button class="btn ghost sm" data-invstatus="${d.id}">${received?ICO.plane+t('doc.act.marktransit'):ICO.receive+t('doc.act.markreceived')}</button>`:""}<button class="btn ghost sm" data-vdoc="${tipo}:${d.id}">${ICO.view}${t("doc.act.view")}</button>${tipo==="venta"?`<button class="btn ghost sm" data-copydoc="${tipo}:${d.id}">${ICO.copy}${t("doc.act.copy")}</button>`:""}<button class="btn ghost sm" data-editdoc="${tipo}:${d.id}">${ICO.edit}${t("common.edit")}</button><button class="btn ghost sm" data-deldoc="${tipo}:${d.id}" style="color:var(--alert);padding:6px 9px" title="${t("common.delete")}" aria-label="${t("common.delete")}">${ICO.trash}</button></td>
     </tr>`;
   }).join("") || `<tr><td colspan="${cols}" style="text-align:center;color:var(--muted);padding:22px">${t("doc.nomatch")}</td></tr>`;
   const cnt=document.getElementById("docCount");
