@@ -949,3 +949,39 @@
   border-radius:50%;border:1px solid var(--line-strong);background:var(--surface-2);color:var(--muted);
   font-size:10px;font-weight:700;cursor:help;vertical-align:middle;line-height:1;font-family:var(--sans)}
 .idot:hover{border-color:var(--accent);color:var(--accent-ink)}
+
+/* ============================================================
+   Items 7 y 8 — tira de "pendientes" (Panel) y filas con 1 primario + overflow
+   Aditivo, tokens propios de la app. No pisa reglas existentes.
+   ============================================================ */
+/* 7 · tira de pendientes */
+.pendstrip{margin:0 0 22px}
+.pendlabel{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;margin:0 0 9px}
+.pendrow{display:flex;flex-wrap:wrap;gap:10px}
+.pchip{display:flex;align-items:center;gap:11px;padding:11px 14px;border-radius:12px;border:1px solid var(--line-strong);
+  background:var(--surface);cursor:pointer;transition:transform .12s,border-color .12s;min-width:212px;text-align:left;font-family:var(--sans)}
+.pchip:hover{transform:translateY(-1px);border-color:var(--accent)}
+.pchip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.pchip .pic{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;color:#fff}
+.pchip .pic svg{width:18px;height:18px}
+.pchip.warn .pic{background:var(--accent)}
+.pchip.info .pic{background:var(--muted)}
+.pchip.split .pic{background:var(--up)}
+.pchip .ptxt{display:flex;flex-direction:column;line-height:1.15}
+.pchip .pn{font-size:21px;font-weight:800;color:var(--text)}
+.pchip .pl{font-size:12.5px;color:var(--muted);margin-top:1px}
+.pchip .pgo{margin-left:auto;color:var(--muted);font-size:18px;padding-left:6px}
+@media (max-width:640px){ .pchip{min-width:0;flex:1 1 100%} }
+
+/* 8 · fila: 1 botón primario + overflow "⋯" */
+.rowacts{display:inline-flex;align-items:center;gap:6px;justify-content:flex-end}
+.rowovf{position:relative;display:inline-block}
+.ovf-toggle{padding:5px 10px;line-height:1;font-weight:800;letter-spacing:1px}
+.ovf-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:30;min-width:174px;
+  background:var(--surface);border:1px solid var(--line-strong);border-radius:11px;padding:5px;
+  box-shadow:0 10px 30px rgba(28,24,16,.16);text-align:left}
+:root[data-theme="dark"] .ovf-menu{box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.ovf-menu .btn{display:flex;align-items:center;gap:9px;width:100%;justify-content:flex-start;
+  border:0;background:none;border-radius:7px;padding:8px 10px;font-size:13px;white-space:nowrap}
+.ovf-menu .btn:hover{background:var(--surface-2)}
+.ovf-menu .btn svg{flex:0 0 auto}
