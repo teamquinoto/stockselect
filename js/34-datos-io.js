@@ -1,6 +1,6 @@
 /* ============================================================
    gestordestock — 34-datos-io.js
-   Parte de la app. Se carga como <script> en el ORDEN del index.html.
+   Parte de la app. Se carga como una etiqueta script en el ORDEN del index.html.
    Todo vive en scope global (sin módulos), igual que antes.
    ============================================================ */
 /* ============================================================
