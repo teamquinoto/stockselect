@@ -53,8 +53,6 @@ function closeModal(){
    lógica de wireXXX() sigue andando sin enterarse.
    ============================================================ */
 (function(){
-  const MESES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-  const DOW   = ["Su","Mo","Tu","We","Th","Fr","Sa"];   // week starts Sunday (US)
   const CAL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>';
 
   let openPop = null;   // popup abierto actualmente (select o calendario)
@@ -128,6 +126,8 @@ function closeModal(){
 
   function openCalendar(inp){
     closeOpen();
+    const MESES = Array.from({length:12},(_,i)=> t("cal.mon."+i));
+    const DOW   = Array.from({length:7},(_,i)=> t("cal.dow."+i));
     const today = new Date(); today.setHours(0,0,0,0);
     const sel = parseISO(inp.value);
     let viewY = (sel||today).getFullYear();
@@ -168,7 +168,7 @@ function closeModal(){
           <div class="cal-nav" data-act="next">›</div>
         </div>
         <div class="cal-grid">${DOW.map(d=>`<div class="cal-dow">${d}</div>`).join('')}${cells}</div>
-        <div class="cal-foot"><button data-act="clear">Clear</button><button data-act="today">Today</button></div>`;
+        <div class="cal-foot"><button data-act="clear">${t("cal.clear")}</button><button data-act="today">${t("cal.today")}</button></div>`;
       pop.querySelectorAll('.cal-cell[data-d]').forEach(c=> c.onclick=()=> commit(new Date(viewY, viewM, +c.dataset.d)));
       pop.querySelector('[data-act="prev"]').onclick = ()=>{ viewM--; if(viewM<0){viewM=11;viewY--;} drawDays(); };
       pop.querySelector('[data-act="next"]').onclick = ()=>{ viewM++; if(viewM>11){viewM=0;viewY++;} drawDays(); };
@@ -320,7 +320,7 @@ function openCmdK(){
   const ov = document.createElement("div");
   ov.id = "cmdk-ov"; ov.className = "cmdk-ov";
   ov.innerHTML = `<div class="cmdk-box">
-      <input class="cmdk-input" placeholder="Search products, customers, invoices…" autocomplete="off" spellcheck="false">
+      <input class="cmdk-input" placeholder="${t("cmdk.ph")}" autocomplete="off" spellcheck="false">
       <div class="cmdk-list"></div>
     </div>`;
   document.body.appendChild(ov);
@@ -331,7 +331,7 @@ function openCmdK(){
   const close = ()=>{ _cmdkOpen=false; document.removeEventListener("keydown", onKey, true); ov.remove(); };
   const hl = ()=>{ list.querySelectorAll(".cmdk-item").forEach((it,idx)=> it.classList.toggle("on", idx===active)); const el=list.querySelector(".cmdk-item.on"); if(el) el.scrollIntoView({block:"nearest"}); };
   const paint = ()=>{
-    if(!results.length){ list.innerHTML = `<div class="cmdk-empty">${input.value.trim()?"No matches":"Type to search products, customers, invoices"}</div>`; return; }
+    if(!results.length){ list.innerHTML = `<div class="cmdk-empty">${input.value.trim()?t("cmdk.nomatch"):t("cmdk.type")}</div>`; return; }
     list.innerHTML = results.map((r,idx)=>`<button class="cmdk-item${idx===active?" on":""}" data-idx="${idx}">
         <span class="cmdk-kind">${esc(r.kind)}</span>
         <span class="cmdk-label">${esc(r.label)}</span>
@@ -346,14 +346,14 @@ function openCmdK(){
     results = [];
     if(q){
       db.productos.filter(p=> ((p.nombre||"")+" "+(p.sku||"")).toLowerCase().includes(q)).slice(0,6)
-        .forEach(p=> results.push({ kind:"Product", label:p.nombre||"—", sub:p.sku||"", action:()=>{ close(); if(typeof openFicha==="function") openFicha(p.id); } }));
+        .forEach(p=> results.push({ kind:t("cmdk.kind.product"), label:p.nombre||"—", sub:p.sku||"", action:()=>{ close(); if(typeof openFicha==="function") openFicha(p.id); } }));
       db.clientes.filter(c=> ((c.nombre||"")+" "+(c.empresa||"")).toLowerCase().includes(q)).slice(0,5)
-        .forEach(c=> results.push({ kind:"Customer", label:c.nombre||"—", sub:c.empresa||"", action:()=>{ close(); if(typeof cliFiltro!=="undefined") cliFiltro=c.nombre||""; setView("clientes"); } }));
+        .forEach(c=> results.push({ kind:t("cmdk.kind.customer"), label:c.nombre||"—", sub:c.empresa||"", action:()=>{ close(); if(typeof cliFiltro!=="undefined") cliFiltro=c.nombre||""; setView("clientes"); } }));
       const docs = [];
       (db.ventas||[]).forEach(d=> docs.push(["venta",d]));
       (db.compras||[]).forEach(d=> docs.push(["compra",d]));
-      docs.filter(([t,d])=> ((d.numero||"")+" "+((d.cliente&&d.cliente.nombre)||d.contraparte||"")).toLowerCase().includes(q)).slice(0,6)
-        .forEach(([t,d])=> results.push({ kind: t==="venta"?"Sale":"Purchase", label:(d.numero||"—")+" · "+((d.cliente&&d.cliente.nombre)||d.contraparte||"—"), sub: fmtDate(d.fecha), action:()=>{ close(); verDoc(t, d.id); } }));
+      docs.filter(([dt,d])=> ((d.numero||"")+" "+((d.cliente&&d.cliente.nombre)||d.contraparte||"")).toLowerCase().includes(q)).slice(0,6)
+        .forEach(([dt,d])=> results.push({ kind: dt==="venta"?t("cmdk.kind.sale"):t("cmdk.kind.purchase"), label:(d.numero||"—")+" · "+((d.cliente&&d.cliente.nombre)||d.contraparte||"—"), sub: fmtDate(d.fecha), action:()=>{ close(); verDoc(dt, d.id); } }));
     }
     active = 0; paint();
   };

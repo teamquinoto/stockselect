@@ -9,7 +9,7 @@
 /* Barras horizontales: items=[{label, sku, value}], fmt=formateador, color=CSS var */
 function hbars(items, fmt, color){
   const vals = items.filter(i=> i.value>0);
-  if(!vals.length) return `<div class="cempty">No data to chart.</div>`;
+  if(!vals.length) return `<div class="cempty">${t("an.nodata")}</div>`;
   const max = Math.max(...vals.map(i=>i.value)) || 1;
   return vals.map(i=>{
     const pct = Math.max(2, (i.value/max)*100);
@@ -32,7 +32,7 @@ function hbars(items, fmt, color){
 const DONUT_COLORS = ["#2563eb","#2dbd8f","#8a5cf6","#f0a935","#f16a68","#2b8fd9","#e069b6","#7c8b9a"];
 function donut(cid, items, fmt){
   const data = items.filter(i=> i.value>0).sort((a,b)=> b.value-a.value);
-  if(!data.length) return `<div class="cempty">No data to chart.</div>`;
+  if(!data.length) return `<div class="cempty">${t("an.nodata")}</div>`;
   const total = data.reduce((a,i)=> a+i.value, 0);
   let cum = 0;
   const segs = data.map((i,idx)=>{
@@ -50,7 +50,7 @@ function donut(cid, items, fmt){
     <circle cx="21" cy="21" r="15.915" fill="none" stroke="var(--surface-2)" stroke-width="6"></circle>
     ${segs.map(s=>s.seg).join("")}
     <text x="21" y="20.6" text-anchor="middle" font-size="${donutFit(totStr)}" class="donut-ctr-val" data-ctrval="1">${esc(totStr)}</text>
-    <text x="21" y="24.4" text-anchor="middle" font-size="2.1" class="donut-ctr-lbl" data-ctrlbl="1">Total</text>
+    <text x="21" y="24.4" text-anchor="middle" font-size="2.1" class="donut-ctr-lbl" data-ctrlbl="1">${t("common.total")}</text>
   </svg>`;
   const legend = `<div class="donut-legend">${segs.map(s=>`
     <div class="donut-leg" data-donut="${esc(cid)}" data-idx="${s.idx}">
@@ -96,7 +96,7 @@ function wireDonuts(){
         ctrLbl.textContent = seg.dataset.pct + '% · ' + seg.dataset.lbl;
       } else {
         setCtr(totFmt);
-        ctrLbl.textContent = 'Total';
+        ctrLbl.textContent = t("common.total");
       }
     };
     const apply = (idx)=>{ active = (active===idx) ? null : idx; paint(); };
@@ -213,7 +213,7 @@ function viewAnalisis(){
   const socRows = socOrder.filter(k=>bySoc[k]).map(k=>{
     const e = bySoc[k];
     const mg = round2(e.revenue - e.cogs);
-    return { soc:k, nombre: k==="—"?"— (no breakdown)":storeName(k), units:e.units, cogs:e.cogs,
+    return { soc:k, nombre: k==="—"?t("an.soc.nobreakdown"):storeName(k), units:e.units, cogs:e.cogs,
              avg: e.units>0 ? round2(e.cogs/e.units) : 0, revenue:e.revenue, margin:mg,
              marginPct: e.revenue>0 ? (mg/e.revenue*100) : 0 };
   });
@@ -226,7 +226,7 @@ function viewAnalisis(){
   const byMonth = {};
   rows.forEach(r=>{ const k=(r.fecha||"").slice(0,7); if(!k) return; (byMonth[k]=byMonth[k]||{revenue:0,units:0}); byMonth[k].revenue+=r.revenue; byMonth[k].units+=r.cantidad; });
   const monthsSorted = Object.keys(byMonth).sort();
-  const trend = monthsSorted.map(k=>{ const [y,m]=k.split("-"); return { label:`${_MONTHS3[(+m)-1]} ${y.slice(2)}`, value: anMetric==="units"?byMonth[k].units:byMonth[k].revenue }; });
+  const trend = monthsSorted.map(k=>{ const [y,m]=k.split("-"); return { label:`${t("cal.mon."+((+m)-1)).slice(0,3)} ${y.slice(2)}`, value: anMetric==="units"?byMonth[k].units:byMonth[k].revenue }; });
 
   // --- Punto 2/6: rendimiento por vendedor (unidades, revenue, margen FIFO) ---
   const vendPerf = Object.entries(byVend)
@@ -236,80 +236,80 @@ function viewAnalisis(){
 
   const kpis = `
   <div class="kpis">
-    <div class="kpi"><div class="lbl">Revenue</div><div class="val">${money(revenue)}</div><div class="sub">${qty(units)} units sold</div></div>
-    <div class="kpi"><div class="lbl">COGS (FIFO)</div><div class="val">${money(cogs)}</div><div class="sub">actual cost layers</div></div>
-    <div class="kpi"><div class="lbl">Gross margin</div><div class="val">${money(margin)}</div><div class="sub">revenue − COGS</div></div>
-    <div class="kpi"><div class="lbl">Margin %</div><div class="val">${revenue>0?nf0.format(marginPct)+"%":"—"}</div><div class="sub">on revenue</div></div>
+    <div class="kpi"><div class="lbl">${t("an.kpi.revenue")}</div><div class="val">${money(revenue)}</div><div class="sub">${t("an.kpi.unitssold",{n:qty(units)})}</div></div>
+    <div class="kpi"><div class="lbl">${t("an.kpi.cogs")}</div><div class="val">${money(cogs)}</div><div class="sub">${t("an.kpi.cogssub")}</div></div>
+    <div class="kpi"><div class="lbl">${t("an.kpi.grossmargin")}</div><div class="val">${money(margin)}</div><div class="sub">${t("an.kpi.grosssub")}</div></div>
+    <div class="kpi"><div class="lbl">${t("an.kpi.marginpct")}</div><div class="val">${revenue>0?nf0.format(marginPct)+"%":"—"}</div><div class="sub">${t("an.kpi.onrev")}</div></div>
   </div>`;
 
   const sagas=sagasUnicas(), paises=paisesVentas();
   const slicers = `
   <div class="slicers">
-    <div class="slicer"><span>Seller</span><select id="an_vend"><option value="">All</option>${vendedores().map(v=>`<option value="${esc(v.id)}" ${anFiltros.vend===v.id?"selected":""}>${esc(v.nombre)}</option>`).join("")}</select></div>
-    <div class="slicer"><span>Line</span><select id="an_saga"><option value="">All</option>${sagas.map(s=>`<option value="${esc(s)}" ${anFiltros.saga===s?"selected":""}>${esc(s)}</option>`).join("")}</select></div>
-    <div class="slicer"><span>Language</span><select id="an_idioma"><option value="">All</option>${LANGS.map(([v,l])=>`<option value="${v}" ${anFiltros.idioma===v?"selected":""}>${esc(l)}</option>`).join("")}</select></div>
-    <div class="slicer"><span>Country</span><select id="an_pais"><option value="">All</option>${paises.map(c=>`<option value="${esc(c)}" ${anFiltros.pais===c?"selected":""}>${esc(c)}</option>`).join("")}</select></div>
-    <div class="slicer"><span>From</span><input type="date" id="an_desde" value="${esc(anFiltros.desde)}"></div>
-    <div class="slicer"><span>To</span><input type="date" id="an_hasta" value="${esc(anFiltros.hasta)}"></div>
-    <button class="slicer-reset" id="an_clear">Reset</button>
+    <div class="slicer"><span>${t("an.sl.seller")}</span><select id="an_vend"><option value="">${t("an.sl.all")}</option>${vendedores().map(v=>`<option value="${esc(v.id)}" ${anFiltros.vend===v.id?"selected":""}>${esc(v.nombre)}</option>`).join("")}</select></div>
+    <div class="slicer"><span>${t("an.sl.line")}</span><select id="an_saga"><option value="">${t("an.sl.all")}</option>${sagas.map(s=>`<option value="${esc(s)}" ${anFiltros.saga===s?"selected":""}>${esc(s)}</option>`).join("")}</select></div>
+    <div class="slicer"><span>${t("an.sl.language")}</span><select id="an_idioma"><option value="">${t("an.sl.all")}</option>${LANGS.map(([v,l])=>`<option value="${v}" ${anFiltros.idioma===v?"selected":""}>${esc(l)}</option>`).join("")}</select></div>
+    <div class="slicer"><span>${t("an.sl.country")}</span><select id="an_pais"><option value="">${t("an.sl.all")}</option>${paises.map(c=>`<option value="${esc(c)}" ${anFiltros.pais===c?"selected":""}>${esc(c)}</option>`).join("")}</select></div>
+    <div class="slicer"><span>${t("an.sl.from")}</span><input type="date" id="an_desde" value="${esc(anFiltros.desde)}"></div>
+    <div class="slicer"><span>${t("an.sl.to")}</span><input type="date" id="an_hasta" value="${esc(anFiltros.hasta)}"></div>
+    <button class="slicer-reset" id="an_clear">${t("an.sl.reset")}</button>
   </div>`;
 
   const charts = `
   <div class="chart-grid">
     <div class="panel chart" style="grid-column:1/-1">
-      <p class="ctitle">Monthly trend</p>
-      <p class="csub">${anMetric==="units"?"Units":"Revenue"} per month in the current selection.</p>
-      ${trend.length ? hbars(trend, mfmt, "var(--accent)") : `<div class="cempty">No sales in this selection.</div>`}
+      <p class="ctitle">${t("an.trend.title")}</p>
+      <p class="csub">${t("an.trend.sub",{metric:anMetric==="units"?t("an.w.units"):t("an.w.revenue")})}</p>
+      ${trend.length ? hbars(trend, mfmt, "var(--accent)") : `<div class="cempty">${t("an.nosales")}</div>`}
     </div>
     <div class="panel chart">
-      <p class="ctitle">Top 10 products by ${anMetric==="units"?"units":"revenue"}</p>
-      <p class="csub">Where the money comes from. Tap a bar to filter its line.</p>
-      ${rows.length ? hbars(top(byProd, mval).map(t=>({label:t.label,value:t.value,saga:sagaOfName(t.label)})), mfmt, "var(--accent)") : `<div class="cempty">No sales in this selection.</div>`}
+      <p class="ctitle">${t("an.top.title",{metric:anMetric==="units"?t("an.w.unitslow"):t("an.w.revenuelow")})}</p>
+      <p class="csub">${t("an.top.sub")}</p>
+      ${rows.length ? hbars(top(byProd, mval).map(t=>({label:t.label,value:t.value,saga:sagaOfName(t.label)})), mfmt, "var(--accent)") : `<div class="cempty">${t("an.nosales")}</div>`}
     </div>
     <div class="panel chart">
-      <p class="ctitle">Top 10 products by gross margin</p>
-      <p class="csub">Revenue − FIFO cost, per product.</p>
-      ${rows.length ? hbars(topMargin, money, "var(--up)") : `<div class="cempty">No sales in this selection.</div>`}
+      <p class="ctitle">${t("an.topmargin.title")}</p>
+      <p class="csub">${t("an.topmargin.sub")}</p>
+      ${rows.length ? hbars(topMargin, money, "var(--up)") : `<div class="cempty">${t("an.nosales")}</div>`}
     </div>
     <div class="panel chart">
-      <p class="ctitle">${anMetric==="units"?"Units":"Revenue"} by seller</p>
-      <p class="csub">Who's selling. Click a slice for its ${anMetric==="units"?"units":"amount"}.</p>
-      ${rows.length ? donut("d-vend", top(byVend,mval), mfmt) : `<div class="cempty">No sales.</div>`}
+      <p class="ctitle">${t("an.byseller.title",{metric:anMetric==="units"?t("an.w.units"):t("an.w.revenue")})}</p>
+      <p class="csub">${t("an.byseller.sub",{m:anMetric==="units"?t("an.w.unitslow"):t("an.w.amount")})}</p>
+      ${rows.length ? donut("d-vend", top(byVend,mval), mfmt) : `<div class="cempty">${t("an.nosales.short")}</div>`}
     </div>
     <div class="panel chart">
-      <p class="ctitle">${anMetric==="units"?"Units":"Revenue"} by country</p>
-      <p class="csub">Buyer country on each sale. Click a slice for its ${anMetric==="units"?"units":"amount"}.</p>
-      ${Object.keys(byPais).length ? donut("d-pais", top(byPais,mval,8), mfmt) : `<div class="cempty">No country data — add it on the customer.</div>`}
+      <p class="ctitle">${t("an.bycountry.title",{metric:anMetric==="units"?t("an.w.units"):t("an.w.revenue")})}</p>
+      <p class="csub">${t("an.bycountry.sub",{m:anMetric==="units"?t("an.w.unitslow"):t("an.w.amount")})}</p>
+      ${Object.keys(byPais).length ? donut("d-pais", top(byPais,mval,8), mfmt) : `<div class="cempty">${t("an.bycountry.empty")}</div>`}
     </div>
     <div class="panel chart">
-      <p class="ctitle">${anMetric==="units"?"Units":"Revenue"} by language</p>
-      <p class="csub">JP vs SP/ESP. Click a slice for its ${anMetric==="units"?"units":"amount"}.</p>
-      ${Object.keys(byLang).length ? donut("d-lang", top(byLang,mval), mfmt) : `<div class="cempty">No language data.</div>`}
+      <p class="ctitle">${t("an.bylang.title",{metric:anMetric==="units"?t("an.w.units"):t("an.w.revenue")})}</p>
+      <p class="csub">${t("an.bylang.sub",{m:anMetric==="units"?t("an.w.unitslow"):t("an.w.amount")})}</p>
+      ${Object.keys(byLang).length ? donut("d-lang", top(byLang,mval), mfmt) : `<div class="cempty">${t("an.bylang.empty")}</div>`}
     </div>
     <div class="panel chart">
-      <p class="ctitle">Seller performance</p>
-      <p class="csub">Units, revenue and FIFO gross margin per seller in the current selection.</p>
+      <p class="ctitle">${t("an.perf.title")}</p>
+      <p class="csub">${t("an.perf.sub")}</p>
       ${vendPerf.length ? `<div class="table-scroll"><table>
-        <thead><tr><th>Seller</th><th class="r">Units</th><th class="r">Revenue</th><th class="r">Margin</th><th class="r">Margin %</th></tr></thead>
+        <thead><tr><th>${t("an.th.seller")}</th><th class="r">${t("an.th.units")}</th><th class="r">${t("an.th.revenue")}</th><th class="r">${t("an.th.margin")}</th><th class="r">${t("an.th.marginpct")}</th></tr></thead>
         <tbody>${vendPerf.map(r=>`<tr><td>${esc(r.nombre)}</td><td class="r num">${qty(r.units)}</td><td class="r num">${money(r.revenue)}</td><td class="r num">${money(r.margin)}</td><td class="r num">${r.revenue>0?nf0.format(r.marginPct)+"%":"—"}</td></tr>`).join("")}</tbody>
-      </table></div>` : `<div class="cempty">No sales in this selection.</div>`}
+      </table></div>` : `<div class="cempty">${t("an.nosales")}</div>`}
     </div>
     ${STORE_IDS.length>1 ? `<div class="panel chart" style="grid-column:1/-1">
-      <p class="ctitle">Cost &amp; margin by society (provenance)</p>
-      <p class="csub">Which society's stock was sold, its real FIFO cost and margin. Same pool price for all — the margin gap is the cost gap. Revenue allocated per unit shipped from each society.</p>
+      <p class="ctitle">${t("an.soc.title")}</p>
+      <p class="csub">${t("an.soc.sub")}</p>
       ${socRows.length ? `<div class="table-scroll"><table>
-        <thead><tr><th>Society</th><th class="r">Units sold</th><th class="r">COGS (FIFO)</th><th class="r">Avg unit cost</th><th class="r">Revenue*</th><th class="r">Margin</th><th class="r">Margin %</th></tr></thead>
+        <thead><tr><th>${t("an.soc.society")}</th><th class="r">${t("an.soc.unitssold")}</th><th class="r">${t("an.soc.cogs")}</th><th class="r">${t("an.soc.avgcost")}</th><th class="r">${t("an.soc.revenue")}</th><th class="r">${t("an.soc.margin")}</th><th class="r">${t("an.soc.marginpct")}</th></tr></thead>
         <tbody>${socRows.map(r=>`<tr><td>${esc(r.nombre)}</td><td class="r num">${qty(r.units)}</td><td class="r num">${money(r.cogs)}</td><td class="r num">${money(r.avg)}</td><td class="r num">${money(r.revenue)}</td><td class="r num">${money(r.margin)}</td><td class="r num">${r.revenue>0?nf0.format(r.marginPct)+"%":"—"}</td></tr>`).join("")}</tbody>
-        <tfoot><tr><td><b>Total</b></td><td class="r num"><b>${qty(units)}</b></td><td class="r num"><b>${money(cogs)}</b></td><td class="r num">—</td><td class="r num"><b>${money(revenue)}</b></td><td class="r num"><b>${money(margin)}</b></td><td class="r num"><b>${revenue>0?nf0.format(marginPct)+"%":"—"}</b></td></tr></tfoot>
-      </table></div><p class="csub" style="margin-top:8px">*Revenue is pool-level; here it's split across societies pro-rata by units shipped, only to estimate each one's margin.</p>` : `<div class="cempty">No sales in this selection.</div>`}
+        <tfoot><tr><td><b>${t("an.soc.total")}</b></td><td class="r num"><b>${qty(units)}</b></td><td class="r num"><b>${money(cogs)}</b></td><td class="r num">—</td><td class="r num"><b>${money(revenue)}</b></td><td class="r num"><b>${money(margin)}</b></td><td class="r num"><b>${revenue>0?nf0.format(marginPct)+"%":"—"}</b></td></tr></tfoot>
+      </table></div><p class="csub" style="margin-top:8px">${t("an.soc.foot")}</p>` : `<div class="cempty">${t("an.nosales")}</div>`}
     </div>` : ""}
   </div>`;
 
   return `
-  <div class="head"><div class="title"><h2>Analysis</h2><p>Sales, FIFO margin and seller performance. Filter with the slicers.</p></div>
+  <div class="head"><div class="title"><h2>${t("an.title")}</h2><p>${t("an.sub")}</p></div>
     <div class="actions" style="gap:8px">
-      <div class="seg"><button class="seg-btn ${anMetric==="usd"?"on":""}" data-metric="usd">USD</button><button class="seg-btn ${anMetric==="units"?"on":""}" data-metric="units">Units</button></div>
-      ${isAdmin()?`<button class="btn primary" id="an_pnl">⤓ Export P&amp;L (Excel)</button>`:""}
+      <div class="seg"><button class="seg-btn ${anMetric==="usd"?"on":""}" data-metric="usd">${t("an.metric.usd")}</button><button class="seg-btn ${anMetric==="units"?"on":""}" data-metric="units">${t("an.metric.units")}</button></div>
+      ${isAdmin()?`<button class="btn primary" id="an_pnl">${t("an.exportpnl")}</button>`:""}
     </div>
   </div>
   ${slicers}
@@ -331,7 +331,7 @@ function wireAnalisis(){
   document.querySelectorAll("[data-metric]").forEach(b=> b.onclick=()=>{ anMetric=b.dataset.metric; render(); });
   // Punto 20: barras de producto clickeables -> filtran su línea (saga)
   document.querySelectorAll('#main .crow[data-saga]').forEach(el=>{
-    el.style.cursor="pointer"; el.title="Filter this line";
+    el.style.cursor="pointer"; el.title=t("an.filterline");
     el.onclick=()=>{ const sg=el.dataset.saga; anFiltros.saga = (anFiltros.saga===sg?"":sg); render(); };
   });
   // Punto 5: donuts interactivos (revenue/units por local, país, idioma)

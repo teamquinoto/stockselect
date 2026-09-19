@@ -412,7 +412,7 @@ const COSTO_TIPOS = [
   { id:"comision", label:"Sales commission" },
   { id:"otro",     label:"Other" }
 ];
-function costoTipoLabel(id){ const t=COSTO_TIPOS.find(x=>x.id===id); return t?t.label:"Other"; }
+function costoTipoLabel(id){ return COSTO_TIPOS.some(x=>x.id===id) ? t("md.costo."+id) : t("md.costo.otro"); }
 function saleCostosExtra(d){ return round2(((d&&d.costosExtra)||[]).reduce((a,c)=> a + (+c.monto||0), 0)); }
 function saleCostosPorTipo(d){
   const acc={}; ((d&&d.costosExtra)||[]).forEach(c=>{ const k=c.tipo||"otro"; acc[k]=round2((acc[k]||0)+(+c.monto||0)); });

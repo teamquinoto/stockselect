@@ -11,8 +11,8 @@ function pdfReady(){ return !!(window.jspdf && window.jspdf.jsPDF); }
 function pdfMoney(n, ccy){ return monedaSym(ccy || reportCcy()) + " " + nf2.format(n||0); }
 
 function generarInvoicePDF(id){
-  if(!pdfReady()){ toast("Couldn't load the PDF generator (try once with internet)","warn"); return; }
-  const d = db.ventas.find(v=>v.id===id); if(!d){ toast("Sale not found","warn"); return; }
+  if(!pdfReady()){ toast(t("pdf.err.gen"),"warn"); return; }
+  const d = db.ventas.find(v=>v.id===id); if(!d){ toast(t("pdf.err.saleNotFound"),"warn"); return; }
   const dCcy = storeCcy(d.storeVenta||d.store||STORE_IDS[0]);   // el invoice se emite en la moneda del depósito
   const cli = d.cliente || (d.clienteId?clienteById(d.clienteId):null);
   const { jsPDF } = window.jspdf;
@@ -29,22 +29,22 @@ function generarInvoicePDF(id){
   doc.setFillColor(ACC[0],ACC[1],ACC[2]); doc.rect(0,0,W,96,"F");
   doc.setTextColor(255,255,255);
   doc.setFont("helvetica","bold"); doc.setFontSize(19);
-  doc.text(em.nombre || "INVOICE", M, 42);
+  doc.text(em.nombre || t("pdf.inv.title"), M, 42);
   doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
   let hy=60;
   [em.direccion, [em.email, em.tel].filter(Boolean).join("  ·  ")].filter(Boolean).forEach(t=>{ doc.text(String(t), M, hy); hy+=12; });
   // right side: INVOICE + number + date
   doc.setFont("helvetica","bold"); doc.setFontSize(22);
-  doc.text("INVOICE", W-M, 40, {align:"right"});
+  doc.text(t("pdf.inv.title"), W-M, 40, {align:"right"});
   doc.setFont("helvetica","normal"); doc.setFontSize(9.5);
-  doc.text(`No. ${d.numero||"—"}`, W-M, 58, {align:"right"});
+  doc.text(t("pdf.inv.no",{n:d.numero||"—"}), W-M, 58, {align:"right"});
   doc.text(fmtDate(d.fecha), W-M, 72, {align:"right"});
 
   /* ---------- Bill To ---------- */
   let y=132;
   doc.setFont("helvetica","bold"); doc.setFontSize(9); setInk(MUT);
-  doc.text("BILL TO", M, y);
-  doc.text("STORE", W-M-150, y);
+  doc.text(t("pdf.inv.billto"), M, y);
+  doc.text(t("pdf.store"), W-M-150, y);
   y+=15; setInk(INK); doc.setFontSize(10);
   const leftLines=[];
   if(cli){
@@ -74,10 +74,10 @@ function generarInvoicePDF(id){
   const drawHead=(yy)=>{
     doc.setFillColor(ACC[0],ACC[1],ACC[2]); doc.rect(M, yy-13, W-2*M, 24, "F");
     doc.setTextColor(255,255,255); doc.setFont("helvetica","bold"); doc.setFontSize(9);
-    doc.text("ITEM", cItem+6, yy+3);
-    doc.text("QTY", cQty+wQty, yy+3, {align:"right"});
-    doc.text("UNIT PRICE", cUnit+wUnit, yy+3, {align:"right"});
-    doc.text("AMOUNT", cAmt+wAmt, yy+3, {align:"right"});
+    doc.text(t("pdf.th.item"), cItem+6, yy+3);
+    doc.text(t("pdf.th.qty"), cQty+wQty, yy+3, {align:"right"});
+    doc.text(t("pdf.th.unitprice"), cUnit+wUnit, yy+3, {align:"right"});
+    doc.text(t("pdf.th.amount"), cAmt+wAmt, yy+3, {align:"right"});
     return yy+24;
   };
   y = drawHead(y);
@@ -113,23 +113,23 @@ function generarInvoicePDF(id){
     doc.text(label, boxX, y); setInk(opts.bold?INK:INK);
     doc.text(val, W-M, y, {align:"right"}); y+= opts.big?22:16;
   };
-  line("Subtotal", pdfMoney(sub, dCcy));
-  line("Shipping", d.envio && d.envio.tipo==="free" ? "Free" : pdfMoney(envio, dCcy));
-  (d.cargosCliente||[]).forEach(c=> line(c.nota||"Charge", pdfMoney(c.monto||0, dCcy)));   // Task 5
+  line(t("pdf.subtotal"), pdfMoney(sub, dCcy));
+  line(t("pdf.shipping"), d.envio && d.envio.tipo==="free" ? t("pdf.free") : pdfMoney(envio, dCcy));
+  (d.cargosCliente||[]).forEach(c=> line(c.nota||t("pdf.charge"), pdfMoney(c.monto||0, dCcy)));   // Task 5
   y+=4;
   doc.setDrawColor(ACC[0],ACC[1],ACC[2]); doc.setLineWidth(1.2); doc.line(boxX, y-8, W-M, y-8); doc.setLineWidth(1);
   y+=4;
   doc.setFillColor(ACC[0],ACC[1],ACC[2]);
   const total=(d.total!=null)?d.total:round2(sub+envio+((d.cargosCliente||[]).reduce((a,c)=>a+(c.monto||0),0)));
-  line("TOTAL", pdfMoney(total, dCcy), {bold:true, big:true});
+  line(t("pdf.total"), pdfMoney(total, dCcy), {bold:true, big:true});
 
   /* ---------- Footer ---------- */
   setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
-  doc.text("Thank you for your business.", M, H-46);
+  doc.text(t("pdf.inv.thanks"), M, H-46);
   doc.setDrawColor(LINE[0],LINE[1],LINE[2]); doc.line(M, H-58, W-M, H-58);
 
   doc.save(`invoice-${(d.numero||"sale")}.pdf`);
-  toast("Invoice downloaded");
+  toast(t("pdf.inv.downloaded"));
 }
 
 /* ============================================================
@@ -141,19 +141,19 @@ function generarInvoicePDF(id){
    referencia. Lo que queda en Swan (USA) NO viaja, así que no figura.
    ============================================================ */
 function generarRemitoPDF(conjuntaId){
-  if(!pdfReady()){ toast("Couldn't load the PDF generator (try once with internet)","warn"); return; }
-  const d = (db.conjuntas||[]).find(x=>x.id===conjuntaId); if(!d){ toast("Joint buy not found","warn"); return; }
+  if(!pdfReady()){ toast(t("pdf.err.gen"),"warn"); return; }
+  const d = (db.conjuntas||[]).find(x=>x.id===conjuntaId); if(!d){ toast(t("pdf.err.jointNotFound"),"warn"); return; }
   // Filas que VIAJAN: ours→AR (aTransito) y ajeno por dueño.
   const filas = [];
   (d.lineas||[]).forEach(l=>{
     const nom = (l.sku?`[${l.sku}] `:"")+(l.nombre||"");
-    if((l.aTransito||0)>0) filas.push({ nom, owner:"Ours (Swan)", qty:l.aTransito, costo:l.costoUnit||0 });
+    if((l.aTransito||0)>0) filas.push({ nom, owner:t("pdf.owner.ours"), ours:true, qty:l.aTransito, costo:l.costoUnit||0 });
     if((l.ajeno||0)>0){
       const c = l.terceroId ? clienteById(l.terceroId) : null;
-      filas.push({ nom, owner:(c?(c.nombre+(c.empresa?` · ${c.empresa}`:"")):"Third party"), qty:l.ajeno, costo:l.costoUnit||0 });
+      filas.push({ nom, owner:(c?(c.nombre+(c.empresa?` · ${c.empresa}`:"")):t("pdf.owner.thirdparty")), ours:false, qty:l.ajeno, costo:l.costoUnit||0 });
     }
   });
-  if(!filas.length){ toast("Nothing travels to AR in this joint buy","warn"); return; }
+  if(!filas.length){ toast(t("pdf.err.nothingTravels"),"warn"); return; }
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit:"pt", format:"letter" });
@@ -166,19 +166,19 @@ function generarRemitoPDF(conjuntaId){
   doc.setFillColor(ACC[0],ACC[1],ACC[2]); doc.rect(0,0,W,96,"F");
   doc.setTextColor(255,255,255);
   doc.setFont("helvetica","bold"); doc.setFontSize(19);
-  doc.text(em.nombre || "REMITO", M, 42);
+  doc.text(em.nombre || t("pdf.rem.title"), M, 42);
   doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
-  doc.text("Internal transfer note · USA (Swan) → AR (Select)", M, 60);
+  doc.text(t("pdf.rem.subInternal"), M, 60);
   doc.setFont("helvetica","bold"); doc.setFontSize(20);
-  doc.text("REMITO", W-M, 40, {align:"right"});
+  doc.text(t("pdf.rem.title"), W-M, 40, {align:"right"});
   doc.setFont("helvetica","normal"); doc.setFontSize(9.5);
-  doc.text(`Shipment ${d.numero||"—"}`, W-M, 58, {align:"right"});
+  doc.text(t("pdf.rem.shipment",{n:d.numero||"—"}), W-M, 58, {align:"right"});
   doc.text(fmtDate(d.fecha), W-M, 72, {align:"right"});
 
   /* Sub-caption */
   let y=126;
   setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(9);
-  doc.text("Not a commercial invoice — internal movement document. Quantities already filtered (US-kept units excluded).", M, y);
+  doc.text(t("pdf.rem.caption"), M, y);
   y+=22;
 
   /* Table */
@@ -190,11 +190,11 @@ function generarRemitoPDF(conjuntaId){
   const drawHead=(yy)=>{
     doc.setFillColor(ACC[0],ACC[1],ACC[2]); doc.rect(M, yy-13, W-2*M, 24, "F");
     doc.setTextColor(255,255,255); doc.setFont("helvetica","bold"); doc.setFontSize(9);
-    doc.text("ITEM", cItem+6, yy+3);
-    doc.text("OWNER", cOwn, yy+3);
-    doc.text("QTY", cQty+wQty, yy+3, {align:"right"});
-    doc.text("REF. COST", cUnit+wUnit, yy+3, {align:"right"});
-    doc.text("AMOUNT", cAmt+wAmt, yy+3, {align:"right"});
+    doc.text(t("pdf.th.item"), cItem+6, yy+3);
+    doc.text(t("pdf.th.owner"), cOwn, yy+3);
+    doc.text(t("pdf.th.qty"), cQty+wQty, yy+3, {align:"right"});
+    doc.text(t("pdf.th.refcost"), cUnit+wUnit, yy+3, {align:"right"});
+    doc.text(t("pdf.th.amount"), cAmt+wAmt, yy+3, {align:"right"});
     return yy+24;
   };
   y = drawHead(y);
@@ -207,7 +207,7 @@ function generarRemitoPDF(conjuntaId){
     zebra=!zebra;
     const tTop=y+1;
     setInk(INK); doc.setFontSize(9.5); doc.text(wrapped, cItem+6, tTop);
-    setInk(f.owner.indexOf("Ours")===0?MUT:INK); doc.setFontSize(9);
+    setInk(f.ours?MUT:INK); doc.setFontSize(9);
     doc.text(doc.splitTextToSize(f.owner, wOwn), cOwn, tTop);
     setInk(INK); doc.setFontSize(9.5);
     doc.text(qty(f.qty), cQty+wQty, tTop, {align:"right"});
@@ -224,17 +224,17 @@ function generarRemitoPDF(conjuntaId){
     setInk(opts.bold?INK:MUT); doc.text(label, boxX, y); setInk(INK);
     doc.text(val, W-M, y, {align:"right"}); y+= opts.big?22:16;
   };
-  line("Total units traveling", qty(totQ));
+  line(t("pdf.rem.totunits"), qty(totQ));
   doc.setDrawColor(ACC[0],ACC[1],ACC[2]); doc.setLineWidth(1.2); doc.line(boxX, y-8, W-M, y-8); doc.setLineWidth(1); y+=4;
-  line("Reference value", pdfMoney(totAmt, "USD"), {bold:true, big:true});
+  line(t("pdf.rem.refvalue"), pdfMoney(totAmt, "USD"), {bold:true, big:true});
 
   /* Footer */
   setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
-  doc.text("Third-party units belong to their listed owner and are moved for logistics/traceability only.", M, H-46);
+  doc.text(t("pdf.rem.footer"), M, H-46);
   doc.setDrawColor(LINE[0],LINE[1],LINE[2]); doc.line(M, H-58, W-M, H-58);
 
   doc.save(`remito-${(d.numero||"shipment")}.pdf`);
-  toast("Remito downloaded");
+  toast(t("pdf.rem.downloaded"));
 }
 
 /* ============================================================
@@ -244,8 +244,8 @@ function generarRemitoPDF(conjuntaId){
    El remito A imprime de qué U salió, para la trazabilidad del split.
    ============================================================ */
 function generarRemitoDocPDF(remitoId){
-  if(!pdfReady()){ toast("Couldn't load the PDF generator (try once with internet)","warn"); return; }
-  const r = remitoById(remitoId); if(!r){ toast("Remito not found","warn"); return; }
+  if(!pdfReady()){ toast(t("pdf.err.gen"),"warn"); return; }
+  const r = remitoById(remitoId); if(!r){ toast(t("pdf.err.remNotFound"),"warn"); return; }
   const esTercero = r.tipo==="ar-tercero";
   const esSelect  = r.tipo==="ar-select";
   // Un remito NO lista lo "ours" cuando además lleva líneas de terceros: la mercadería
@@ -256,13 +256,13 @@ function generarRemitoDocPDF(remitoId){
   let lineasVivas = (r.lineas||[]).filter(l=> (l.cantidad||0)>0);
   if(lineasVivas.some(l=> l.rol!=="ours")) lineasVivas = lineasVivas.filter(l=> l.rol!=="ours");
   const filas = lineasVivas.map(l=>{
-    const detalle = l.rol==="ours"   ? "Ours → AR"
-                  : l.rol==="select" ? ("Kept for Select" + (l.owner?` · from ${l.owner}`:""))
-                  : (l.owner || "Third party");
+    const detalle = l.rol==="ours"   ? t("pdf.remdoc.oursAR")
+                  : l.rol==="select" ? (t("pdf.remdoc.keptselect") + (l.owner?t("pdf.remdoc.fromowner",{owner:l.owner}):""))
+                  : (l.owner || t("pdf.owner.thirdparty"));
     return { nom:(l.sku?`[${l.sku}] `:"")+(l.nombre||""), detalle, qty:l.cantidad||0, ours:l.rol==="ours",
              costo:+l.costoUnit||0, charge:(l.charge!=null?+l.charge:(+l.costoUnit||0)) };
   });
-  if(!filas.length){ toast("This remito has no lines","warn"); return; }
+  if(!filas.length){ toast(t("pdf.err.remNoLines"),"warn"); return; }
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit:"pt", format:"letter" });
@@ -276,13 +276,13 @@ function generarRemitoDocPDF(remitoId){
   doc.setFillColor(ACC[0],ACC[1],ACC[2]); doc.rect(0,0,W,96,"F");
   doc.setTextColor(255,255,255);
   doc.setFont("helvetica","bold"); doc.setFontSize(19);
-  doc.text(em.nombre || "REMITO", M, 42);
+  doc.text(em.nombre || t("pdf.rem.title"), M, 42);
   doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
-  doc.text(esTercero ? "Delivery note + charge · to owner (Argentina)"
-         : esSelect  ? "Internal note · retained as Select (AR) stock"
-         :             "Internal transfer note · USA (Swan) → AR (Select)", M, 60);
+  doc.text(esTercero ? t("pdf.remdoc.subTercero")
+         : esSelect  ? t("pdf.remdoc.subSelect")
+         :             t("pdf.rem.subInternal"), M, 60);
   doc.setFont("helvetica","bold"); doc.setFontSize(20);
-  doc.text("REMITO", W-M, 40, {align:"right"});
+  doc.text(t("pdf.rem.title"), W-M, 40, {align:"right"});
   doc.setFont("helvetica","bold"); doc.setFontSize(13);
   doc.text(r.codigo, W-M, 60, {align:"right"});
   doc.setFont("helvetica","normal"); doc.setFontSize(9.5);
@@ -292,29 +292,29 @@ function generarRemitoDocPDF(remitoId){
   let y=126;
   if(esAR && r.origenCodigo){
     setInk(ACC); doc.setFont("helvetica","bold"); doc.setFontSize(10);
-    doc.text(`Split from remito ${r.origenCodigo}`, M, y);
+    doc.text(t("pdf.remdoc.splitfrom",{code:r.origenCodigo}), M, y);
     setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(9); y+=16;
   }
   setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(9);
-  doc.text(esTercero ? "Owner's goods brought in for them (never our stock). Charge = accumulated landed cost per door + markup."
-         : esSelect  ? "Our commission taken in Argentina — these units enter Select (AR) as our sellable stock."
-         :             "Not a commercial invoice — internal movement document. Quantities already filtered (US-kept excluded).", M, y);
+  doc.text(esTercero ? t("pdf.remdoc.capTercero")
+         : esSelect  ? t("pdf.remdoc.capSelect")
+         :             t("pdf.remdoc.capInternal"), M, y);
   y+=22;
 
   /* Columnas numéricas (derecha) según tipo */
   let rightCols;
   if(esTercero) rightCols = [
-    { h:"QTY", w:44, val:f=>qty(f.qty) },
-    { h:"COST/u", w:62, val:f=>pdfMoney(f.costo,"USD") },
-    { h:"CHARGE/u", w:62, val:f=>pdfMoney(f.charge,"USD") },
-    { h:"TOTAL", w:70, val:f=>pdfMoney(f.qty*f.charge,"USD"), bold:true },
+    { h:t("pdf.th.qty"), w:44, val:f=>qty(f.qty) },
+    { h:t("pdf.th.costu"), w:62, val:f=>pdfMoney(f.costo,"USD") },
+    { h:t("pdf.th.chargeu"), w:62, val:f=>pdfMoney(f.charge,"USD") },
+    { h:t("pdf.total"), w:70, val:f=>pdfMoney(f.qty*f.charge,"USD"), bold:true },
   ];
   else if(esSelect) rightCols = [
-    { h:"QTY", w:44, val:f=>qty(f.qty) },
-    { h:"COST/u", w:64, val:f=>pdfMoney(f.costo,"USD") },
-    { h:"VALUE", w:70, val:f=>pdfMoney(f.qty*f.costo,"USD"), bold:true },
+    { h:t("pdf.th.qty"), w:44, val:f=>qty(f.qty) },
+    { h:t("pdf.th.costu"), w:64, val:f=>pdfMoney(f.costo,"USD") },
+    { h:t("pdf.th.value"), w:70, val:f=>pdfMoney(f.qty*f.costo,"USD"), bold:true },
   ];
-  else rightCols = [ { h:"QTY", w:60, val:f=>qty(f.qty) } ];
+  else rightCols = [ { h:t("pdf.th.qty"), w:60, val:f=>qty(f.qty) } ];
   let cx = W-M; for(let k=rightCols.length-1;k>=0;k--){ rightCols[k].xr=cx; cx-=rightCols[k].w; }
   const wItem = cx - M - 12;
 
@@ -349,41 +349,41 @@ function generarRemitoDocPDF(remitoId){
     setInk(opts.bold?INK:MUT); doc.text(label, boxX, y); setInk(INK);
     doc.text(val, W-M, y, {align:"right"}); y+= opts.big?22:16;
   };
-  tline("Total units", qty(totQ));
-  if(esTercero){ doc.setDrawColor(ACC[0],ACC[1],ACC[2]); doc.setLineWidth(1.2); doc.line(boxX, y-8, W-M, y-8); doc.setLineWidth(1); y+=4; tline("Total to charge", pdfMoney(totCharge,"USD"), {bold:true, big:true}); }
-  else if(esSelect){ tline("Value at cost", pdfMoney(totValue,"USD"), {bold:true}); }
+  tline(t("pdf.remdoc.totunits"), qty(totQ));
+  if(esTercero){ doc.setDrawColor(ACC[0],ACC[1],ACC[2]); doc.setLineWidth(1.2); doc.line(boxX, y-8, W-M, y-8); doc.setLineWidth(1); y+=4; tline(t("pdf.remdoc.tocharge"), pdfMoney(totCharge,"USD"), {bold:true, big:true}); }
+  else if(esSelect){ tline(t("pdf.remdoc.valuecost"), pdfMoney(totValue,"USD"), {bold:true}); }
 
   /* Footer */
   setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
-  doc.text(esTercero ? "Charge to the owner for goods we imported on their behalf. Not a sale from our inventory."
-         : esSelect  ? "Traceability — links our retained (commission) units back to their origin remito."
-         :             "Third-party units belong to their listed owner and are moved for logistics/traceability only.", M, H-46);
+  doc.text(esTercero ? t("pdf.remdoc.footTercero")
+         : esSelect  ? t("pdf.remdoc.footSelect")
+         :             t("pdf.rem.footer"), M, H-46);
   doc.setDrawColor(LINE[0],LINE[1],LINE[2]); doc.line(M, H-58, W-M, H-58);
 
   doc.save(`remito-${String(r.codigo).replace(/\s+/g,"-")}.pdf`);
-  toast(`Remito ${r.codigo} downloaded`);
+  toast(t("pdf.remdoc.downloaded",{code:r.codigo}));
 }
 
 /* Lista de precios para clientes (punto 10). Recibe la lista ya filtrada. */
 function exportListaPrecios(prods){
-  if(!pdfReady()){ toast("Couldn't load the PDF generator (try once with internet)","warn"); return; }
+  if(!pdfReady()){ toast(t("pdf.err.gen"),"warn"); return; }
   // Point 9: a customer price list must never leak blocked or investment items.
   const clean = prods.filter(p=> !soloEnVault(p) && !esBloqueado(p) && (p.precioVenta||0)>0);
   const dropped = prods.length - clean.length;
-  if(!clean.length){ toast("No sellable products with a price to export","warn"); return; }
+  if(!clean.length){ toast(t("pdf.pl.noprod"),"warn"); return; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit:"pt", format:"letter" });
   const M=48, W=doc.internal.pageSize.getWidth(); let y=56;
   const em=db.config.emisor||{};
   doc.setFont("helvetica","bold"); doc.setFontSize(18); doc.setTextColor(20);
-  doc.text(em.nombre?`${em.nombre} — Price list`:"Price list", M, y); y+=18;
+  doc.text(em.nombre?t("pdf.pl.titleName",{name:em.nombre}):t("pdf.pl.title"), M, y); y+=18;
   doc.setFont("helvetica","normal"); doc.setFontSize(9.5); doc.setTextColor(120);
   doc.text(new Date().toLocaleDateString("en-US"), M, y); y+=20;
 
   const cSKU=M, cName=M+90, cPrice=W-M;
   doc.setFillColor(245); doc.rect(M, y-12, W-2*M, 22, "F");
   doc.setFont("helvetica","bold"); doc.setFontSize(9.5); doc.setTextColor(40);
-  doc.text("SKU", cSKU, y+3); doc.text("Product", cName, y+3); doc.text("Price", cPrice, y+3, {align:"right"});
+  doc.text(t("pdf.pl.sku"), cSKU, y+3); doc.text(t("pdf.pl.product"), cName, y+3); doc.text(t("pdf.pl.price"), cPrice, y+3, {align:"right"});
   y+=22; doc.setFont("helvetica","normal"); doc.setTextColor(55);
   clean.slice().sort((a,b)=>String(a.nombre||"").localeCompare(String(b.nombre||""),"en")).forEach(p=>{
     if(y>740){ doc.addPage(); y=60; }
@@ -396,7 +396,7 @@ function exportListaPrecios(prods){
     doc.setDrawColor(240); doc.line(M, y-5, W-M, y-5);
   });
   doc.save(`price-list-${new Date().toISOString().slice(0,10)}.pdf`);
-  toast(`Price list exported · ${clean.length} products${dropped>0?` (${dropped} blocked/investment excluded)`:""}`);
+  toast(t("pdf.pl.exported",{n:clean.length,extra:dropped>0?t("pdf.pl.excluded",{d:dropped}):""}));
 }
 
 
@@ -407,12 +407,12 @@ function exportListaPrecios(prods){
    Sólo referencia de costos (no es factura). Montos en USD.
    ============================================================ */
 function generarLandedCostPDF(){
-  if(!pdfReady()){ toast("Couldn't load the PDF generator (try once with internet)","warn"); return; }
+  if(!pdfReady()){ toast(t("pdf.err.gen"),"warn"); return; }
   const prods = db.productos
     .map(p=>({ p, b:landedBuildup(p) }))
     .filter(x=> x.b.units>0)
     .sort((a,b)=> String(a.p.nombre||"").localeCompare(String(b.p.nombre||""),"en"));
-  if(!prods.length){ toast("No stock on hand to report","warn"); return; }
+  if(!prods.length){ toast(t("pdf.lc.nostock"),"warn"); return; }
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit:"pt", format:"letter" });
@@ -425,17 +425,17 @@ function generarLandedCostPDF(){
   doc.setFillColor(ACC[0],ACC[1],ACC[2]); doc.rect(0,0,W,92,"F");
   doc.setTextColor(255,255,255);
   doc.setFont("helvetica","bold"); doc.setFontSize(18);
-  doc.text(em.nombre || "Stock Select", M, 40);
+  doc.text(em.nombre || t("pdf.lc.brand"), M, 40);
   doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
-  doc.text("Landed cost buildup · US → Buenos Aires → store (per unit, USD)", M, 58);
+  doc.text(t("pdf.lc.sub"), M, 58);
   doc.setFont("helvetica","bold"); doc.setFontSize(15);
-  doc.text("LANDED COST", W-M, 38, {align:"right"});
+  doc.text(t("pdf.lc.title"), W-M, 38, {align:"right"});
   doc.setFont("helvetica","normal"); doc.setFontSize(9);
   doc.text(fmtDate(new Date().toISOString()), W-M, 56, {align:"right"});
 
   let y=118;
   setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
-  doc.text("Weighted average over stock on hand (sellable + in transit). Reference cost only — not a commercial document.", M, y);
+  doc.text(t("pdf.lc.caption"), M, y);
   y+=20;
 
   /* Columnas */
@@ -444,12 +444,12 @@ function generarLandedCostPDF(){
   const drawHead=(yy)=>{
     doc.setFillColor(ACC[0],ACC[1],ACC[2]); doc.rect(M, yy-13, W-2*M, 22, "F");
     doc.setTextColor(255,255,255); doc.setFont("helvetica","bold"); doc.setFontSize(8.5);
-    doc.text("PRODUCT", cItem+6, yy+2);
-    doc.text("UNITS", cUn, yy+2, {align:"right"});
-    doc.text("US COST", cUs, yy+2, {align:"right"});
-    doc.text("+ INTL", cIn, yy+2, {align:"right"});
-    doc.text("+ ARG", cAr, yy+2, {align:"right"});
-    doc.text("LANDED", cTot, yy+2, {align:"right"});
+    doc.text(t("pdf.lc.product"), cItem+6, yy+2);
+    doc.text(t("pdf.lc.units"), cUn, yy+2, {align:"right"});
+    doc.text(t("pdf.lc.uscost"), cUs, yy+2, {align:"right"});
+    doc.text(t("pdf.lc.intl"), cIn, yy+2, {align:"right"});
+    doc.text(t("pdf.lc.arg"), cAr, yy+2, {align:"right"});
+    doc.text(t("pdf.lc.landed"), cTot, yy+2, {align:"right"});
     return yy+22;
   };
   y = drawHead(y);
@@ -477,7 +477,7 @@ function generarLandedCostPDF(){
   /* Totales (valor total del inventario por puerta) */
   y+=6; doc.setDrawColor(ACC[0],ACC[1],ACC[2]); doc.setLineWidth(1.1); doc.line(M, y-8, W-M, y-8); doc.setLineWidth(1);
   setInk(INK); doc.setFont("helvetica","bold"); doc.setFontSize(9);
-  doc.text("On-hand value by gate", cItem+6, y+6);
+  doc.text(t("pdf.lc.onhand"), cItem+6, y+6);
   doc.text(String(round2(tU)), cUn, y+6, {align:"right"});
   doc.text(pdfMoney(round2(sUs),"USD"), cUs, y+6, {align:"right"});
   doc.text(pdfMoney(round2(sIn),"USD"), cIn, y+6, {align:"right"});
@@ -485,5 +485,5 @@ function generarLandedCostPDF(){
   doc.text(pdfMoney(round2(sTot),"USD"), cTot, y+6, {align:"right"});
 
   doc.save("landed-cost-"+new Date().toISOString().slice(0,10)+".pdf");
-  toast("Landed cost PDF downloaded");
+  toast(t("pdf.lc.downloaded"));
 }

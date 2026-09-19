@@ -38,7 +38,7 @@ if(_pt) _pt.onclick=()=>{
   const mostrar = p.type==="password";
   p.type = mostrar ? "text" : "password";
   _pt.classList.toggle("show", mostrar);
-  const lbl = mostrar ? "Hide password" : "Show password";
+  const lbl = mostrar ? t("boot.pass.hide") : t("boot.pass.show");
   _pt.setAttribute("aria-label", lbl); _pt.title=lbl;
   p.focus();
 };
@@ -69,8 +69,8 @@ function paintThemeBtn(){
     el.innerHTML = dark ? MOON_SVG : SUN_SVG;         // ícono = modo actual; la posición indica el estado
   });
   document.querySelectorAll("[data-theme-toggle]").forEach(b=>{
-    const t = dark ? "Cambiar a tema claro" : "Cambiar a tema oscuro";
-    b.title = t; b.setAttribute("aria-label", t);
+    const lbl = dark ? t("boot.theme.light") : t("boot.theme.dark");
+    b.title = lbl; b.setAttribute("aria-label", lbl);
   });
 }
 paintThemeBtn();
@@ -105,12 +105,12 @@ function mostrarBotonUpdate(sw){
   if(document.getElementById("pwaUpdate")) return;   // ya está en pantalla
   const bar = document.createElement("div");
   bar.id = "pwaUpdate";
-  bar.innerHTML = `<span>New version available</span><button id="pwaUpdateBtn">Update</button>`;
+  bar.innerHTML = `<span>${t("boot.pwa.newversion")}</span><button id="pwaUpdateBtn">${t("boot.pwa.update")}</button>`;
   document.body.appendChild(bar);
   document.getElementById("pwaUpdateBtn").onclick = ()=>{
     if(sw) sw.postMessage({ type:"SKIP_WAITING" });   // pedile al SW que se active
     // cuando el nuevo SW tome control, recargamos una sola vez
-    bar.querySelector("button").textContent = "Updating…";
+    bar.querySelector("button").textContent = t("boot.pwa.updating");
   };
 }
 if ("serviceWorker" in navigator) {

@@ -10,7 +10,7 @@ let draft = null;  // { tipo, contraparte, fecha, numero, lineas:[{key,productoI
 
 function openDoc(tipo, pre){
   // Punto 3: un vendedor no puede cargar compras.
-  if(tipo==="compra" && !puedeComprar()){ toast("Only admins can load purchases","warn"); return; }
+  if(tipo==="compra" && !puedeComprar()){ toast(t("md.err.admincompra"),"warn"); return; }
   draft = pre || {
     tipo, contraparte:"", fecha:new Date().toISOString().slice(0,10),
     numero: tipo==="venta" ? nextFacturaVenta() : "",
@@ -59,9 +59,9 @@ function renderDocModal(){
   const cli = clienteById(draft.clienteId);
   const clienteRow = isC ? "" : `
     <div class="field" style="grid-column:1/3">
-      <label>Customer <span class="hint" style="font-weight:400">· required</span></label>
+      <label>${t("md.lbl.customer")} <span class="hint" style="font-weight:400">${t("md.req")}</span></label>
       <button type="button" class="ppick-btn${cli?"":" placeholder"}" id="d_cli">
-        <span class="ppick-label">${cli?esc(clienteLinea(cli)):"— pick customer —"}</span><span class="ppick-caret">▾</span>
+        <span class="ppick-label">${cli?esc(clienteLinea(cli)):t("md.pick.customer")}</span><span class="ppick-caret">▾</span>
       </button>
       ${cli?`<div class="hint" style="font-size:11px;margin-top:4px">${esc(clienteDireccion(cli)||cli.email||"")}</div>`:""}
     </div>`;
@@ -75,32 +75,32 @@ function renderDocModal(){
     // import, NO se vuelve a preguntar. Se muestra un resumen compacto con un botón
     // "Change" que despliega la barra completa por si hay que corregir algo.
     const locked = draft.origenLocked && !draft._origenEdit;
-    const ownerHint = `${terc?`<p class="hint" style="margin:-4px 0 12px;font-size:12px">Third-party invoice: set <b>Ours</b> on each line for the units you keep (they enter stock like a normal purchase). The rest keeps travelling to the owner and is only <b>tracked</b> — it never touches your stock, valuation or P&amp;L.</p>`:""}`;
+    const ownerHint = `${terc?`<p class="hint" style="margin:-4px 0 12px;font-size:12px">${t("md.tp.hint")}</p>`:""}`;
     if(locked){
       origenBar = `
       <div class="origen-bar locked">
         <div class="origen-sum">
-          <span class="origen-chip ${terc?"is-third":"is-own"}">${terc?"Third-party":"Own · all to stock"}</span>
-          ${terc?`<span class="origen-owner">Owner: <b>${owner?esc(clienteLinea(owner)):"— none —"}</b></span>`:""}
-          <span class="hint" style="font-size:11.5px">· set in the import step</span>
+          <span class="origen-chip ${terc?"is-third":"is-own"}">${terc?t("md.third"):t("md.chip.own")}</span>
+          ${terc?`<span class="origen-owner">${t("md.lbl.ownercolon")} <b>${owner?esc(clienteLinea(owner)):t("md.none2")}</b></span>`:""}
+          <span class="hint" style="font-size:11.5px">${t("md.setinimport")}</span>
         </div>
-        <button type="button" class="btn ghost xs" id="d_origen_edit">Change</button>
+        <button type="button" class="btn ghost xs" id="d_origen_edit">${t("md.btn.change")}</button>
       </div>
       ${ownerHint}`;
     } else {
       origenBar = `
       <div class="origen-bar">
         <div class="field">
-          <label>Invoice type</label>
+          <label>${t("md.lbl.invoicetype")}</label>
           <div class="seg" id="d_origen">
-            <button type="button" data-origen="propia" class="${!terc?"on":""}">Own (all to stock)</button>
-            <button type="button" data-origen="terceros" class="${terc?"on":""}">Third-party</button>
+            <button type="button" data-origen="propia" class="${!terc?"on":""}">${t("md.seg.own")}</button>
+            <button type="button" data-origen="terceros" class="${terc?"on":""}">${t("md.third")}</button>
           </div>
         </div>
         ${terc?`<div class="field" style="min-width:240px;flex:1">
-          <label>Owner <span class="hint" style="font-weight:400">· whose the units in transit belong to</span></label>
+          <label>${t("common.owner")} <span class="hint" style="font-weight:400">${t("md.owner.hint")}</span></label>
           <button type="button" class="ppick-btn${owner?"":" placeholder"}" id="d_owner" style="width:100%">
-            <span class="ppick-label">${owner?esc(clienteLinea(owner)):"— pick owner (client / local) —"}</span><span class="ppick-caret">▾</span>
+            <span class="ppick-label">${owner?esc(clienteLinea(owner)):t("md.pick.owner")}</span><span class="ppick-caret">▾</span>
           </button></div>`:""}
       </div>
       ${ownerHint}`;
@@ -110,23 +110,23 @@ function renderDocModal(){
   if(isC){
     // COMPRA: elegir la sociedad que compra (procedencia del lote).
     topSel = (allowSt.length>1)
-      ? `<div class="field" style="grid-column:1/3"><label>Society <span class="hint" style="font-weight:400">· who buys this stock</span></label>
+      ? `<div class="field" style="grid-column:1/3"><label>${t("md.lbl.society")} <span class="hint" style="font-weight:400">${t("md.society.hint")}</span></label>
            <select class="inp" id="d_store">${allowSt.map(s=>`<option value="${s}" ${s===draft.store?"selected":""}>${esc(storeName(s))}</option>`).join("")}</select></div>`
-      : `<div class="field" style="grid-column:1/3"><label>Society</label>
+      : `<div class="field" style="grid-column:1/3"><label>${t("md.lbl.society")}</label>
            <input class="inp" value="${esc(storeName(draft.store))}" disabled></div>`;
   } else {
     // VENTA: elige DEPÓSITO (de dónde despacha; define el costo FIFO) + VENDEDOR (comisión).
-    const depSel = `<div class="field"><label>Deposit <span class="hint" style="font-weight:400">· ships from</span></label>
+    const depSel = `<div class="field"><label>${t("md.lbl.deposit")} <span class="hint" style="font-weight:400">${t("md.deposit.hint")}</span></label>
         <select class="inp" id="d_storeventa">${allowSt.map(s=>`<option value="${s}" ${s===draft.storeVenta?"selected":""}>${esc(storeName(s))}</option>`).join("")}</select></div>`;
     let vendSel;
     if(isSeller()){
-      vendSel = `<div class="field"><label>Seller</label>
+      vendSel = `<div class="field"><label>${t("md.lbl.seller")}</label>
            <input class="inp" value="${esc((session&&session.name)||vendedorNombre(draft.vendedorId))}" disabled></div>`;
     } else {
       const vends = vendedores();
-      vendSel = `<div class="field"><label>Seller <span class="hint" style="font-weight:400">· whose commission</span></label>
+      vendSel = `<div class="field"><label>${t("md.lbl.seller")} <span class="hint" style="font-weight:400">${t("md.seller.hint")}</span></label>
            <select class="inp" id="d_vend">
-             <option value="" ${!draft.vendedorId?"selected":""}>— none (house) —</option>
+             <option value="" ${!draft.vendedorId?"selected":""}>${t("md.none.house")}</option>
              ${vends.map(v=>`<option value="${esc(v.id)}" ${v.id===draft.vendedorId?"selected":""}>${esc(v.nombre)}</option>`).join("")}
            </select></div>`;
     }
@@ -136,53 +136,53 @@ function renderDocModal(){
     ${isC?origenBar:""}
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0;margin-bottom:10px">${topSel}</div>
     ${isC?`<div class="banner ok" style="justify-content:space-between;align-items:center">
-      <span>Got the invoice as PDF? Import it and I'll fill the lines.</span>
-      <button class="btn sm" id="d_import" style="white-space:nowrap">⤒ Import PDF</button>
+      <span>${t("md.import.banner")}</span>
+      <button class="btn sm" id="d_import" style="white-space:nowrap">${t("md.import.btn")}</button>
     </div>`:""}
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0;margin-bottom:12px">
-      ${isC?`<div class="field" style="grid-column:1/3"><label>Supplier</label><input class="inp" id="d_cp" value="${esc(draft.contraparte)}"></div>`:clienteRow}
-      <div class="field"><label>Date</label><input class="inp" type="date" id="d_fe" value="${esc(draft.fecha)}"></div>
-      <div class="field"><label>${isC?"Doc N°":'N° invoice <span class="hint" style="font-weight:400">· sugerido, editable</span>'}</label><input class="inp" id="d_nu" value="${esc(draft.numero)}"></div>
+      ${isC?`<div class="field" style="grid-column:1/3"><label>${t("md.lbl.supplier")}</label><input class="inp" id="d_cp" value="${esc(draft.contraparte)}"></div>`:clienteRow}
+      <div class="field"><label>${t("common.date")}</label><input class="inp" type="date" id="d_fe" value="${esc(draft.fecha)}"></div>
+      <div class="field"><label>${isC?t("md.lbl.docno"):t("md.lbl.invno")+' <span class="hint" style="font-weight:400">'+t("md.invno.hint")+'</span>'}</label><input class="inp" id="d_nu" value="${esc(draft.numero)}"></div>
     </div>
     <div id="lineHost"></div>
-    <button class="btn sm" id="addLine" style="margin-top:10px">+ Add line</button>
+    <button class="btn sm" id="addLine" style="margin-top:10px">${t("md.btn.addline")}</button>
     ${isC?`
-    <div class="phead" style="margin:16px 0 6px;padding:0"><h3 style="font-size:13px">Additional costs (spread across units)</h3></div>
+    <div class="phead" style="margin:16px 0 6px;padding:0"><h3 style="font-size:13px">${t("md.h.addcosts")}</h3></div>
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
-      <div class="field"><label>Handling total</label><input class="inp num" id="d_hand" value="${draft.handling||0}"></div>
-      <div class="field"><label>Flete total</label><input class="inp num" id="d_flete" value="${draft.flete||0}"></div>
+      <div class="field"><label>${t("md.lbl.handling")}</label><input class="inp num" id="d_hand" value="${draft.handling||0}"></div>
+      <div class="field"><label>${t("md.lbl.flete")}</label><input class="inp num" id="d_flete" value="${draft.flete||0}"></div>
     </div>
     <p class="hint" id="d_proHint" style="font-size:12px;margin:6px 0 0"></p>
     `:`
-    <div class="phead" style="margin:16px 0 6px;padding:0"><h3 style="font-size:13px">Customer shipping</h3></div>
+    <div class="phead" style="margin:16px 0 6px;padding:0"><h3 style="font-size:13px">${t("md.h.custship")}</h3></div>
     <div class="grid-form" style="grid-template-columns:auto 1fr;padding:0;align-items:end">
-      <div class="field"><label>Type</label>
+      <div class="field"><label>${t("md.lbl.type")}</label>
         <select class="inp" id="d_envtipo">
-          <option value="free" ${draft.envio.tipo==="free"?"selected":""}>Free shipping</option>
-          <option value="monto" ${draft.envio.tipo==="monto"?"selected":""}>Flat amount</option>
+          <option value="free" ${draft.envio.tipo==="free"?"selected":""}>${t("md.ship.free")}</option>
+          <option value="monto" ${draft.envio.tipo==="monto"?"selected":""}>${t("md.ship.flat")}</option>
         </select>
       </div>
-      <div class="field"><label>Shipping cost</label><input class="inp num" id="d_envmonto" value="${draft.envio.monto||0}" ${draft.envio.tipo==="free"?"disabled":""}></div>
+      <div class="field"><label>${t("md.lbl.shipcost")}</label><input class="inp num" id="d_envmonto" value="${draft.envio.monto||0}" ${draft.envio.tipo==="free"?"disabled":""}></div>
     </div>
-    <div class="phead" style="margin:16px 0 6px;padding:0"><h3 style="font-size:13px">Extra charges <span class="hint" style="font-weight:400">· on top, billed to the client (freight, wire fees, service…)</span></h3></div>
+    <div class="phead" style="margin:16px 0 6px;padding:0"><h3 style="font-size:13px">${t("md.h.extra")} <span class="hint" style="font-weight:400">${t("md.extra.hint")}</span></h3></div>
     <div id="cargoHost"></div>
-    <button class="btn sm" id="addCargo" style="margin-top:8px">+ Add charge</button>
+    <button class="btn sm" id="addCargo" style="margin-top:8px">${t("md.btn.addcharge")}</button>
     ${isAdmin()?`
-    <div class="phead" style="margin:16px 0 6px;padding:0"><h3 style="font-size:13px">Selling costs <span class="hint" style="font-weight:400">· eat into the sale margin, not the stock cost</span></h3></div>
+    <div class="phead" style="margin:16px 0 6px;padding:0"><h3 style="font-size:13px">${t("md.h.selling")} <span class="hint" style="font-weight:400">${t("md.selling.hint")}</span></h3></div>
     <div id="costHost"></div>
-    <button class="btn sm" id="addCost" style="margin-top:8px">+ Add cost</button>
+    <button class="btn sm" id="addCost" style="margin-top:8px">${t("md.btn.addcost")}</button>
     <div id="netBox" style="margin-top:12px"></div>`:""}`}
     <div id="docWarn"></div>
   `;
   const editing = !!draft.editingId;
   buildModal(
-    isC?(editing?"Edit purchase":"New purchase"):(editing?"Edit sale":"New sale"), body,
+    isC?(editing?t("md.title.editpurchase"):t("md.title.newpurchase")):(editing?t("md.title.editsale"):t("md.title.newsale")), body,
     [
-      {label:"Cancel",cls:"btn",act:()=>{ draft.editingId=null; closeModal(); }},
-      {label: editing?"Save changes" : (isC?"Confirm purchase (+stock)":"Confirm sale (−stock)"),cls:isC?"btn up":"btn down",act:confirmDoc}
+      {label:t("common.cancel"),cls:"btn",act:()=>{ draft.editingId=null; closeModal(); }},
+      {label: editing?t("md.btn.savechanges") : (isC?t("md.btn.confirmpurchase"):t("md.btn.confirmsale")),cls:isC?"btn up":"btn down",act:confirmDoc}
     ],
     "wide doc",
-    `<div class="totrow"><span style="color:var(--muted)">Document total</span><span class="num" id="docTotal">${money(docTotal(), storeCcy(draft.tipo==="compra"?draft.store:draft.storeVenta))}</span></div>`
+    `<div class="totrow"><span style="color:var(--muted)">${t("md.doctotal")}</span><span class="num" id="docTotal">${money(docTotal(), storeCcy(draft.tipo==="compra"?draft.store:draft.storeVenta))}</span></div>`
   );
   renderLines();
   const dOr=document.getElementById("d_origen");
@@ -246,10 +246,10 @@ function renderCargos(){
   const cc = storeCcy(draft.storeVenta || STORE_IDS[0]);
   host.innerHTML = draft.cargosCliente.length ? draft.cargosCliente.map((c,i)=>`
     <div class="grid-form" style="grid-template-columns:1fr auto auto;padding:0;gap:8px;align-items:end;margin-bottom:6px">
-      <div class="field"><label>Concept</label><input class="inp" data-cgnota="${i}" value="${esc(c.nota||"")}" placeholder="Intl freight, wire fee, service…"></div>
-      <div class="field"><label>Amount (${esc(cc)})</label><input class="inp num" data-cgmonto="${i}" value="${c.monto||0}" style="max-width:130px"></div>
+      <div class="field"><label>${t("md.lbl.concept")}</label><input class="inp" data-cgnota="${i}" value="${esc(c.nota||"")}" placeholder="${t("md.ph.charge")}"></div>
+      <div class="field"><label>${t("md.lbl.amount",{cc:esc(cc)})}</label><input class="inp num" data-cgmonto="${i}" value="${c.monto||0}" style="max-width:130px"></div>
       <button class="btn ghost sm" data-cgdel="${i}" style="color:var(--alert)">✕</button>
-    </div>`).join("") : `<p class="hint" style="font-size:12px;margin:0">No extra charges. The client pays only product + shipping.</p>`;
+    </div>`).join("") : `<p class="hint" style="font-size:12px;margin:0">${t("md.cargos.empty")}</p>`;
   host.querySelectorAll("[data-cgnota]").forEach(inp=> inp.oninput=()=>{ draft.cargosCliente[+inp.dataset.cgnota].nota=inp.value; });
   host.querySelectorAll("[data-cgmonto]").forEach(inp=> inp.oninput=()=>{ draft.cargosCliente[+inp.dataset.cgmonto].monto=parseNum(inp.value); refreshTotal(); });
   host.querySelectorAll("[data-cgdel]").forEach(b=> b.onclick=()=>{ draft.cargosCliente.splice(+b.dataset.cgdel,1); renderCargos(); refreshTotal(); });
@@ -259,8 +259,8 @@ function pintarProrateo(){
   const u=unidadesDoc(), extra=(draft.handling||0)+(draft.flete||0);
   const cc=storeCcy(draft.store);
   h.textContent = (extra>0 && u>0)
-    ? `${money(extra, cc)} split across ${qty(u)} u = ${money(extra/u, cc)} per unit, added to each product cost.`
-    : "Enter handling/freight; it prorates per unit on confirm.";
+    ? t("md.pro.split",{total:money(extra, cc),u:qty(u),per:money(extra/u, cc)})
+    : t("md.pro.hint");
   refreshTotal();
 }
 
@@ -287,10 +287,10 @@ function refreshNet(){
   const sc=ventaCcy();
   const gm=round2(draftGrossMargin()), rate=draftCommRate(), comm=round2(gm*rate), cost=round2(costosDraftTotal()), net=round2(gm-comm-cost);
   box.innerHTML = `
-    <div class="totrow"><span style="color:var(--muted)">Gross margin (est.)</span><span class="num">${money(gm, sc)}</span></div>
-    <div class="totrow"><span style="color:var(--muted)">− Seller commission (${nf0.format(rate*100)}%)</span><span class="num">${money(comm, sc)}</span></div>
-    <div class="totrow"><span style="color:var(--muted)">− Selling costs</span><span class="num">${money(cost, sc)}</span></div>
-    <div class="totrow" style="font-weight:700"><span>Net margin (est.)</span><span class="num" style="color:${net<0?'var(--alert)':'var(--up)'}">${money(net, sc)}</span></div>`;
+    <div class="totrow"><span style="color:var(--muted)">${t("md.net.gross")}</span><span class="num">${money(gm, sc)}</span></div>
+    <div class="totrow"><span style="color:var(--muted)">${t("md.net.comm",{p:nf0.format(rate*100)})}</span><span class="num">${money(comm, sc)}</span></div>
+    <div class="totrow"><span style="color:var(--muted)">${t("md.net.costs")}</span><span class="num">${money(cost, sc)}</span></div>
+    <div class="totrow" style="font-weight:700"><span>${t("md.net.net")}</span><span class="num" style="color:${net<0?'var(--alert)':'var(--up)'}">${money(net, sc)}</span></div>`;
 }
 function renderCostos(){
   const host=document.getElementById("costHost"); if(!host) return;
@@ -299,21 +299,21 @@ function renderCostos(){
   const rows = draft.costosExtra.map((c,i)=>{
     const isLabor = c.tipo==="labor";
     const midCells = isLabor
-      ? `<td style="width:64px"><input class="inp num" data-ck="horas" data-ci="${i}" value="${c.horas||0}" placeholder="hs" title="Hours"></td>
-         <td style="width:78px"><input class="inp num" data-ck="valorHora" data-ci="${i}" value="${c.valorHora||0}" placeholder="/h" title="Rate per hour"></td>
+      ? `<td style="width:64px"><input class="inp num" data-ck="horas" data-ci="${i}" value="${c.horas||0}" placeholder="${t("md.ph.hs")}" title="${t("md.tt.hours")}"></td>
+         <td style="width:78px"><input class="inp num" data-ck="valorHora" data-ci="${i}" value="${c.valorHora||0}" placeholder="${t("md.ph.rate")}" title="${t("md.tt.rate")}"></td>
          <td class="r num" data-csub="${i}" style="width:92px;color:var(--muted)">${money((parseNum(c.horas)||0)*(parseNum(c.valorHora)||0), c.ccy||ventaCcy())}</td>`
-      : `<td colspan="2"><input class="inp" data-ck="nota" data-ci="${i}" value="${esc(c.nota||"")}" placeholder="note (optional)"></td>
+      : `<td colspan="2"><input class="inp" data-ck="nota" data-ci="${i}" value="${esc(c.nota||"")}" placeholder="${t("md.ph.noteopt")}"></td>
          <td style="width:92px"><input class="inp num" data-ck="monto" data-ci="${i}" value="${c.monto||0}"></td>`;
     return `<tr>
-      <td style="width:150px"><select class="inp" data-ck="tipo" data-ci="${i}">${COSTO_TIPOS.map(t=>`<option value="${t.id}" ${t.id===c.tipo?"selected":""}>${esc(t.label)}</option>`).join("")}</select></td>
+      <td style="width:150px"><select class="inp" data-ck="tipo" data-ci="${i}">${COSTO_TIPOS.map(t=>`<option value="${t.id}" ${t.id===c.tipo?"selected":""}>${esc(costoTipoLabel(t.id))}</option>`).join("")}</select></td>
       <td style="width:62px"><select class="inp" data-ck="ccy" data-ci="${i}">${ccyOpts(c)}</select></td>
       ${midCells}
-      <td style="width:28px"><button class="btn ghost sm" data-cdel="${i}" title="Remove">✕</button></td>
+      <td style="width:28px"><button class="btn ghost sm" data-cdel="${i}" title="${t("md.tt.remove")}">✕</button></td>
     </tr>`;
   }).join("");
   host.innerHTML = draft.costosExtra.length
     ? `<div class="table-scroll"><table class="line-tbl doc-tbl"><colgroup><col style="width:150px"><col style="width:62px"><col><col><col style="width:92px"><col style="width:28px"></colgroup><tbody>${rows}</tbody></table></div>`
-    : `<p class="hint" style="margin:2px 0 0;font-size:12px">No selling costs yet — add shipping, man-hours, commission, etc. Each can be in its own currency.</p>`;
+    : `<p class="hint" style="margin:2px 0 0;font-size:12px">${t("md.costos.empty")}</p>`;
   host.querySelectorAll("[data-ck]").forEach(inp=>{
     const i=+inp.dataset.ci, k=inp.dataset.ck;
     const handler=()=>{
@@ -347,7 +347,7 @@ function openAjuste(prodId){
 function renderAjuste(){
   const p = prodById(adjDraft.productoId);
   const store = adjDraft.store;
-  const opts = `<option value="">— pick —</option>` +
+  const opts = `<option value="">${t("md.aj.pickprod")}</option>` +
     db.productos.filter(x=>!soloEnVault(x)||isAdmin()).map(x=>`<option value="${x.id}" ${x.id===adjDraft.productoId?"selected":""}>${esc(x.sku?("["+x.sku+"] "):"")}${esc(x.nombre)}</option>`).join("");
   const stockActual = p ? qty(stockDe(p, store)) : "—";
   const allowSt = allowedStores();
@@ -364,28 +364,28 @@ function renderAjuste(){
   }
   const body = `
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0;margin-bottom:8px">
-      <div class="field"><label>Product</label>
+      <div class="field"><label>${t("common.product")}</label>
         <select class="inp" id="aj_prod">${opts}</select>
       </div>
-      <div class="field"><label>Society</label>${storeSel}
-        ${p?`<div style="font-size:11.5px;color:var(--muted);margin-top:4px">In store: <b class="num">${stockActual}</b> · last cost ${money(p.ultimoCosto, storeCcy(draft.tipo==="compra"?draft.store:draft.storeVenta))}</div>`:""}
+      <div class="field"><label>${t("md.lbl.society")}</label>${storeSel}
+        ${p?`<div style="font-size:11.5px;color:var(--muted);margin-top:4px">${t("md.aj.stockline",{n:'<b class="num">'+stockActual+'</b>',cost:money(p.ultimoCosto, storeCcy(draft.tipo==="compra"?draft.store:draft.storeVenta))})}</div>`:""}
       </div>
-      <div class="field"><label>Adjustment type</label>
+      <div class="field"><label>${t("md.aj.type")}</label>
         <select class="inp" id="aj_modo">
-          <option value="delta" ${adjDraft.modo==="delta"?"selected":""}>Difference (+/−)</option>
-          <option value="recuento" ${adjDraft.modo==="recuento"?"selected":""}>Count (final stock)</option>
+          <option value="delta" ${adjDraft.modo==="delta"?"selected":""}>${t("md.aj.modo.delta")}</option>
+          <option value="recuento" ${adjDraft.modo==="recuento"?"selected":""}>${t("md.aj.modo.count")}</option>
         </select>
       </div>
-      <div class="field"><label>${adjDraft.modo==="recuento"?"Counted stock":"Quantity (+ add / − remove)"}</label>
+      <div class="field"><label>${adjDraft.modo==="recuento"?t("md.aj.countedstock"):t("md.aj.qty")}</label>
         <input class="inp num" id="aj_cant" type="number" step="any" value="${esc(adjDraft.cantidad)}" placeholder="0"></div>
-      <div class="field"><label>Date</label><input class="inp" type="date" id="aj_fe" value="${esc(adjDraft.fecha)}"></div>
-      <div class="field"><label>Note (required)</label><input class="inp" id="aj_obs" value="${esc(adjDraft.obs)}" placeholder="e.g. breakage, physical count, supplier shortfall…"></div>
+      <div class="field"><label>${t("common.date")}</label><input class="inp" type="date" id="aj_fe" value="${esc(adjDraft.fecha)}"></div>
+      <div class="field"><label>${t("md.aj.note")}</label><input class="inp" id="aj_obs" value="${esc(adjDraft.obs)}" placeholder="${t("md.aj.ph.note")}"></div>
     </div>
     <div id="aj_prev">${previewTxt}</div>
   `;
-  buildModal("Inventory adjustment", body, [
-    {label:"Cancel", cls:"btn", act:()=>{ adjDraft=null; closeModal(); }},
-    {label:"Record adjustment", cls:"btn", act:confirmAjuste}
+  buildModal(t("md.aj.title"), body, [
+    {label:t("common.cancel"), cls:"btn", act:()=>{ adjDraft=null; closeModal(); }},
+    {label:t("md.aj.record"), cls:"btn", act:confirmAjuste}
   ]);
   const sync=()=>{
     adjDraft.productoId=document.getElementById("aj_prod").value;
@@ -404,37 +404,37 @@ function renderAjuste(){
 }
 function confirmAjuste(){
   const p = prodById(adjDraft.productoId);
-  if(!p){ toast("Pick a product","warn"); return; }
+  if(!p){ toast(t("md.err.pickprod"),"warn"); return; }
   const store = adjDraft.store || STORE_IDS[0];
-  if(adjDraft.cantidad==="" || isNaN(+adjDraft.cantidad)){ toast("Enter a valid quantity","warn"); return; }
-  if(!adjDraft.obs.trim()){ toast("The note is required","warn"); return; }
+  if(adjDraft.cantidad==="" || isNaN(+adjDraft.cantidad)){ toast(t("md.err.qtyvalid"),"warn"); return; }
+  if(!adjDraft.obs.trim()){ toast(t("md.err.noterequired"),"warn"); return; }
   const cur = stockDe(p, store);
   const nuevo = adjDraft.modo==="recuento" ? +adjDraft.cantidad : cur+(+adjDraft.cantidad);
   const delta = +(nuevo-cur).toFixed(4);
-  if(delta===0){ toast("The adjustment doesn't change stock","warn"); return; }
-  if(nuevo < 0){ toast("Stock can't go negative","warn"); alert(`The adjustment would leave stock at ${qty(nuevo)}.\nStock can't be negative.`); return; }
-  if(!confirm(`Confirm the adjustment?\n\n${p.nombre} · ${storeName(store)}\nStock ${qty(cur)} → ${qty(nuevo)} (${delta>=0?'+':'−'}${qty(Math.abs(delta))})\nReason: ${adjDraft.obs.trim()}`)) return;
-  const ref = "Adjustment · " + adjDraft.obs.trim();
+  if(delta===0){ toast(t("md.err.nochange"),"warn"); return; }
+  if(nuevo < 0){ toast(t("md.err.negative"),"warn"); alert(t("md.aj.alertneg",{n:qty(nuevo)})); return; }
+  if(!confirm(t("md.aj.confirm",{prod:p.nombre,store:storeName(store),from:qty(cur),to:qty(nuevo),delta:(delta>=0?'+':'−')+qty(Math.abs(delta)),reason:adjDraft.obs.trim()}))) return;
+  const ref = t("md.aj.ref",{obs:adjDraft.obs.trim()});
   const fechaISO = new Date(adjDraft.fecha+"T12:00:00").toISOString();
   // FIFO: positive adjustment adds a layer at last cost; negative consumes layers
   if(delta>0) fifoEntrada(p, store, delta, p.ultimoCosto||0, ref, null);
   else fifoConsumir(p, store, -delta);
   moverStock(p, delta, p.ultimoCosto||0, "ajuste", null, ref, { tipo:"ajuste", obs:adjDraft.obs.trim(), fecha:fechaISO, store });
   adjDraft=null; save(); closeModal();
-  toast(`Adjustment recorded · ${delta>=0?'+':'−'}${qty(Math.abs(delta))} u`, delta>=0?"up":"down");
+  toast(t("md.aj.recorded",{delta:(delta>=0?'+':'−')+qty(Math.abs(delta))}), delta>=0?"up":"down");
   render();
 }
 
 function prodOptions(sel, soloConStock){
   const lista = soloConStock ? db.productos.filter(p=> (p.stock||0) > 0) : db.productos;
   const opts = lista.map(p=>{
-    const disp = soloConStock ? ` (disp: ${qty(p.stock)})` : "";
+    const disp = soloConStock ? t("md.opt.disp",{n:qty(p.stock)}) : "";
     return `<option value="${p.id}" ${p.id===sel?"selected":""}>${esc(p.sku?("["+p.sku+"] "):"")}${esc(p.nombre)}${disp}</option>`;
   }).join("");
-  const nuevo = soloConStock ? "" : `<option value="__new">＋ Create new product…</option>`;
+  const nuevo = soloConStock ? "" : `<option value="__new">${t("md.opt.newprod")}</option>`;
   const vacio = soloConStock && !lista.length
-    ? `<option value="">— no products with stock —</option>`
-    : `<option value="">— choose —</option>`;
+    ? `<option value="">${t("md.opt.nostock")}</option>`
+    : `<option value="">${t("md.opt.choose")}</option>`;
   return vacio + opts + nuevo;
 }
 
@@ -484,7 +484,7 @@ function updateDispInfos(){
     const rem=dispRestante(l.productoId,i), comprom=comprometidoOtras(l.productoId,i);
     const over=(parseNum(l.cantidad)||0)>rem;
     div.style.color = over?"var(--alert)":"var(--muted)";
-    div.innerHTML = `avail: ${qty(stockBaseVenta(l.productoId))}${comprom>0?` · left ${qty(rem)}`:""}${over?" · <b>over stock</b>":""}`;
+    div.innerHTML = `${t("md.disp.avail",{n:qty(stockBaseVenta(l.productoId))})}${comprom>0?t("md.disp.left",{n:qty(rem)}):""}${over?t("md.disp.over"):""}`;
   });
 }
 
@@ -496,13 +496,13 @@ function updateDispInfos(){
    ============================================================ */
 let _pickerAnchor = null;
 function pickerLabel(l){
-  if(l.crear) return { kind:"plain", txt:"＋ New product", ph:false };
+  if(l.crear) return { kind:"plain", txt:t("md.pick.newprod"), ph:false };
   if(l.productoId){
     const p=prodById(l.productoId);
-    if(!p) return { kind:"plain", txt:"— pick product —", ph:true };
+    if(!p) return { kind:"plain", txt:t("md.pick.product"), ph:true };
     return { kind:"prod", sku:p.sku||"", name:p.nombre||"", ph:false };
   }
-  return { kind:"plain", txt:"— pick product —", ph:true };
+  return { kind:"plain", txt:t("md.pick.product"), ph:true };
 }
 function pickerBtn(l, i){
   const info = pickerLabel(l);
@@ -533,15 +533,15 @@ function pickerItemsHTML(i, q){
   let html = lista.map(p=>{
     const sku = p.sku ? `<span class="sku">${esc(p.sku)}</span>` : "";
     let disp = "";
-    if(!isC){ disp = `<span class="pi-disp">disp ${qty(dispRestante(p.id,i))}</span>`; }
+    if(!isC){ disp = `<span class="pi-disp">${t("md.pi.disp",{n:qty(dispRestante(p.id,i))})}</span>`; }
     const sel = p.id===cur ? " active" : "";
     return `<button type="button" class="ppick-item${sel}" data-pick="${p.id}">${sku}<span class="pi-name" data-fullname="${esc(p.nombre)}">${esc(p.nombre)}</span>${disp}</button>`;
   }).join("");
   if(!lista.length){
     const hayStock = db.productos.some(p=> isC ? true : stockDe(p, vstoreVenta)>0);
-    html = `<div class="ppick-empty">${isC ? "No products match." : (hayStock?"No product with stock matches.":`No stock to sell in ${esc(storeName(vstoreVenta))}.`)}</div>`;
+    html = `<div class="ppick-empty">${isC ? t("md.pick.noprodmatch") : (hayStock?t("md.pick.nostockmatch"):t("md.pick.nostocksell",{store:esc(storeName(vstoreVenta))}))}</div>`;
   }
-  if(isC) html += `<button type="button" class="ppick-item new" data-pick="__new">＋ Create new product…</button>`;
+  if(isC) html += `<button type="button" class="ppick-item new" data-pick="__new">${t("md.opt.newprod")}</button>`;
   return html;
 }
 function positionPicker(pop, anchor){
@@ -593,7 +593,7 @@ function openProductPicker(i, anchor){
   closeProductPicker();
   _pickerAnchor = anchor; anchor.classList.add("open");
   const pop = document.createElement("div"); pop.className="ppick-pop";
-  pop.innerHTML = `<input class="inp ppick-search" placeholder="Search by name or SKU…" autocomplete="off" spellcheck="false"><div class="ppick-list"></div>`;
+  pop.innerHTML = `<input class="inp ppick-search" placeholder="${t("md.ph.searchprod")}" autocomplete="off" spellcheck="false"><div class="ppick-list"></div>`;
   document.body.appendChild(pop);
   const search = pop.querySelector(".ppick-search");
   const listEl = pop.querySelector(".ppick-list");
@@ -682,7 +682,7 @@ function openClientePicker(anchor){
   closeProductPicker();
   _pickerAnchor = anchor; anchor.classList.add("open");
   const pop = document.createElement("div"); pop.className="ppick-pop";
-  pop.innerHTML = `<input class="inp ppick-search" placeholder="Search customer by name or company…" autocomplete="off" spellcheck="false"><div class="ppick-list"></div>`;
+  pop.innerHTML = `<input class="inp ppick-search" placeholder="${t("md.ph.searchcust")}" autocomplete="off" spellcheck="false"><div class="ppick-list"></div>`;
   document.body.appendChild(pop);
   const search = pop.querySelector(".ppick-search"), listEl = pop.querySelector(".ppick-list");
   const paint=(q)=>{
@@ -691,8 +691,8 @@ function openClientePicker(anchor){
     if(q) lista = lista.filter(c=> ((c.nombre||"")+" "+(c.empresa||"")+" "+(c.email||"")).toLowerCase().includes(q));
     let html = lista.map(c=>`<button type="button" class="ppick-item${c.id===draft.clienteId?" active":""}" data-pickcli="${c.id}">
       <span class="pi-name">${esc(c.nombre)}${c.empresa?` · ${esc(c.empresa)}`:""}</span></button>`).join("");
-    if(!lista.length) html = `<div class="ppick-empty">No customers match.</div>`;
-    html += `<button type="button" class="ppick-item new" data-pickcli="__new">＋ Add new customer…</button>`;
+    if(!lista.length) html = `<div class="ppick-empty">${t("md.pick.nocustmatch")}</div>`;
+    html += `<button type="button" class="ppick-item new" data-pickcli="__new">${t("md.pick.addcust")}</button>`;
     listEl.innerHTML = html;
     listEl.querySelectorAll("[data-pickcli]").forEach(it=> it.onclick=()=>{
       const v=it.dataset.pickcli; closeProductPicker();
@@ -714,7 +714,7 @@ function openDocOwnerPicker(anchor){
   closeProductPicker();
   _pickerAnchor = anchor; anchor.classList.add("open");
   const pop = document.createElement("div"); pop.className="ppick-pop";
-  pop.innerHTML = `<input class="inp ppick-search" placeholder="Search owner (client / local)…" autocomplete="off" spellcheck="false"><div class="ppick-list"></div>`;
+  pop.innerHTML = `<input class="inp ppick-search" placeholder="${t("conj.ph.searchowner")}" autocomplete="off" spellcheck="false"><div class="ppick-list"></div>`;
   document.body.appendChild(pop);
   const search = pop.querySelector(".ppick-search"), listEl = pop.querySelector(".ppick-list");
   const paint=(q)=>{
@@ -723,8 +723,8 @@ function openDocOwnerPicker(anchor){
     if(q) lista = lista.filter(c=> ((c.nombre||"")+" "+(c.empresa||"")+" "+(c.email||"")).toLowerCase().includes(q));
     let html = lista.map(c=>`<button type="button" class="ppick-item${c.id===draft.terceroId?" active":""}" data-pickowner="${c.id}">
       <span class="pi-name">${esc(c.nombre)}${c.empresa?` · ${esc(c.empresa)}`:""}</span></button>`).join("");
-    if(!lista.length) html = `<div class="ppick-empty">No clients match.</div>`;
-    html += `<button type="button" class="ppick-item new" data-pickowner="__new">＋ Add new client…</button>`;
+    if(!lista.length) html = `<div class="ppick-empty">${t("md.pick.noclimatch")}</div>`;
+    html += `<button type="button" class="ppick-item new" data-pickowner="__new">${t("md.pick.addcli")}</button>`;
     listEl.innerHTML = html;
     listEl.querySelectorAll("[data-pickowner]").forEach(it=> it.onclick=()=>{
       const v=it.dataset.pickowner; closeProductPicker();
@@ -745,31 +745,31 @@ function openDocOwnerPicker(anchor){
    renderDocModal() (el draft persiste en memoria). */
 function openClienteForm(id, nombrePre){
   const c = id ? clienteById(id) : null;
-  buildModal(c?"Edit customer":"New customer", `
+  buildModal(c?t("md.cli.edit"):t("md.cli.new"), `
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
-      <div class="field" style="grid-column:1/3"><label>Customer name <span class="hint" style="font-weight:400">· required</span></label><input class="inp" id="c_nom" value="${c?esc(c.nombre):esc(nombrePre||"")}"></div>
-      <div class="field"><label>Contact name</label><input class="inp" id="c_con" value="${c?esc(c.contacto):""}"></div>
-      <div class="field"><label>Company</label><input class="inp" id="c_emp" value="${c?esc(c.empresa):""}"></div>
-      <div class="field"><label>Phone</label><input class="inp" id="c_tel" value="${c?esc(c.telefono):""}"></div>
-      <div class="field"><label>Email <span class="hint" style="font-weight:400">· required</span></label><input class="inp" id="c_mail" value="${c?esc(c.email):""}"></div>
-      <div class="field" style="grid-column:1/3"><label>Address <span class="hint" style="font-weight:400">· required</span></label><input class="inp" id="c_dir" value="${c?esc(c.direccion):""}" placeholder="Street address"></div>
-      <div class="field"><label>City</label><input class="inp" id="c_ciu" value="${c?esc(c.ciudad):""}"></div>
-      <div class="field"><label>State</label><input class="inp" id="c_est" value="${c?esc(c.estado):""}" placeholder="FL, NJ..."></div>
-      <div class="field"><label>ZIP <span class="hint" style="font-weight:400">· required</span></label><input class="inp" id="c_zip" value="${c?esc(c.zip):""}"></div>
-      <div class="field"><label>Country</label><input class="inp" id="c_pais" value="${c?esc(c.pais):""}" placeholder="USA, Japan, Argentina..."></div>
+      <div class="field" style="grid-column:1/3"><label>${t("md.cli.name")} <span class="hint" style="font-weight:400">${t("md.req")}</span></label><input class="inp" id="c_nom" value="${c?esc(c.nombre):esc(nombrePre||"")}"></div>
+      <div class="field"><label>${t("md.cli.contact")}</label><input class="inp" id="c_con" value="${c?esc(c.contacto):""}"></div>
+      <div class="field"><label>${t("md.cli.company")}</label><input class="inp" id="c_emp" value="${c?esc(c.empresa):""}"></div>
+      <div class="field"><label>${t("md.cli.phone")}</label><input class="inp" id="c_tel" value="${c?esc(c.telefono):""}"></div>
+      <div class="field"><label>${t("md.cli.email")} <span class="hint" style="font-weight:400">${t("md.req")}</span></label><input class="inp" id="c_mail" value="${c?esc(c.email):""}"></div>
+      <div class="field" style="grid-column:1/3"><label>${t("md.cli.address")} <span class="hint" style="font-weight:400">${t("md.req")}</span></label><input class="inp" id="c_dir" value="${c?esc(c.direccion):""}" placeholder="${t("md.cli.ph.address")}"></div>
+      <div class="field"><label>${t("md.cli.city")}</label><input class="inp" id="c_ciu" value="${c?esc(c.ciudad):""}"></div>
+      <div class="field"><label>${t("md.cli.state")}</label><input class="inp" id="c_est" value="${c?esc(c.estado):""}" placeholder="${t("md.cli.ph.state")}"></div>
+      <div class="field"><label>${t("md.cli.zip")} <span class="hint" style="font-weight:400">${t("md.req")}</span></label><input class="inp" id="c_zip" value="${c?esc(c.zip):""}"></div>
+      <div class="field"><label>${t("md.cli.country")}</label><input class="inp" id="c_pais" value="${c?esc(c.pais):""}" placeholder="${t("md.cli.ph.country")}"></div>
     </div>
   `, [
-    {label:"Cancel",cls:"btn",act:()=>renderDocModal()},
-    {label:"Save customer",cls:"btn primary",act:()=>saveCliente(id)}
+    {label:t("common.cancel"),cls:"btn",act:()=>renderDocModal()},
+    {label:t("md.cli.save"),cls:"btn primary",act:()=>saveCliente(id)}
   ], true);
   document.getElementById("c_nom").focus();
 }
 function saveCliente(id){
   const g=x=>document.getElementById(x).value.trim();
   const nom=g("c_nom"), mail=g("c_mail"), dir=g("c_dir"), zip=g("c_zip");
-  if(!nom){ toast("Customer name is required","warn"); return; }
-  if(!mail || !dir || !zip){ toast("Missing required fields: email, address and ZIP","warn"); return; }
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)){ toast("The email format isn't valid","warn"); return; }
+  if(!nom){ toast(t("md.cli.errname"),"warn"); return; }
+  if(!mail || !dir || !zip){ toast(t("md.cli.errfields"),"warn"); return; }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)){ toast(t("md.cli.erremail"),"warn"); return; }
   const campos={ nombre:nom, contacto:g("c_con"), empresa:g("c_emp"), telefono:g("c_tel"),
                  email:mail, direccion:dir, ciudad:g("c_ciu"), estado:g("c_est"), zip, pais:g("c_pais") };
   let cid=id;
@@ -777,7 +777,7 @@ function saveCliente(id){
   else { const nc=Object.assign({id:uid()}, campos); db.clientes.push(nc); cid=nc.id; }
   draft.clienteId=cid;
   if(draft.tipo==="compra") draft.terceroId=cid;   // en compras el cliente elegido es el DUEÑO (terceros)
-  save(); toast("Customer saved"); renderDocModal();
+  save(); toast(t("md.cli.saved")); renderDocModal();
 }
 
 

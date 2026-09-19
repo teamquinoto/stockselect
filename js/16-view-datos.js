@@ -8,94 +8,93 @@
    ============================================================ */
 function viewDatos(){
   const conf = syncState==="conflict";
-  const roleLbl = isAdmin() ? "Admin (master)" : `Seller · ${esc((session&&session.name)||"—")}`;
+  const roleLbl = isAdmin() ? t("dat.acct.admin") : t("dat.acct.seller",{name:esc((session&&session.name)||"—")});
   return `
-  <div class="head"><div class="title"><h2>Data</h2><p>Account, backup and settings.</p></div></div>
+  <div class="head"><div class="title"><h2>${t("dat.title")}</h2><p>${t("dat.sub")}</p></div></div>
 
   <div class="panel">
-    <div class="phead"><h3>Account</h3><span class="hint" data-syncchip>●</span></div>
+    <div class="phead"><h3>${t("dat.acct")}</h3><span class="hint" data-syncchip>●</span></div>
     <div class="grid-form">
       <p style="margin:0;color:var(--muted);font-size:14px">
-        Signed in as <b>${esc(session?session.user:"—")}</b> · <b>${esc(roleLbl)}</b>. Your data lives on the server:
-        sign in from any device and see the same thing.
+        ${t("dat.acct.signedin",{u:`<b>${esc(session?session.user:"—")}</b>`,role:`<b>${esc(roleLbl)}</b>`})}
       </p>
       ${conf ? `<div class="banner warn">
-        <div>It changed here <b>and</b> on the server since the last sync. Which one do you keep?
+        <div>${t("dat.conf.title")}
           <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn sm" data-confserver>Take the server's</button>
-            <button class="btn sm danger" data-conflocal>Overwrite with this device's</button>
+            <button class="btn sm" data-confserver>${t("dat.conf.takeserver")}</button>
+            <button class="btn sm danger" data-conflocal>${t("dat.conf.overwrite")}</button>
           </div>
         </div>
       </div>`:""}
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn" data-syncnow>↻ Sync now</button>
-        <button class="btn danger" data-logout>Sign out</button>
+        <button class="btn" data-syncnow>${t("dat.syncnow")}</button>
+        <button class="btn danger" data-logout>${t("tb.logout")}</button>
       </div>
       <p style="font-size:12px;color:var(--muted);margin:0">
-        Inventory: <b>${esc(session?session.space:"main")}</b> · synced rev ${syncMeta.syncedRev}${syncMeta.dirty?" · local changes not pushed":""}.
+        ${t("dat.inv.line",{sp:`<b>${esc(session?session.space:"main")}</b>`,rev:syncMeta.syncedRev,dirty:syncMeta.dirty?t("dat.inv.dirty"):""})}.
       </p>
     </div>
   </div>
 
   <div class="panel">
-    <div class="phead"><h3>Backup</h3></div>
+    <div class="phead"><h3>${t("dat.backup")}</h3></div>
     <div class="grid-form">
-      <p style="margin:0;color:var(--muted);font-size:14px">Extra JSON copy, on top of the server, to migrate or archive.</p>
+      <p style="margin:0;color:var(--muted);font-size:14px">${t("dat.backup.sub")}</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn" data-export>⤓ Export JSON</button>
-        <button class="btn" data-import-json>⤒ Import JSON</button>
-        ${isAdmin()?`<button class="btn danger" data-reset>Delete all</button>`:""}
+        <button class="btn" data-export>${t("dat.exportjson")}</button>
+        <button class="btn" data-import-json>${t("dat.importjson")}</button>
+        ${isAdmin()?`<button class="btn danger" data-reset>${t("dat.deleteall")}</button>`:""}
       </div>
     </div>
   </div>
 
   <div class="panel">
-    <div class="phead"><h3>Settings</h3></div>
+    <div class="phead"><h3>${t("dat.settings")}</h3></div>
     <div class="grid-form" style="grid-template-columns:1fr 1fr">
-      <div class="field"><label>Exchange rate <span class="hint" style="font-weight:400">· ARS per US$1</span></label><input class="inp num" id="cfgTC" value="${esc(String(db.config.tc||1000))}"></div>
-      <div class="field"><label>Report currency <span class="hint" style="font-weight:400">· consolidated views</span></label>
+      <div class="field"><label>${t("dat.set.rate")} <span class="hint" style="font-weight:400">${t("dat.set.rate.hint")}</span></label><input class="inp num" id="cfgTC" value="${esc(String(db.config.tc||1000))}"></div>
+      <div class="field"><label>${t("dat.set.repccy")} <span class="hint" style="font-weight:400">${t("dat.set.repccy.hint")}</span></label>
         <select class="inp" id="cfgRep">
-          <option value="USD" ${reportCcy()==="USD"?"selected":""}>US$ · Dollars</option>
-          <option value="ARS" ${reportCcy()==="ARS"?"selected":""}>AR$ · Pesos</option>
+          <option value="USD" ${reportCcy()==="USD"?"selected":""}>${t("dat.set.usd")}</option>
+          <option value="ARS" ${reportCcy()==="ARS"?"selected":""}>${t("dat.set.ars")}</option>
         </select></div>
-      <div class="field"><label>Starting invoice #</label><input class="inp num" id="cfgFac" value="${esc(String(db.config.facturaInicio||101))}"></div>
-      ${isAdmin()?`<div class="field"><label>Remito U · starting # <span class="hint" style="font-weight:400">· US → AR</span></label><input class="inp num" id="cfgRemU" value="${esc(String(remitoSeqInicio("U")))}"></div>
-      <div class="field"><label>Remito A · starting # <span class="hint" style="font-weight:400">· AR split</span></label><input class="inp num" id="cfgRemA" value="${esc(String(remitoSeqInicio("A")))}"></div>`:""}
-      ${isAdmin()?`<div class="field"><label>Default commission (% of margin)</label><input class="inp num" id="cfgComm" value="${esc(String(round2((db.config.commissionRate||0)*100)))}"></div>
-      <div class="field" style="justify-content:flex-end"><p class="hint" style="font-size:11.5px;margin:0 0 8px">Default for new sellers. Each seller can override it below. Existing sales keep the rate they were booked at.</p></div>`:""}
-      <button class="btn" data-savecfg style="justify-self:start;margin-top:4px">Save</button>
+      <div class="field"><label>${t("dat.set.startinv")}</label><input class="inp num" id="cfgFac" value="${esc(String(db.config.facturaInicio||101))}"></div>
+      ${isAdmin()?`<div class="field"><label>${t("dat.set.remu")} <span class="hint" style="font-weight:400">${t("dat.set.remu.hint")}</span></label><input class="inp num" id="cfgRemU" value="${esc(String(remitoSeqInicio("U")))}"></div>
+      <div class="field"><label>${t("dat.set.rema")} <span class="hint" style="font-weight:400">${t("dat.set.rema.hint")}</span></label><input class="inp num" id="cfgRemA" value="${esc(String(remitoSeqInicio("A")))}"></div>`:""}
+      ${isAdmin()?`<div class="field"><label>${t("dat.set.defcomm")}</label><input class="inp num" id="cfgComm" value="${esc(String(round2((db.config.commissionRate||0)*100)))}"></div>
+      <div class="field" style="justify-content:flex-end"><p class="hint" style="font-size:11.5px;margin:0 0 8px">${t("dat.set.defcomm.hint")}</p></div>`:""}
+      <button class="btn" data-savecfg style="justify-self:start;margin-top:4px">${t("common.save")}</button>
     </div>
   </div>
 
   ${isAdmin()?`<div class="panel">
-    <div class="phead"><h3>Sellers</h3><span class="hint">who a sale can be credited to · each with their own commission %</span></div>
+    <div class="phead"><h3>${t("dat.sellers")}</h3><span class="hint">${t("dat.sellers.hint")}</span></div>
     <div class="grid-form">
-      <p style="margin:0;color:var(--muted);font-size:13px">These are the people who sell (Teo, Tonio…). They're <b>not</b> societies: the stock is one shared pool. Each seller has <b>their own commission %</b> (on margin). To let a seller sign in on their own device, also add them to the Worker's <code>USERS</code> secret with the same id.</p>
+      <p style="margin:0;color:var(--muted);font-size:13px">${t("dat.sellers.desc")}</p>
       <div id="vendList" style="display:flex;flex-direction:column;gap:8px">
         ${vendedores().map(v=>`<div class="vend-row" data-vrow="${esc(v.id)}" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <span class="sku" style="min-width:70px">${esc(v.id)}</span>
-          <input class="inp" data-vname="${esc(v.id)}" value="${esc(v.nombre)}" style="max-width:200px" placeholder="Display name">
-          <span style="display:inline-flex;align-items:center;gap:4px"><input class="inp num" data-vrate="${esc(v.id)}" value="${esc(String(round2((v.rate!=null?v.rate:(db.config.commissionRate||0))*100)))}" style="max-width:80px" placeholder="%"><span class="hint" style="font-size:12px">% comm.</span></span>
-          <button class="btn ghost sm" data-vdel="${esc(v.id)}" style="color:var(--alert)">Remove</button>
-        </div>`).join("") || `<p class="hint">No sellers yet — add one below.</p>`}
+          <input class="inp" data-vname="${esc(v.id)}" value="${esc(v.nombre)}" style="max-width:200px" placeholder="${t("dat.sellers.dispname")}">
+          <span style="display:inline-flex;align-items:center;gap:4px"><input class="inp num" data-vrate="${esc(v.id)}" value="${esc(String(round2((v.rate!=null?v.rate:(db.config.commissionRate||0))*100)))}" style="max-width:80px" placeholder="%"><span class="hint" style="font-size:12px">${t("dat.sellers.comm")}</span></span>
+          <button class="btn ghost sm" data-vdel="${esc(v.id)}" style="color:var(--alert)">${t("dat.sellers.remove")}</button>
+        </div>`).join("") || `<p class="hint">${t("dat.sellers.none")}</p>`}
       </div>
       <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:4px">
-        <div class="field"><label>New seller id</label><input class="inp" id="vNewId" placeholder="short id (no spaces)" style="max-width:170px"></div>
-        <div class="field"><label>Display name</label><input class="inp" id="vNewName" placeholder="Full name" style="max-width:180px"></div>
-        <div class="field"><label>Commission %</label><input class="inp num" id="vNewRate" placeholder="${esc(String(round2((db.config.commissionRate||0)*100)))}" style="max-width:110px"></div>
-        <button class="btn" id="vAdd" style="margin-bottom:2px">+ Add seller</button>
+        <div class="field"><label>${t("dat.sellers.newid")}</label><input class="inp" id="vNewId" placeholder="${t("dat.sellers.newid.ph")}" style="max-width:170px"></div>
+        <div class="field"><label>${t("dat.sellers.dispname")}</label><input class="inp" id="vNewName" placeholder="${t("dat.sellers.fullname")}" style="max-width:180px"></div>
+        <div class="field"><label>${t("dat.sellers.commpct")}</label><input class="inp num" id="vNewRate" placeholder="${esc(String(round2((db.config.commissionRate||0)*100)))}" style="max-width:110px"></div>
+        <button class="btn" id="vAdd" style="margin-bottom:2px">${t("dat.sellers.add")}</button>
       </div>
     </div>
   </div>`:""}
 
   <div class="panel">
-    <div class="phead"><h3>Issuer details</h3><span class="hint">shown on the invoice PDF</span></div>
+    <div class="phead"><h3>${t("dat.issuer")}</h3><span class="hint">${t("dat.issuer.hint")}</span></div>
     <div class="grid-form" style="grid-template-columns:1fr 1fr">
-      <div class="field" style="grid-column:1/3"><label>Name / company</label><input class="inp" id="cfgEmNom" value="${esc((db.config.emisor||{}).nombre||"")}"></div>
-      <div class="field" style="grid-column:1/3"><label>Address</label><input class="inp" id="cfgEmDir" value="${esc((db.config.emisor||{}).direccion||"")}"></div>
-      <div class="field"><label>Email</label><input class="inp" id="cfgEmMail" value="${esc((db.config.emisor||{}).email||"")}"></div>
-      <div class="field"><label>Phone</label><input class="inp" id="cfgEmTel" value="${esc((db.config.emisor||{}).tel||"")}"></div>
-      <button class="btn" data-savecfg style="justify-self:start;margin-top:4px">Save</button>
+      <div class="field" style="grid-column:1/3"><label>${t("dat.issuer.name")}</label><input class="inp" id="cfgEmNom" value="${esc((db.config.emisor||{}).nombre||"")}"></div>
+      <div class="field" style="grid-column:1/3"><label>${t("dat.issuer.addr")}</label><input class="inp" id="cfgEmDir" value="${esc((db.config.emisor||{}).direccion||"")}"></div>
+      <div class="field"><label>${t("dat.issuer.email")}</label><input class="inp" id="cfgEmMail" value="${esc((db.config.emisor||{}).email||"")}"></div>
+      <div class="field"><label>${t("dat.issuer.phone")}</label><input class="inp" id="cfgEmTel" value="${esc((db.config.emisor||{}).tel||"")}"></div>
+      <button class="btn" data-savecfg style="justify-self:start;margin-top:4px">${t("common.save")}</button>
     </div>
   </div>`;
 }
@@ -163,7 +162,7 @@ function wire(){
       email:(document.getElementById("cfgEmMail").value||"").trim(),
       tel:(document.getElementById("cfgEmTel").value||"").trim()
     };
-    save(); toast("Settings saved"); render();
+    save(); toast(t("dat.tt.saved")); render();
   });
 
   // --- cuenta / sincronización ---
@@ -174,30 +173,30 @@ function wire(){
 
   // --- vendedores (ABM, admin) ---
   m.querySelectorAll("[data-vname]").forEach(inp=> inp.onchange=()=>{
-    const v=vendedorById(inp.dataset.vname); if(v){ v.nombre=(inp.value||"").trim()||v.id; save(); toast("Seller renamed"); }
+    const v=vendedorById(inp.dataset.vname); if(v){ v.nombre=(inp.value||"").trim()||v.id; save(); toast(t("dat.tt.renamed")); }
   });
   m.querySelectorAll("[data-vrate]").forEach(inp=> inp.onchange=()=>{
     const v=vendedorById(inp.dataset.vrate); if(!v) return;
     const pct=parseNum(inp.value);
     if(isNaN(pct)){ inp.value=String(round2((v.rate||0)*100)); return; }
     v.rate = Math.min(1, Math.max(0, round2(pct)/100));
-    save(); toast(`${v.nombre}'s commission: ${round2(v.rate*100)}%`);
+    save(); toast(t("dat.tt.commset",{name:v.nombre,p:round2(v.rate*100)}));
   });
   m.querySelectorAll("[data-vdel]").forEach(b=> b.onclick=()=>{
     const id=b.dataset.vdel;
-    if(!confirm(`Remove seller "${vendedorNombre(id)}"?\n\nPast sales already credited to them keep their name and rate. New sales just won't offer this seller.`)) return;
+    if(!confirm(t("dat.cf.delseller",{name:vendedorNombre(id)}))) return;
     db.config.vendedores = vendedores().filter(v=>v.id!==id);
-    save(); toast("Seller removed","warn"); render();
+    save(); toast(t("dat.tt.sellerremoved"),"warn"); render();
   });
   const vAdd=m.querySelector("#vAdd"); if(vAdd) vAdd.onclick=()=>{
     let id=(document.getElementById("vNewId").value||"").trim().toLowerCase().replace(/[^a-z0-9_-]/g,"");
     const nombre=(document.getElementById("vNewName").value||"").trim();
     const rpct=parseNum(document.getElementById("vNewRate").value);
     const rate = isNaN(rpct) ? (db.config.commissionRate||0) : Math.min(1, Math.max(0, round2(rpct)/100));
-    if(!id){ toast("Enter a seller id (short, no spaces)","warn"); return; }
-    if(vendedorById(id)){ toast("That id already exists","warn"); return; }
+    if(!id){ toast(t("dat.tt.enterid"),"warn"); return; }
+    if(vendedorById(id)){ toast(t("dat.tt.ididexists"),"warn"); return; }
     db.config.vendedores = vendedores().concat([{ id, nombre: nombre||id, rate }]);
-    save(); toast("Seller added"); render();
+    save(); toast(t("dat.tt.selleradded")); render();
   };
 
   paintSync();

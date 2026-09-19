@@ -39,23 +39,23 @@ function viewClientes(){
       <td>${esc(c.pais||"—")}</td>
       <td class="r num">${nv}</td>
       <td class="r" style="white-space:nowrap">
-        <a href="#" data-cliedit="${c.id}">Edit</a>
-        <a href="#" data-clidel="${c.id}" style="color:var(--down);margin-left:10px">Delete</a>
+        <a href="#" data-cliedit="${c.id}">${t("common.edit")}</a>
+        <a href="#" data-clidel="${c.id}" style="color:var(--down);margin-left:10px">${t("common.delete")}</a>
       </td>
     </tr>`;
   }).join("");
   const body = list.length
     ? `<div class="table-scroll"><table>
-        <thead><tr>${sortTh(cliSort,"nombre","Customer","")}${sortTh(cliSort,"email","Email","")}${sortTh(cliSort,"ciudad","City","")}${sortTh(cliSort,"pais","Country","")}${sortTh(cliSort,"ventas","Sales","r")}<th class="r">Actions</th></tr></thead>
+        <thead><tr>${sortTh(cliSort,"nombre",t("md.lbl.customer"),"")}${sortTh(cliSort,"email",t("md.cli.email"),"")}${sortTh(cliSort,"ciudad",t("md.cli.city"),"")}${sortTh(cliSort,"pais",t("md.cli.country"),"")}${sortTh(cliSort,"ventas",t("cl.th.sales"),"r")}<th class="r">${t("cl.th.actions")}</th></tr></thead>
         <tbody>${rows}</tbody></table></div>`
-    : emptyState("No customers yet","Create one from a sale, or add it here with “New customer”.");
+    : emptyState(t("cl.empty.title"),t("cl.empty.sub"));
   return `
-  <div class="head"><div class="title"><h2>Customers</h2><p>${db.clientes.length} customer(s). Invoices keep a snapshot, so deleting one won’t change past sales.</p></div>
-    <div class="actions"><button class="btn primary" data-clinew>+ New customer</button></div>
+  <div class="head"><div class="title"><h2>${t("cl.title")}</h2><p>${t("cl.sub",{n:db.clientes.length})}</p></div>
+    <div class="actions"><button class="btn primary" data-clinew>${t("cl.btn.new")}</button></div>
   </div>
   <div class="panel">
-    <div class="phead" style="gap:10px"><input class="inp" id="cliSearch" placeholder="Search by name, company, email, city or country…" value="${esc(cliFiltro)}" style="max-width:420px">
-      ${cliFiltro?`<button class="btn sm" data-cliclear>Clear</button>`:""}</div>
+    <div class="phead" style="gap:10px"><input class="inp" id="cliSearch" placeholder="${t("cl.ph.search")}" value="${esc(cliFiltro)}" style="max-width:420px">
+      ${cliFiltro?`<button class="btn sm" data-cliclear>${t("cl.btn.clear")}</button>`:""}</div>
     ${body}
   </div>`;
 }
@@ -75,46 +75,46 @@ function wireClientes(){
 /* Form de cliente independiente de la venta (no toca draft). */
 function openClienteStandalone(id){
   const c = id ? clienteById(id) : null;
-  buildModal(c?"Edit customer":"New customer", `
+  buildModal(c?t("md.cli.edit"):t("md.cli.new"), `
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
-      <div class="field" style="grid-column:1/3"><label>Customer name <span class="hint" style="font-weight:400">· required</span></label><input class="inp" id="cs_nom" value="${c?esc(c.nombre):""}"></div>
-      <div class="field"><label>Contact name</label><input class="inp" id="cs_con" value="${c?esc(c.contacto):""}"></div>
-      <div class="field"><label>Company</label><input class="inp" id="cs_emp" value="${c?esc(c.empresa):""}"></div>
-      <div class="field"><label>Phone</label><input class="inp" id="cs_tel" value="${c?esc(c.telefono):""}"></div>
-      <div class="field"><label>Email</label><input class="inp" id="cs_mail" value="${c?esc(c.email):""}"></div>
-      <div class="field" style="grid-column:1/3"><label>Address</label><input class="inp" id="cs_dir" value="${c?esc(c.direccion):""}" placeholder="Street address"></div>
-      <div class="field"><label>City</label><input class="inp" id="cs_ciu" value="${c?esc(c.ciudad):""}"></div>
-      <div class="field"><label>State</label><input class="inp" id="cs_est" value="${c?esc(c.estado):""}" placeholder="FL, NJ..."></div>
-      <div class="field"><label>ZIP</label><input class="inp" id="cs_zip" value="${c?esc(c.zip):""}"></div>
-      <div class="field"><label>Country</label><input class="inp" id="cs_pais" value="${c?esc(c.pais):""}" placeholder="USA, Japan, Argentina..."></div>
+      <div class="field" style="grid-column:1/3"><label>${t("md.cli.name")} <span class="hint" style="font-weight:400">${t("md.req")}</span></label><input class="inp" id="cs_nom" value="${c?esc(c.nombre):""}"></div>
+      <div class="field"><label>${t("md.cli.contact")}</label><input class="inp" id="cs_con" value="${c?esc(c.contacto):""}"></div>
+      <div class="field"><label>${t("md.cli.company")}</label><input class="inp" id="cs_emp" value="${c?esc(c.empresa):""}"></div>
+      <div class="field"><label>${t("md.cli.phone")}</label><input class="inp" id="cs_tel" value="${c?esc(c.telefono):""}"></div>
+      <div class="field"><label>${t("md.cli.email")}</label><input class="inp" id="cs_mail" value="${c?esc(c.email):""}"></div>
+      <div class="field" style="grid-column:1/3"><label>${t("md.cli.address")}</label><input class="inp" id="cs_dir" value="${c?esc(c.direccion):""}" placeholder="${t("md.cli.ph.address")}"></div>
+      <div class="field"><label>${t("md.cli.city")}</label><input class="inp" id="cs_ciu" value="${c?esc(c.ciudad):""}"></div>
+      <div class="field"><label>${t("md.cli.state")}</label><input class="inp" id="cs_est" value="${c?esc(c.estado):""}" placeholder="${t("md.cli.ph.state")}"></div>
+      <div class="field"><label>${t("md.cli.zip")}</label><input class="inp" id="cs_zip" value="${c?esc(c.zip):""}"></div>
+      <div class="field"><label>${t("md.cli.country")}</label><input class="inp" id="cs_pais" value="${c?esc(c.pais):""}" placeholder="${t("md.cli.ph.country")}"></div>
     </div>
   `, [
-    {label:"Cancel",cls:"btn",act:closeModal},
-    {label:"Save customer",cls:"btn primary",act:()=>saveClienteStandalone(id)}
+    {label:t("common.cancel"),cls:"btn",act:closeModal},
+    {label:t("md.cli.save"),cls:"btn primary",act:()=>saveClienteStandalone(id)}
   ], true);
   document.getElementById("cs_nom").focus();
 }
 function saveClienteStandalone(id){
   const g=x=>document.getElementById(x).value.trim();
   const nom=g("cs_nom");
-  if(!nom){ toast("Customer name is required","warn"); return; }
+  if(!nom){ toast(t("md.cli.errname"),"warn"); return; }
   const mail=g("cs_mail");
-  if(mail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)){ toast("The email format isn't valid","warn"); return; }
+  if(mail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)){ toast(t("md.cli.erremail"),"warn"); return; }
   const campos={ nombre:nom, contacto:g("cs_con"), empresa:g("cs_emp"), telefono:g("cs_tel"),
                  email:mail, direccion:g("cs_dir"), ciudad:g("cs_ciu"), estado:g("cs_est"), zip:g("cs_zip"), pais:g("cs_pais") };
   if(id){ Object.assign(clienteById(id), campos); }
   else { db.clientes.push(Object.assign({id:uid()}, campos)); }
-  save(); toast("Customer saved"); closeModal(); render();
+  save(); toast(t("md.cli.saved")); closeModal(); render();
 }
 function deleteCliente(id){
   const c=clienteById(id); if(!c) return;
   const nv=ventasDeCliente(id).length;
   const msg = nv>0
-    ? `Delete "${c.nombre}"?\n\nThis customer has ${nv} sale(s). Those invoices keep their own snapshot and won't change, but the customer will no longer appear in the picker or list.`
-    : `Delete "${c.nombre}"?`;
+    ? t("cl.del.confirm",{name:c.nombre,n:nv})
+    : t("cl.del.simple",{name:c.nombre});
   if(!confirm(msg)) return;
   db.clientes = db.clientes.filter(x=>x.id!==id);
-  save(); toast("Customer deleted","warn"); render();
+  save(); toast(t("cl.deleted"),"warn"); render();
 }
 
 /* ¿La compra en edición es de terceros? y ¿cuántas unidades de una línea son NUESTRAS
@@ -135,8 +135,8 @@ function renderLines(){
     if(isC){
       const newFields = l.crear ? `
         <div style="display:flex;gap:6px;margin-top:6px">
-          <input class="inp" placeholder="SKU" value="${esc(l.sku)}" data-k="sku" data-i="${i}" style="max-width:110px">
-          <input class="inp" placeholder="New product name" value="${esc(l.nombre)}" data-k="nombre" data-i="${i}">
+          <input class="inp" placeholder="${t("cl.ph.sku")}" value="${esc(l.sku)}" data-k="sku" data-i="${i}" style="max-width:110px">
+          <input class="inp" placeholder="${t("cl.ph.newprod")}" value="${esc(l.nombre)}" data-k="nombre" data-i="${i}">
         </div>` : "";
       if(terc){
         const qtot = parseNum(l.cantidad)||0;
@@ -147,12 +147,12 @@ function renderLines(){
             <div class="ppick">${pickerBtn(l,i)}</div>
             ${newFields}
           </td>
-          <td style="width:74px"><input class="inp num" data-k="cantidad" data-i="${i}" value="${l.cantidad}" title="Total units of this SKU in the invoice"></td>
-          <td style="width:80px" class="col-ours"><input class="inp num" data-k="aNuestro" data-i="${i}" value="${ours}" title="Units you keep (enter stock). The rest travels to the owner."></td>
-          <td class="r num" style="width:66px;color:var(--muted)" data-terc="${i}" title="Units that keep travelling to the owner (tracked, not stock)">${qty(aTerc)}</td>
-          <td style="width:104px"><input class="inp num" data-k="precio" data-i="${i}" value="${l.precio}" title="Unit cost (reference for the third-party units; real cost for your units)"></td>
+          <td style="width:74px"><input class="inp num" data-k="cantidad" data-i="${i}" value="${l.cantidad}" title="${t("cl.tt.qtytotal")}"></td>
+          <td style="width:80px" class="col-ours"><input class="inp num" data-k="aNuestro" data-i="${i}" value="${ours}" title="${t("cl.tt.ourskeep")}"></td>
+          <td class="r num" style="width:66px;color:var(--muted)" data-terc="${i}" title="${t("cl.tt.toowner")}">${qty(aTerc)}</td>
+          <td style="width:104px"><input class="inp num" data-k="precio" data-i="${i}" value="${l.precio}" title="${t("cl.tt.unitcost")}"></td>
           <td class="r num sub-cell" style="width:110px">${money(ours*l.precio, docCcy)}</td>
-          <td style="width:34px"><button class="btn ghost sm" data-del="${i}" title="Remove">✕</button></td>
+          <td style="width:34px"><button class="btn ghost sm" data-del="${i}" title="${t("md.tt.remove")}">✕</button></td>
         </tr>`;
       }
       return `<tr>
@@ -163,7 +163,7 @@ function renderLines(){
         <td style="width:90px"><input class="inp num" data-k="cantidad" data-i="${i}" value="${l.cantidad}"></td>
         <td style="width:120px"><input class="inp num" data-k="precio" data-i="${i}" value="${l.precio}"></td>
         <td class="r num sub-cell" style="width:120px">${money(l.cantidad*l.precio, docCcy)}</td>
-        <td style="width:34px"><button class="btn ghost sm" data-del="${i}" title="Remove">✕</button></td>
+        <td style="width:34px"><button class="btn ghost sm" data-del="${i}" title="${t("md.tt.remove")}">✕</button></td>
       </tr>`;
     }
     // ---- VENTA ----
@@ -171,7 +171,7 @@ function renderLines(){
     const comprom = p ? comprometidoOtras(l.productoId, i) : 0;
     const over = p && (parseNum(l.cantidad)||0) > rem;
     const dispInfo = p
-      ? `<div class="disp-info" data-di="${i}" style="font-size:11px;margin-top:4px;color:${over?'var(--alert)':'var(--muted)'}">avail: ${qty(stockBaseVenta(l.productoId))}${comprom>0?` · left ${qty(rem)}`:""}${over?" · <b>over stock</b>":""}</div>`
+      ? `<div class="disp-info" data-di="${i}" style="font-size:11px;margin-top:4px;color:${over?'var(--alert)':'var(--muted)'}">${t("md.disp.avail",{n:qty(stockBaseVenta(l.productoId))})}${comprom>0?t("md.disp.left",{n:qty(rem)}):""}${over?t("md.disp.over"):""}</div>`
       : `<div class="disp-info" data-di="${i}" style="font-size:11px;margin-top:4px"></div>`;
     return `<tr>
       <td style="min-width:260px">
@@ -184,7 +184,7 @@ function renderLines(){
       <td style="width:86px"><input class="inp num" data-k="precio" data-i="${i}" value="${l.precio}"></td>
       <td class="r num" style="width:44px;color:var(--muted)" data-mg="${i}">${p&&l.precio>0?nf0.format((l.precio-l.costoRef)/l.precio*100)+"%":"—"}</td>
       <td class="r num sub-cell" style="width:88px">${money(l.cantidad*l.precio, docCcy)}</td>
-      <td style="width:30px"><button class="btn ghost sm" data-del="${i}" title="Remove">✕</button></td>
+      <td style="width:30px"><button class="btn ghost sm" data-del="${i}" title="${t("md.tt.remove")}">✕</button></td>
     </tr>`;
   }).join("");
 
@@ -196,10 +196,10 @@ function renderLines(){
     ? `<colgroup><col><col style="width:92px"><col style="width:134px"><col style="width:134px"><col style="width:46px"></colgroup>`
     : `<colgroup><col><col style="width:78px"><col style="width:96px"><col style="width:86px"><col style="width:94px"><col style="width:80px"><col style="width:112px"><col style="width:46px"></colgroup>`;
   const thead = terc
-    ? `<tr><th style="white-space:nowrap">Product</th><th class="r" style="white-space:nowrap" title="Total in the invoice">Qty</th><th class="r" style="white-space:nowrap" title="Units you keep (enter stock)">Ours</th><th class="r" style="white-space:nowrap" title="Travels to the owner (tracked)">→ owner</th><th class="r" style="white-space:nowrap">Unit cost</th><th class="r" style="white-space:nowrap" title="Subtotal of your units">Subtotal</th><th></th></tr>`
+    ? `<tr><th style="white-space:nowrap">${t("common.product")}</th><th class="r" style="white-space:nowrap" title="${t("cl.tt.qtyinv")}">${t("cl.th.qty")}</th><th class="r" style="white-space:nowrap" title="${t("cl.tt.ourskeep2")}">${t("cl.th.ours")}</th><th class="r" style="white-space:nowrap" title="${t("cl.tt.toowner2")}">${t("cl.th.toowner")}</th><th class="r" style="white-space:nowrap">${t("cl.th.unitcost")}</th><th class="r" style="white-space:nowrap" title="${t("cl.tt.subself")}">${t("pdf.subtotal")}</th><th></th></tr>`
     : isC
-    ? `<tr><th>Product</th><th class="r">Qty</th><th class="r">Unit cost</th><th class="r">Subtotal</th><th></th></tr>`
-    : `<tr><th>Product</th><th class="r">Qty</th><th class="r">Cost</th><th class="r" title="Markup %">Mk&nbsp;%</th><th class="r" title="Unit price">Price</th><th class="r" title="Real margin on revenue">Mrg&nbsp;%</th><th class="r">Subtotal</th><th></th></tr>`;
+    ? `<tr><th>${t("common.product")}</th><th class="r">${t("cl.th.qty")}</th><th class="r">${t("cl.th.unitcost")}</th><th class="r">${t("pdf.subtotal")}</th><th></th></tr>`
+    : `<tr><th>${t("common.product")}</th><th class="r">${t("cl.th.qty")}</th><th class="r">${t("cl.th.cost")}</th><th class="r" title="${t("cl.tt.markuppct")}">${t("cl.th.mkpct")}</th><th class="r" title="${t("cl.tt.unitprice")}">${t("cl.th.price")}</th><th class="r" title="${t("cl.tt.realmargin")}">${t("cl.th.mrgpct")}</th><th class="r">${t("pdf.subtotal")}</th><th></th></tr>`;
   host.innerHTML = `<div class="table-scroll"><table class="line-tbl doc-tbl">
     ${colgroup}
     <thead>${thead}</thead>
@@ -218,7 +218,7 @@ function renderLines(){
         if(!isC && l.productoId){
           // TASK 1: tope = stock − comprometido en OTRAS líneas del mismo documento
           const rem=dispRestante(l.productoId, i);
-          if(v>rem){ v=Math.max(0,rem); inp.value=v; toast(`Available for this line: ${qty(rem)} (already committed on other lines)`,"warn"); }
+          if(v>rem){ v=Math.max(0,rem); inp.value=v; toast(t("cl.avail",{n:qty(rem)}),"warn"); }
         }
         l.cantidad=v;
         if(terc){ refreshTercLinea(i, host); }   // re-clampa "Ours" y refresca "→ owner" al cambiar el total
@@ -294,8 +294,8 @@ function refreshTotal(){
   if(h && draft.tipo==="compra"){
     const u=unidadesDoc(), extra=(draft.handling||0)+(draft.flete||0);
     h.textContent = (extra>0 && u>0)
-      ? `${money(extra, docCcy)} split across ${qty(u)} u = ${money(extra/u, docCcy)} per unit, added to each product cost.`
-      : "Enter handling/freight; it prorates per unit on confirm.";
+      ? t("md.pro.split",{total:money(extra, docCcy),u:qty(u),per:money(extra/u, docCcy)})
+      : t("md.pro.hint");
   }
 }
 
@@ -315,7 +315,7 @@ function nuevoProductoBase(sku, nombre, precioVenta){
 function confirmDoc(){
   const isC = draft.tipo==="compra";
   // Punto 3: sólo el admin carga compras.
-  if(isC && !puedeComprar()){ toast("Only admins can load purchases","warn"); return; }
+  if(isC && !puedeComprar()){ toast(t("md.err.admincompra"),"warn"); return; }
   // PUNTO 1 — factura de terceros: parte nuestra (a stock) + parte que sigue viaje al dueño
   // (consignación, tracked). Va por su propio camino para no tocar el flujo de compra normal.
   if(isC && draft.origen==="terceros"){ return confirmCompraTerceros(); }
@@ -323,7 +323,7 @@ function confirmDoc(){
   const storeVenta = draft.storeVenta || STORE_IDS[0];   // depósito desde el que se vende
   // Sale: require a customer before generating the invoice
   if(!isC && !clienteById(draft.clienteId)){
-    toast("Pick (or create) a customer before generating the sale","warn"); return;
+    toast(t("cl.err.pickcust"),"warn"); return;
   }
   // Punto 1: alerta de compra DUPLICADA (mismo proveedor + fecha + N° de factura).
   // Sólo en compras NUEVAS (al editar no aplica). Avisa y deja decidir (no bloquea).
@@ -338,15 +338,7 @@ function confirmDoc(){
         (c.numero||"").trim().toLowerCase()===num
       );
       if(dupCompra){
-        const ok = confirm(
-          `⚠ Possible duplicate purchase\n\n`+
-          `There's already a purchase with the same supplier, date and invoice #:\n`+
-          `· Supplier: ${draft.contraparte||"—"}\n`+
-          `· Date: ${fmtDate(draft.fecha)}\n`+
-          `· Invoice #: ${draft.numero||"—"}\n`+
-          `· ${dupCompra.lineas.reduce((a,l)=>a+l.cantidad,0)} u · ${money(dupCompra.total, storeCcy(dupCompra.store))}\n\n`+
-          `Loading this again will add the stock a SECOND time. Continue anyway?`
-        );
+        const ok = confirm(t("cl.dup.confirm",{supplier:draft.contraparte||"—",date:fmtDate(draft.fecha),invoice:draft.numero||"—",u:dupCompra.lineas.reduce((a,l)=>a+l.cantidad,0),total:money(dupCompra.total, storeCcy(dupCompra.store))}));
         if(!ok) return;
       }
     }
@@ -364,23 +356,23 @@ function confirmDoc(){
       if(dup){
         p = dup;
       } else {
-        if(!l.nombre.trim()){ toast("A new product is missing its name","warn"); return; }
+        if(!l.nombre.trim()){ toast(t("cl.err.newprodname"),"warn"); return; }
         p = nuevoProductoBase(l.sku, l.nombre, isC?(l.precioVentaSugerido||0):l.precio);
         db.productos.push(p);
       }
     } else {
       p = prodById(l.productoId);
-      if(!p){ toast("A line has no product assigned","warn"); return; }
+      if(!p){ toast(t("cl.err.noprod"),"warn"); return; }
     }
     // --- SPECIAL STATE GUARDS on sale (point 5) ---
     if(!isC){
-      if(soloEnVault(p)){ toast(`"${p.nombre}" is in the investment vault and can't be sold`,"warn"); return; }
-      if(esBloqueado(p)){ toast(`"${p.nombre}" is blocked (best-offer). It needs admin approval before selling`,"warn"); return; }
+      if(soloEnVault(p)){ toast(t("cl.err.vault",{name:p.nombre}),"warn"); return; }
+      if(esBloqueado(p)){ toast(t("cl.err.blocked",{name:p.nombre}),"warn"); return; }
     }
     const costoSnap = isC ? l.precio : fifoCostoPeek(p, storeVenta, l.cantidad).unit;   // FIFO unit cost in the chosen deposit
     resolved.push({ prod:p, cantidad:l.cantidad, precio:l.precio, costo:costoSnap });
   }
-  if(!resolved.length){ toast("Add at least one valid line","warn"); return; }
+  if(!resolved.length){ toast(t("cl.err.noline"),"warn"); return; }
 
   // PUNTO 1 — prorrateo de costos adicionales (compra), POR UNIDAD:
   // cada unidad del documento carga (handling+flete)/unidades_totales.
@@ -418,11 +410,11 @@ function confirmDoc(){
     Object.keys(pedido).forEach(id=>{
       const p=prodById(id);
       const eff = stockDe(p, storeVenta) + (editing && oldSameStore ? (revertMap[id]||0) : 0);
-      if(pedido[id]>eff) faltantes.push(`• ${p.nombre}: available ${qty(eff)} in ${storeName(storeVenta)}, you asked ${qty(pedido[id])}`);
+      if(pedido[id]>eff) faltantes.push(t("cl.short.line",{name:p.nombre,avail:qty(eff),store:storeName(storeVenta),asked:qty(pedido[id])}));
     });
     if(faltantes.length){
-      toast("Not enough stock","warn");
-      alert(`Can't sell more than the stock on hand at ${storeName(storeVenta)}:\n\n`+faltantes.join("\n")+"\n\nAdjust the quantities or switch deposit. Stock can't go negative.");
+      toast(t("cl.err.nostock"),"warn");
+      alert(t("cl.alert.overstock",{store:storeName(storeVenta),list:faltantes.join("\n")}));
       return;
     }
   }
@@ -480,7 +472,7 @@ function confirmDoc(){
       ? oldDoc.commissionRate
       : (vid ? vendedorRate(vid) : 0);
   }
-  const refTxt = (isC?"Purchase":"Sale") + (doc.numero?(" "+doc.numero):"") + (doc.contraparte?(" · "+doc.contraparte):"");
+  const refTxt = (isC?t("cl.ref.purchase"):t("cl.ref.sale")) + (doc.numero?(" "+doc.numero):"") + (doc.contraparte?(" · "+doc.contraparte):"");
 
   // Recién ahora mutamos: primero revertimos el documento original (si estábamos editando)
   if(oldDoc) revertDoc(oldDoc);
@@ -514,9 +506,9 @@ function confirmDoc(){
   draft.editingId=null;
   save(); closeModal();
   const uds=qty(doc.lineas.reduce((a,l)=>a+l.cantidad,0));
-  const compraMsg = doc.status===INVOICE_STATUS.IN_TRANSIT ? `Purchase saved · ${uds} u in transit` : `Purchase saved · +${uds} u`;
-  toast(editing ? `Document updated`
-       : (isC?compraMsg : `Sale recorded · −${uds} u`), isC?"up":"down");
+  const compraMsg = doc.status===INVOICE_STATUS.IN_TRANSIT ? t("cl.purchase.transit",{u:uds}) : t("cl.purchase.saved",{u:uds});
+  toast(editing ? t("cl.doc.updated")
+       : (isC?compraMsg : t("cl.sale.recorded",{u:uds})), isC?"up":"down");
   render();
 }
 
@@ -533,7 +525,7 @@ function confirmDoc(){
    Si ninguna unidad es nuestra, no se crea compra: sólo consignaciones.
    ============================================================ */
 function confirmCompraTerceros(){
-  if(!puedeComprar()){ toast("Only admins can load purchases","warn"); return; }
+  if(!puedeComprar()){ toast(t("md.err.admincompra"),"warn"); return; }
   // ---- Task 3: EDICIÓN. Revertimos la compra previa y sus consignaciones en
   // tránsito, y recreamos todo abajo como si fuera nueva. Si alguna consignación
   // ya avanzó (hecho físico), no se toca. ----
@@ -542,7 +534,7 @@ function confirmCompraTerceros(){
     if(prev){
       const cons = (db.consignaciones||[]).filter(cs=> cs.conjuntaId===prev.id);
       if(cons.some(cs=> cs.estado!==CONSIGN_ESTADOS.TRANSITO)){
-        toast("Can't edit: third-party units already moved past transit","warn"); return;
+        toast(t("cl.err.editmoved"),"warn"); return;
       }
       // 1) borrar sus consignaciones en tránsito  2) revertir el documento de compra
       db.consignaciones = (db.consignaciones||[]).filter(cs=> !(cs.conjuntaId===prev.id && cs.estado===CONSIGN_ESTADOS.TRANSITO));
@@ -565,19 +557,19 @@ function confirmCompraTerceros(){
       const dup = skuEnUso(l.sku, null);            // si el SKU ya existe, lo adoptamos (no duplicamos)
       if(dup) p = dup;
       else {
-        if(!(l.nombre||"").trim()){ toast("A new product is missing its name","warn"); return; }
+        if(!(l.nombre||"").trim()){ toast(t("cl.err.newprodname"),"warn"); return; }
         p = nuevoProductoBase(l.sku, l.nombre, l.precioVentaSugerido||0);
         db.productos.push(p);
       }
     } else {
       p = prodById(l.productoId);
-      if(!p){ toast("A line has no product assigned","warn"); return; }
+      if(!p){ toast(t("cl.err.noprod"),"warn"); return; }
     }
     if(aTerc>0) hayTercero = true;
     resolved.push({ prod:p, qtot, ours, aTerc, precio:Math.max(0, parseNum(l.precio)||0) });
   }
-  if(!resolved.length){ toast("Add at least one valid line","warn"); return; }
-  if(hayTercero && !clienteById(draft.terceroId)){ toast("Pick the owner of the third-party units","warn"); return; }
+  if(!resolved.length){ toast(t("cl.err.noline"),"warn"); return; }
+  if(hayTercero && !clienteById(draft.terceroId)){ toast(t("cl.err.pickowner"),"warn"); return; }
 
   const ownerId   = draft.terceroId || null;
   const ownerName = ownerId ? ((clienteById(ownerId)||{}).nombre || "") : "";
@@ -622,7 +614,7 @@ function confirmCompraTerceros(){
   if(remitoLineas.length){
     uRemito = crearRemito({ letra:"U", tipo:"salida-us",
       fecha:fechaISO, fuente:{ tipo:"compra", id: compraDoc?compraDoc.id:null },
-      lineas:remitoLineas, obs:(numero?("Invoice "+numero):"")+(ownerName?(" · "+ownerName):"") });
+      lineas:remitoLineas, obs:(numero?t("cl.obs.invoice",{n:numero}):"")+(ownerName?(" · "+ownerName):"") });
     if(compraDoc){ compraDoc.remitoId = uRemito.id; compraDoc.remitoCodigo = uRemito.codigo; }
   }
 
@@ -638,7 +630,7 @@ function confirmCompraTerceros(){
         remitoCodigo: uRemito ? uRemito.codigo : "",
         productoId:r.prod.id, sku:r.prod.sku, nombre:r.prod.nombre,
         cantidad:r.aTerc, costoUnit:r.precio,
-        obs: "Third-party invoice" + (numero?(" "+numero):"")
+        obs: t("cl.obs.terc") + (numero?(" "+numero):"")
       });
     }
   });
@@ -647,10 +639,10 @@ function confirmCompraTerceros(){
   save(); closeModal();
   const udsOurs = oursLines.reduce((a,r)=>a+r.ours,0);
   const parts = [];
-  if(udsOurs>0) parts.push(`+${qty(udsOurs)} u to stock (in transit)`);
-  if(udsTerc>0) parts.push(`${qty(udsTerc)} u tracked for ${ownerName||"owner"}`);
-  if(uRemito) parts.push(`remito ${uRemito.codigo}`);
-  toast("Third-party invoice saved · " + (parts.join(" · ")||"nothing to load"), "up");
+  if(udsOurs>0) parts.push(t("cl.part.stock",{u:qty(udsOurs)}));
+  if(udsTerc>0) parts.push(t("cl.part.tracked",{u:qty(udsTerc),owner:ownerName||t("cl.owner.fallback")}));
+  if(uRemito) parts.push(t("cl.part.remito",{code:uRemito.codigo}));
+  toast(t("cl.tercsaved",{parts:parts.join(" · ")||t("cl.nothingload")}), "up");
   render();
   // El remito U queda GUARDADO y se descarga cuando quieras desde la sección Remitos.
   // Sin pop-up bloqueante (antes preguntaba "¿generar PDF ahora?" en cada carga).
@@ -677,7 +669,7 @@ function recomputeUltimoCosto(prod){
    debe invocarse cuando la compra pasa a "received", nunca dos veces. */
 function receiveInvoice(doc){
   const store = doc.store || STORE_IDS[0];
-  const refTxt = "Purchase" + (doc.numero?(" "+doc.numero):"") + (doc.contraparte?(" · "+doc.contraparte):"");
+  const refTxt = t("cl.ref.purchase") + (doc.numero?(" "+doc.numero):"") + (doc.contraparte?(" · "+doc.contraparte):"");
   doc.lineas.forEach(l=>{
     const p = prodById(l.productoId); if(!p) return;
     const landed = (l.costoTotal!=null) ? l.costoTotal : round2((l.neto!=null?l.neto:l.precio||0) + (l.handling||0) + (l.flete||0));
@@ -742,10 +734,10 @@ function deleteDoc(tipo,id){
   const d=list.find(x=>x.id===id); if(!d) return;
   const items=d.lineas.reduce((a,l)=>a+l.cantidad,0);
   const msg = tipo==="compra"
-    ? `Delete this purchase?\n\n${qty(items)} u are REMOVED from ${storeName(d.store)} stock and its FIFO layer is dropped.`
-    : `Delete this sale?\n\n${qty(items)} u are RETURNED to stock (back into their FIFO layers).`;
+    ? t("cl.del.purchase",{u:qty(items),store:storeName(d.store)})
+    : t("cl.del.sale",{u:qty(items)});
   if(!confirm(msg)) return;
-  withUndo("Document deleted", ()=>{ revertDoc(d); save(); });
+  withUndo(t("cl.doc.deleted"), ()=>{ revertDoc(d); save(); });
   if(document.getElementById("scrim")) closeModal();
   render();
 }
@@ -760,7 +752,7 @@ function editDoc(tipo,id){
   if(tipo==="compra" && d.origen==="terceros"){
     const cons = (db.consignaciones||[]).filter(cs=> cs.conjuntaId===d.id);
     if(cons.some(cs=> cs.estado!==CONSIGN_ESTADOS.TRANSITO)){
-      toast("Can't edit: third-party units already moved past transit — delete instead","warn");
+      toast(t("cl.err.editmoved2"),"warn");
       return;
     }
     const map = {};   // key = productoId|precio  ->  { ..., ours, terc }
@@ -833,12 +825,12 @@ function copyDoc(tipo,id){
     draft.lineas.forEach(l=>{
       const p=prodById(l.productoId); if(!p) return;
       const disp=Math.max(0, stockDe(p, storeV)-(usado[l.productoId]||0));
-      if(l.cantidad>disp){ recortes.push(`• ${p.nombre}: asked ${qty(l.cantidad)}, ${qty(disp)} in ${storeName(storeV)}`); l.cantidad=disp; }
+      if(l.cantidad>disp){ recortes.push(t("cl.copytrim.line",{name:p.nombre,asked:qty(l.cantidad),avail:qty(disp),store:storeName(storeV)})); l.cantidad=disp; }
       usado[l.productoId]=(usado[l.productoId]||0)+l.cantidad;
     });
   }
   renderDocModal();
-  if(recortes.length) alert("Copied the sale but trimmed quantities for lack of stock:\n\n"+recortes.join("\n")+"\n\nReview before confirming.");
+  if(recortes.length) alert(t("cl.alert.copytrim",{list:recortes.join("\n")}));
 }
 
 /* Ver documento existente (solo lectura) */
@@ -855,21 +847,21 @@ function verDoc(tipo,id){
   const cli = d.cliente || (d.clienteId?clienteById(d.clienteId):null);
   const sub = (d.subtotal!=null) ? d.subtotal : totalLineas(d.lineas);
   const extras = isC
-    ? ((d.handling||d.flete) ? `<div class="totrow"><span style="color:var(--muted)">Handling + freight</span><span class="num">${money((d.handling||0)+(d.flete||0), dCcy)}</span></div>` : "")
-    : `<div class="totrow"><span style="color:var(--muted)">Shipping</span><span class="num">${d.envio&&d.envio.tipo==="monto"?money(d.envio.monto, dCcy):"Free shipping"}</span></div>`;
+    ? ((d.handling||d.flete) ? `<div class="totrow"><span style="color:var(--muted)">${t("cl.v.handfreight")}</span><span class="num">${money((d.handling||0)+(d.flete||0), dCcy)}</span></div>` : "")
+    : `<div class="totrow"><span style="color:var(--muted)">${t("cl.v.shipping")}</span><span class="num">${d.envio&&d.envio.tipo==="monto"?money(d.envio.monto, dCcy):t("md.ship.free")}</span></div>`;
   const cliBlock = (!isC && cli) ? `<p style="margin:0 0 14px;color:var(--muted);font-size:13px">
       <b>${esc(cli.nombre)}</b>${cli.empresa?` · ${esc(cli.empresa)}`:""}<br>
       ${esc(clienteDireccion(cli)||"")}${cli.email?`<br>${esc(cli.email)}`:""}${cli.telefono?` · ${esc(cli.telefono)}`:""}</p>` : "";
   // Punto 1: bloque de estado de envío (sólo compras)
   const received = d.status===INVOICE_STATUS.RECEIVED;
   const statusBlock = isC ? `<div class="totrow" style="align-items:center">
-      <span style="color:var(--muted)">Shipment status</span>
+      <span style="color:var(--muted)">${t("cl.v.shipstatus")}</span>
       <span style="display:flex;gap:10px;align-items:center">
-        <span class="inv-badge ${received?'received':'transit'}">${received?'✓ Received':'⋯ In transit'}</span>
-        <button class="btn ghost sm" data-invstatus-modal="${d.id}">${received?'Mark in transit':'Mark received'}</button>
+        <span class="inv-badge ${received?'received':'transit'}">${received?t("cl.v.received"):t("cl.v.intransit")}</span>
+        <button class="btn ghost sm" data-invstatus-modal="${d.id}">${received?t("cl.v.markintransit"):t("cl.v.markreceived")}</button>
       </span></div>` : "";
   // Punto 6: quién vendió (sólo ventas, sólo admin)
-  const vendBlock = (!isC && isAdmin()) ? `<div class="totrow"><span style="color:var(--muted)">Sold by</span><span class="num">${esc(saleVendedorNombre(d))}</span></div>` : "";
+  const vendBlock = (!isC && isAdmin()) ? `<div class="totrow"><span style="color:var(--muted)">${t("cl.v.soldby")}</span><span class="num">${esc(saleVendedorNombre(d))}</span></div>` : "";
   // Punto 4: comisión (sólo ventas y sólo admin/master) + costos de venta -> margen neto
   const costLines = (!isC && isAdmin()) ? (d.costosExtra||[]).map(c=>{
     const cc = c.ccy || dCcy;
@@ -877,30 +869,30 @@ function verDoc(tipo,id){
     return `<div class="totrow"><span style="color:var(--muted)">− ${esc(costoTipoLabel(c.tipo))}${detalle}</span><span class="num">${money(c.monto, cc)}</span></div>`;
   }).join("") : "";
   const commBlock = (!isC && isAdmin()) ? `
-    <div class="totrow"><span style="color:var(--muted)">Margin (FIFO)</span><span class="num">${money(saleMargin(d), dCcy)}</span></div>
-    <div class="totrow"><span style="color:var(--muted)">− Commission (${nf0.format(saleCommissionRate(d)*100)}% of margin)</span><span class="num">${money(saleCommission(d), dCcy)}</span></div>
+    <div class="totrow"><span style="color:var(--muted)">${t("cl.v.marginfifo")}</span><span class="num">${money(saleMargin(d), dCcy)}</span></div>
+    <div class="totrow"><span style="color:var(--muted)">${t("cl.v.commission",{p:nf0.format(saleCommissionRate(d)*100)})}</span><span class="num">${money(saleCommission(d), dCcy)}</span></div>
     ${costLines}
-    ${saleCargosCliente(d)>0?`<div class="totrow"><span style="color:var(--muted)">+ Charges billed to client</span><span class="num">${money(saleCargosCliente(d), dCcy)}</span></div>`:""}
-    <div class="totrow" style="font-weight:700;border-top:1px solid var(--line);margin-top:2px;padding-top:6px"><span>Net margin</span><span class="num" style="color:${saleNetMargin(d)<0?'var(--alert)':'var(--up)'}">${money(saleNetMargin(d), dCcy)}</span></div>` : "";
-  buildModal(`${isC?"Purchase":"Invoice"} ${esc(d.numero||"")}`.trim(), `
+    ${saleCargosCliente(d)>0?`<div class="totrow"><span style="color:var(--muted)">${t("cl.v.chargesbilled")}</span><span class="num">${money(saleCargosCliente(d), dCcy)}</span></div>`:""}
+    <div class="totrow" style="font-weight:700;border-top:1px solid var(--line);margin-top:2px;padding-top:6px"><span>${t("cl.v.netmargin")}</span><span class="num" style="color:${saleNetMargin(d)<0?'var(--alert)':'var(--up)'}">${money(saleNetMargin(d), dCcy)}</span></div>` : "";
+  buildModal(`${isC?t("cl.v.purchase"):t("cl.v.invoice")} ${esc(d.numero||"")}`.trim(), `
     <p style="margin:0 0 6px;color:var(--muted);font-size:14px">${esc(d.contraparte||"—")} · ${esc(fmtDate(d.fecha))}</p>
     ${cliBlock}
     <div class="table-scroll"><table>
-      <thead><tr><th>Product</th><th class="r">Qty</th><th class="r">${isC?"Cost":"Price"}</th><th class="r">Subtotal</th></tr></thead>
+      <thead><tr><th>${t("common.product")}</th><th class="r">${t("cl.th.qty")}</th><th class="r">${isC?t("cl.th.cost"):t("cl.th.price")}</th><th class="r">${t("pdf.subtotal")}</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
-    <div class="totrow"><span style="color:var(--muted)">Subtotal</span><span class="num">${money(sub, dCcy)}</span></div>
+    <div class="totrow"><span style="color:var(--muted)">${t("pdf.subtotal")}</span><span class="num">${money(sub, dCcy)}</span></div>
     ${extras}
-    ${(!isC ? (d.cargosCliente||[]).map(c=>`<div class="totrow"><span style="color:var(--muted)">+ ${esc(c.nota||"Charge")}</span><span class="num">${money(c.monto, dCcy)}</span></div>`).join("") : "")}
-    <div class="totrow" style="font-weight:700"><span>Total</span><span class="num">${money(d.total, dCcy)}</span></div>
+    ${(!isC ? (d.cargosCliente||[]).map(c=>`<div class="totrow"><span style="color:var(--muted)">+ ${esc(c.nota||t("pdf.charge"))}</span><span class="num">${money(c.monto, dCcy)}</span></div>`).join("") : "")}
+    <div class="totrow" style="font-weight:700"><span>${t("common.total")}</span><span class="num">${money(d.total, dCcy)}</span></div>
     ${statusBlock}
     ${vendBlock}
     ${commBlock}
   `,[
-    {label:"Delete",cls:"btn danger",act:()=>deleteDoc(tipo,id)},
-    ...(isC?[]:[{label:"⤓ Download PDF",cls:"btn",act:()=>generarInvoicePDF(id)},
-              {label:"Copy",cls:"btn",act:()=>copyDoc(tipo,id)}]),
-    {label:"Edit",cls:"btn",act:()=>{ closeModal(); editDoc(tipo,id); }},
-    {label:"Close",cls:"btn",act:closeModal}
+    {label:t("common.delete"),cls:"btn danger",act:()=>deleteDoc(tipo,id)},
+    ...(isC?[]:[{label:t("cl.btn.downloadpdf"),cls:"btn",act:()=>generarInvoicePDF(id)},
+              {label:t("cl.btn.copy"),cls:"btn",act:()=>copyDoc(tipo,id)}]),
+    {label:t("common.edit"),cls:"btn",act:()=>{ closeModal(); editDoc(tipo,id); }},
+    {label:t("common.close"),cls:"btn",act:closeModal}
   ]);
   // Punto 1: el botón de estado dentro del detalle re-abre el modal ya actualizado.
   const sb=document.querySelector("[data-invstatus-modal]");

@@ -11,18 +11,18 @@ let importOrigen = "propia";   // PUNTO 1: propia (todo a stock) | terceros (par
 let importOwner = "";          // clienteId dueño, cuando es de terceros
 function openImport(){
   importOrigen = "propia"; importOwner = "";
-  buildModal("Import invoice (PDF)", `
+  buildModal(t("imp.title"), `
     <div class="banner">
-      Choose or drag the invoice PDF. The AI reads it and builds an editable table — check quantities, costs and which product each line maps to <b>before confirming</b>.
+      ${t("imp.intro")}
     </div>
     <div class="drop" id="drop">
       <div class="di">✨</div>
-      <p><span class="fn">Choose a PDF</span> or drag it here</p>
-      <p style="font-size:12px">it goes to your server (Worker) and then to Gemini to read it</p>
+      <p><span class="fn">${t("imp.choosepdf")}</span> ${t("imp.ordrag")}</p>
+      <p style="font-size:12px">${t("imp.serverhint")}</p>
       <input type="file" id="iaInput" accept="application/pdf" hidden>
     </div>
     <div id="importOut"></div>
-  `,[{label:"Close",cls:"btn",act:closeModal}], "import");
+  `,[{label:t("common.close"),cls:"btn",act:closeModal}], "import");
 
   const drop=document.getElementById("drop"), input=document.getElementById("iaInput");
   drop.onclick=()=>input.click();
@@ -37,14 +37,14 @@ function fileToBase64(file){
   return new Promise((res,rej)=>{
     const r=new FileReader();
     r.onload=()=>res(String(r.result).split(",")[1]||"");
-    r.onerror=()=>rej(new Error("couldn't read the file"));
+    r.onerror=()=>rej(new Error(t("imp.err.readfile")));
     r.readAsDataURL(file);
   });
 }
 async function handlePdfIA(file){
   const out=document.getElementById("importOut");
-  if(!session){ out.innerHTML=`<div class="banner warn">You need to be logged in to use AI reading.</div>`; return; }
-  out.innerHTML=`<p style="color:var(--muted);padding:14px 0">✨ Reading <b>${esc(file.name)}</b> with AI… (may take a few seconds)</p>`;
+  if(!session){ out.innerHTML=`<div class="banner warn">${t("imp.needlogin")}</div>`; return; }
+  out.innerHTML=`<p style="color:var(--muted);padding:14px 0">${t("imp.reading.ai",{file:esc(file.name)})}</p>`;
   try{
     const b64=await fileToBase64(file);
     const res=await fetch(apiBase()+"/parse-invoice",{
@@ -54,13 +54,13 @@ async function handlePdfIA(file){
     const j=await res.json();
     if(!res.ok || !j.ok){
       const det = j && (j.detalle||j.error||j.raw) ? esc(j.detalle||j.error||j.raw) : ("HTTP "+res.status);
-      out.innerHTML=`<div class="banner warn">Couldn\u2019t read with AI: ${det}. Try local detection or load it by hand.</div>`;
+      out.innerHTML=`<div class="banner warn">${t("imp.err.ai",{det})}</div>`;
       return;
     }
     const d=j.data||{};
     const lineas=Array.isArray(d.lineas)?d.lineas:[];
     if(!lineas.length){
-      out.innerHTML=`<div class="banner warn">The AI found no product lines in that PDF. Check the file or load it by hand.</div>`;
+      out.innerHTML=`<div class="banner warn">${t("imp.err.nolines")}</div>`;
       return;
     }
     // adaptar a la estructura que consume showImportEditor
@@ -77,11 +77,11 @@ async function handlePdfIA(file){
       })).filter(it=>it.desc),
       mode:"ia"
     };
-    pdfLines=["(document read with AI — no raw text dump)"];
+    pdfLines=[t("imp.rawai")];
     showImportEditor(file.name, parsed);
   }catch(e){
     console.error(e);
-    out.innerHTML=`<div class="banner warn">AI read failed (${esc(e.message||"error")}). Try local detection or load it by hand.</div>`;
+    out.innerHTML=`<div class="banner warn">${t("imp.err.aifail",{err:esc(e.message||"error")})}</div>`;
   }
 }
 /* Normaliza fecha devuelta por la IA a YYYY-MM-DD si viene en otro formato reconocible */
@@ -96,8 +96,8 @@ function normFechaIA(f){
 
 async function handlePdf(file){
   const out=document.getElementById("importOut");
-  if(!window.pdfjsLib){ out.innerHTML=`<div class="banner warn">Couldn\u2019t load the PDF reader (pdf.js). Check your connection and retry, or load the purchase by hand.</div>`; return; }
-  out.innerHTML=`<p style="color:var(--muted);padding:14px 0">Reading ${esc(file.name)}…</p>`;
+  if(!window.pdfjsLib){ out.innerHTML=`<div class="banner warn">${t("imp.err.noreader")}</div>`; return; }
+  out.innerHTML=`<p style="color:var(--muted);padding:14px 0">${t("imp.reading.local",{file:esc(file.name)})}</p>`;
   try{
     const buf=await file.arrayBuffer();
     const pdf=await pdfjsLib.getDocument({data:buf}).promise;
@@ -112,7 +112,7 @@ async function handlePdf(file){
     showImportEditor(file.name, parsed);
   }catch(e){
     console.error(e);
-    out.innerHTML=`<div class="banner warn">Couldn't read that PDF (${esc(e.message||"error")}). It may be a scanned image. Load the purchase by hand.</div>`;
+    out.innerHTML=`<div class="banner warn">${t("imp.err.localfail",{err:esc(e.message||"error")})}</div>`;
   }
 }
 
@@ -222,8 +222,8 @@ function showImportEditor(fname, parsed){
   const out=document.getElementById("importOut");
   const { meta, items, mode } = parsed;
   if(!items.length){
-    out.innerHTML=`<div class="banner warn">Extracted the text but found no lines with qty and price. Check the raw text below and load by hand if needed.</div>
-      <details open><summary>Extracted text</summary><div class="rawbox">${esc(pdfLines.join("\n"))}</div></details>`;
+    out.innerHTML=`<div class="banner warn">${t("imp.err.nolineslocal")}</div>
+      <details open><summary>${t("imp.extractedtext")}</summary><div class="rawbox">${esc(pdfLines.join("\n"))}</div></details>`;
     return;
   }
   // mapear cada ítem a un producto existente por SKU (o por nombre)
@@ -249,26 +249,26 @@ function showImportEditor(fname, parsed){
   </tr>`).join("");
 
   const metaBits = [
-    meta.numero ? `N° <b>${esc(meta.numero)}</b>` : "",
-    meta.fecha ? `fecha <b>${esc(meta.fecha)}</b>` : "",
-    meta.proveedor ? `prov. <b>${esc(meta.proveedor)}</b>` : ""
+    meta.numero ? t("imp.meta.num",{v:esc(meta.numero)}) : "",
+    meta.fecha ? t("imp.meta.date",{v:esc(meta.fecha)}) : "",
+    meta.proveedor ? t("imp.meta.supplier",{v:esc(meta.proveedor)}) : ""
   ].filter(Boolean).join(" · ");
 
   out.innerHTML=`
     <div class="banner ok">
-      Detected <b>${items.length}</b> line(s) in <b>${esc(fname)}</b>${metaBits?` \u00B7 <span style="font-weight:400">${metaBits}</span>`:""} \u2014 review before confirming.
+      ${t("imp.detected",{n:items.length,file:esc(fname),meta:metaBits?` \u00B7 <span style="font-weight:400">${metaBits}</span>`:""})}
     </div>
     <div id="importOrigenBar"></div>
-    ${meta.flete? `<div class="banner" style="white-space:normal">Detected a <b>freight/handling</b> charge of ${money(meta.flete, "USD")}. It's loaded in the purchase and will be <b>spread across all units</b> when you confirm (not added as stock).</div>`:""}
+    ${meta.flete? `<div class="banner" style="white-space:normal">${t("imp.freight",{amount:money(meta.flete, "USD")})}</div>`:""}
     <p style="font-size:12px;color:var(--muted);margin:0 0 8px">
-      <b>Cost</b> = what you pay (NET); updates last cost. <b>List price</b> = suggested selling price (MSRP). Not a sale — just your catalog price.
+      ${t("imp.costhint")}
     </p>
     <div class="table-scroll"><table class="line-tbl${SHOW_TARGET_PRODUCT_COL?'':' hide-target'}">
-      <thead><tr><th class="c">✓</th><th class="c">SKU</th><th>Description</th><th class="r">Qty</th><th class="r">Cost</th><th class="r">List price</th><th class="col-target">Target product</th></tr></thead>
+      <thead><tr><th class="c">✓</th><th class="c">SKU</th><th>${t("imp.th.desc")}</th><th class="r">${t("imp.th.qty")}</th><th class="r">${t("imp.th.cost")}</th><th class="r">${t("imp.th.listprice")}</th><th class="col-target">${t("imp.th.target")}</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
-    <details><summary>View raw PDF text</summary><div class="rawbox">${esc(pdfLines.join("\n"))}</div></details>
+    <details><summary>${t("imp.viewraw")}</summary><div class="rawbox">${esc(pdfLines.join("\n"))}</div></details>
     <div style="display:flex;justify-content:flex-end;margin-top:16px">
-      <button class="btn up" id="toDraft">Continue to purchase editor →</button>
+      <button class="btn up" id="toDraft">${t("imp.continue")}</button>
     </div>`;
 
   paintImportOrigen();
@@ -288,9 +288,9 @@ function showImportEditor(fname, parsed){
   });
   document.getElementById("toDraft").onclick=()=>{
     const chosen=items.filter(c=>c.sel && c.cantidad>0);
-    if(!chosen.length){ toast("Tick at least one line","warn"); return; }
+    if(!chosen.length){ toast(t("imp.tt.tickone"),"warn"); return; }
     const terc = importOrigen==="terceros";
-    if(terc && !clienteById(importOwner)){ toast("Pick the owner of this third-party invoice","warn"); return; }
+    if(terc && !clienteById(importOwner)){ toast(t("imp.tt.pickowner"),"warn"); return; }
     const lineas=chosen.map(c=>({
       key:uid(),
       productoId: c.crear?"":c.productoId,
@@ -316,19 +316,19 @@ function paintImportOrigen(){
   host.innerHTML = `
     <div class="origen-bar">
       <div class="field">
-        <label>Invoice type</label>
+        <label>${t("imp.invoicetype")}</label>
         <div class="seg" id="imp_origen">
-          <button type="button" data-origen="propia" class="${!terc?"on":""}">Own (all to stock)</button>
-          <button type="button" data-origen="terceros" class="${terc?"on":""}">Third-party</button>
+          <button type="button" data-origen="propia" class="${!terc?"on":""}">${t("imp.own")}</button>
+          <button type="button" data-origen="terceros" class="${terc?"on":""}">${t("imp.thirdparty")}</button>
         </div>
       </div>
       ${terc?`<div class="field" style="min-width:260px;flex:1">
-        <label>Owner <span class="hint" style="font-weight:400">· whose the units belong to</span></label>
+        <label>${t("common.owner")} <span class="hint" style="font-weight:400">${t("imp.ownerhint")}</span></label>
         <button type="button" class="ppick-btn${owner?"":" placeholder"}" id="imp_owner" style="width:100%">
-          <span class="ppick-label">${owner?esc(clienteLinea(owner)):"— pick owner (client / local) —"}</span><span class="ppick-caret">▾</span>
+          <span class="ppick-label">${owner?esc(clienteLinea(owner)):t("imp.pickowner")}</span><span class="ppick-caret">▾</span>
         </button></div>`:""}
     </div>
-    ${terc?`<p class="hint" style="margin:-4px 0 10px;font-size:12px">In the next step you set <b>Ours</b> per line (the units you keep → stock). The rest keeps travelling to the owner and is only tracked.</p>`:""}`;
+    ${terc?`<p class="hint" style="margin:-4px 0 10px;font-size:12px">${t("imp.thirdhint")}</p>`:""}`;
   host.querySelectorAll("[data-origen]").forEach(b=> b.onclick=()=>{
     if(importOrigen===b.dataset.origen) return;
     importOrigen=b.dataset.origen;
@@ -342,7 +342,7 @@ function openImportOwnerPicker(anchor){
   if(typeof closeProductPicker==="function") closeProductPicker();
   _pickerAnchor = anchor; anchor.classList.add("open");
   const pop=document.createElement("div"); pop.className="ppick-pop";
-  pop.innerHTML = `<input class="inp ppick-search" placeholder="Search owner (client / local)…" autocomplete="off" spellcheck="false"><div class="ppick-list"></div>`;
+  pop.innerHTML = `<input class="inp ppick-search" placeholder="${t("conj.ph.searchowner")}" autocomplete="off" spellcheck="false"><div class="ppick-list"></div>`;
   document.body.appendChild(pop);
   const search=pop.querySelector(".ppick-search"), listEl=pop.querySelector(".ppick-list");
   const paint=(q)=>{
@@ -351,20 +351,20 @@ function openImportOwnerPicker(anchor){
     if(q) lista=lista.filter(c=> ((c.nombre||"")+" "+(c.empresa||"")).toLowerCase().includes(q));
     let html=lista.map(c=>`<button type="button" class="ppick-item${c.id===importOwner?" active":""}" data-pio="${c.id}">
       <span class="pi-name">${esc(c.nombre)}${c.empresa?` · ${esc(c.empresa)}`:""}</span></button>`).join("");
-    if(!lista.length) html=`<div class="ppick-empty">No clients yet — create one below.</div>`;
+    if(!lista.length) html=`<div class="ppick-empty">${t("imp.noclients")}</div>`;
     // + Crear al vuelo: un owner (cliente/local) sólo necesita nombre. Se enriquece luego en Customers.
     const q2=(search.value||"").trim();
-    html+=`<button type="button" class="ppick-item new" data-pio="__new">＋ Create ${q2?`“${esc(q2)}”`:"new owner…"}</button>`;
+    html+=`<button type="button" class="ppick-item new" data-pio="__new">${t("imp.createowner",{name:q2?`“${esc(q2)}”`:t("imp.newowner")})}</button>`;
     listEl.innerHTML=html;
     listEl.querySelectorAll("[data-pio]").forEach(it=> it.onclick=()=>{
       const v=it.dataset.pio;
       if(v==="__new"){
         const nombre=(search.value||"").trim();
-        if(!nombre){ toast("Type the owner's name first","warn"); search.focus(); return; }
+        if(!nombre){ toast(t("imp.tt.typename"),"warn"); search.focus(); return; }
         const nc={ id:uid(), nombre, contacto:"", empresa:"", telefono:"", email:"", direccion:"", ciudad:"", estado:"", zip:"", pais:"" };
         db.clientes.push(nc); save();
         importOwner=nc.id; closeProductPicker(); paintImportOrigen();
-        toast("Owner created · "+nombre);
+        toast(t("imp.tt.ownercreated",{name:nombre}));
         return;
       }
       importOwner=v; closeProductPicker(); paintImportOrigen();

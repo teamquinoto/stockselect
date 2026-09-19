@@ -186,7 +186,7 @@ function sendToInvestment(prod, alloc, obs){
     // exact FIFO cost of the units leaving this store
     const { unit, consumed } = fifoConsumir(prod, s, q);
     // source store: decrement stock + log a "→ vault" OUT movement (visible in Movements)
-    moverStock(prod, -q, unit, "inversion", null, "→ Investment vault", { store:s, tipo:"inv-out", obs:obs||"" });
+    moverStock(prod, -q, unit, "inversion", null, t("eng.mov.toinv"), { store:s, tipo:"inv-out", obs:obs||"" });
     // vault side: carry the real cost layers in, bump the vault bucket (no extra kardex line)
     consumed.forEach(c=>{ if(!c.synthetic) invLayers(prod).push({ id:uid(), fecha:new Date().toISOString(), cantidad:c.cantidad, costoUnit:c.costoUnit, ref:"from "+storeName(s) }); });
     prod.stockPorTienda[INV_STORE] = round4((prod.stockPorTienda[INV_STORE]||0) + q);
@@ -204,7 +204,7 @@ function returnFromInvestment(prod, store, q, obs){
   // destination store: put the exact cost layers back so it can be sold at its real cost
   consumed.forEach(c=>{ if(!c.synthetic) fifoLayers(prod, store).push({ id:uid(), fecha:new Date().toISOString(), cantidad:c.cantidad, costoUnit:c.costoUnit, ref:"back from vault" }); });
   // log an IN movement in the destination store (visible in Movements)
-  moverStock(prod, +q, unit, "inversion", null, "← from Investment vault", { store, tipo:"inv-return", obs:obs||"" });
+  moverStock(prod, +q, unit, "inversion", null, t("eng.mov.frominv"), { store, tipo:"inv-return", obs:obs||"" });
   save();
   return q;
 }
@@ -228,7 +228,7 @@ function transferStock(prod, origen, destino, cantidad, costoExtraUnit, obs, leg
   cantidad = Math.min(Math.max(0, +cantidad||0), stockDe(prod, origen));
   if(cantidad<=0 || origen===destino) return 0;
   costoExtraUnit = +costoExtraUnit || 0;
-  const legTxt = costoExtraUnit>0 ? ` · +${round2(costoExtraUnit)}/u leg cost` : "";   // costo capitalizado del tramo, visible en el kardex
+  const legTxt = costoExtraUnit>0 ? t("eng.mov.legcost",{n:round2(costoExtraUnit)}) : "";   // costo capitalizado del tramo, visible en el kardex
   // consumo FIFO del origen (mutando las capas y sabiendo el costo exacto)
   const { unit, consumed } = fifoConsumir(prod, origen, cantidad);
   // --- salida del origen ---
