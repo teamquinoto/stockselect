@@ -676,6 +676,16 @@ var I18N = {
     "mov.showing":"{n} of {total}", "mov.cap400":" \u00b7 showing 400",
     "mov.cf.deladj":"Delete this adjustment?\n\n{name}\nReverts {delta} u \u2192 stock {from} becomes {to}.",
     "mov.cf.deladj.gone":"Delete this adjustment? (the product no longer exists in the master)",
+    // --- UX batch: nav tooltips + glosario reutilizable (infoDot) ---
+    "nav.tip.conjunta":"Third-party & cross-border transit: goods you only track (consignment), split at the end.",
+    "nav.tip.remitos":"Numbered internal transfer notes (series U = US→AR, A = split/delivery).",
+    "nav.tip.inv":"Investment vault: units pulled out of sellable stock as an investment.",
+    "gloss.swan":"Swan = your deposit in the USA, where imported stock lands first.",
+    "gloss.select":"Select = your deposit in Argentina (sellable stock).",
+    "gloss.transito":"In transit = stock that already left the US and is on its way to Argentina.",
+    "gloss.tercero":"Third-party = consignment goods you only track; never your stock or P&L.",
+    "gloss.remito":"Remito = internal transfer note. Series U: US→AR · Series A: split/delivery.",
+    "gloss.fifo":"FIFO = the oldest units are consumed first when computing cost of goods sold.",
   },
   es: {
     "sec.op":"Operaciones", "sec.cat":"Cat\u00e1logo", "sec.fin":"Finanzas", "sec.dat":"Configuraci\u00f3n",
@@ -1330,6 +1340,16 @@ var I18N = {
     "mov.showing":"{n} de {total}", "mov.cap400":" \u00b7 mostrando 400",
     "mov.cf.deladj":"\u00bfEliminar este ajuste?\n\n{name}\nRevierte {delta} u \u2192 stock {from} pasa a {to}.",
     "mov.cf.deladj.gone":"\u00bfEliminar este ajuste? (el producto ya no existe en el maestro)",
+    // --- UX batch: nav tooltips + glosario reutilizable (infoDot) ---
+    "nav.tip.conjunta":"Terceros y tránsito cross-border: mercadería que solo trackeás (consignación), se reparte al final.",
+    "nav.tip.remitos":"Remitos internos numerados (serie U = USA→AR, A = reparto/entrega).",
+    "nav.tip.inv":"Bóveda de inversión: unidades que sacás del stock vendible como inversión.",
+    "gloss.swan":"Swan = tu depósito en USA, donde cae primero la mercadería importada.",
+    "gloss.select":"Select = tu depósito en Argentina (stock vendible).",
+    "gloss.transito":"En tránsito = stock que ya salió de USA y viaja hacia Argentina.",
+    "gloss.tercero":"Tercero = mercadería en consignación que solo trackeás; nunca es tu stock ni tu P&L.",
+    "gloss.remito":"Remito = nota de transferencia interna. Serie U: USA→AR · Serie A: reparto/entrega.",
+    "gloss.fifo":"FIFO = se consumen primero las unidades más viejas al calcular el costo.",
   }
 };
 

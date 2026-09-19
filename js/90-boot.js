@@ -45,6 +45,7 @@ if(_pt) _pt.onclick=()=>{
 // Botones estáticos (tema / cerrar sesión / sincronizar) — hay uno en el sidebar y otro en el nav mobile
 document.querySelectorAll("[data-logout-side]").forEach(b=> b.onclick=logout);
 document.querySelectorAll("[data-syncside]").forEach(b=> b.onclick=()=> pullNow());
+document.querySelectorAll("[data-open-cmdk]").forEach(b=> b.onclick=()=>{ if(typeof openCmdK==="function") openCmdK(); });
 document.querySelectorAll("[data-theme-toggle]").forEach(b=> b.onclick=toggleTheme);
 // Topbar glass: al scrollear aparece el fondo tenue + hairline inferior
 const _tb=document.getElementById("topbar");

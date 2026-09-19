@@ -29,17 +29,33 @@ function buildModal(title, bodyHTML, buttons=[], wide=false, extraFoot=""){
   document.getElementById("xClose").onclick=closeModal;
   document.getElementById("scrim").addEventListener("mousedown",e=>{ if(e.target.id==="scrim") closeModal(); });
   document.addEventListener("keydown", escClose);
+  document.addEventListener("keydown", enterConfirm);
   return root;
 }
 function mkBtn(b){
   const el=document.createElement("button"); el.className=b.cls; el.textContent=b.label; el.onclick=b.act; return el;
 }
 function escClose(e){ if(e.key==="Escape") closeModal(); }
+/* Enter dispara el botón primario del modal. Guardas: no pisa pickers, calendarios,
+   textareas, selects ni el campo fecha; sólo actúa desde un <input> de una línea. */
+function enterConfirm(e){
+  if(e.key!=="Enter" || e.isComposing) return;
+  if(document.querySelector(".ppick-pop")) return;      // picker de producto/cliente abierto
+  const scrim=document.getElementById("scrim"); if(!scrim) return;
+  const ae=document.activeElement;
+  if(!ae || !scrim.contains(ae)) return;                // el foco tiene que estar dentro del modal
+  if(ae.tagName!=="INPUT") return;                      // sólo inputs de una línea (no textarea/select/botón)
+  if(ae.type==="date") return;                          // Enter en fecha abre el calendario
+  const btns=scrim.querySelectorAll(".mfoot button");
+  const btn=scrim.querySelector(".mfoot .primary") || btns[btns.length-1];
+  if(btn && !btn.disabled){ e.preventDefault(); btn.click(); }
+}
 function closeModal(){
   if(typeof closeProductPicker==="function") closeProductPicker();
   if(typeof hideNameTip==="function") hideNameTip();
   document.getElementById("modalRoot").innerHTML="";
   document.removeEventListener("keydown", escClose);
+  document.removeEventListener("keydown", enterConfirm);
 }
 
 /* ============================================================

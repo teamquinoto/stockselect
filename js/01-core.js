@@ -703,6 +703,13 @@ function parseNum(s){
   return isNaN(v) ? 0 : v;
 }
 
+/* infoDot("gloss.xxx"): burbuja "?" con definición al hover (title nativo). Reutilizable
+   en cualquier render: `${infoDot("gloss.transito")}`. No rompe nada si la clave no existe. */
+function infoDot(defKey){
+  const d = (typeof t==="function") ? t(defKey) : defKey;
+  return `<span class="idot" tabindex="0" role="note" aria-label="${d}" title="${d}">?</span>`;
+}
+
 /* ---------- Toast ---------- */
 function toast(msg, kind="up"){
   const el = document.createElement("div");

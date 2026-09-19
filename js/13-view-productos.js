@@ -34,7 +34,7 @@ function viewProd(){
     <div class="table-scroll"><table>
       <thead><tr>${selMode?`<th class="c"><input type="checkbox" id="selall"></th>`:""}${sortTh(prodFiltros,"sku","SKU","")}${sortTh(prodFiltros,"nombre",t("prod.l.name"),"")}${sortTh(prodFiltros,"lang",t("pr.th.lang"),"c")}${sociedadColsHead(prodFiltros)}${sortTh(prodFiltros,"stock",stockView==="cases"?t("pr.th.stockcases"):t("pr.th.stock"),"r")}${sortTh(prodFiltros,"costo",t("pr.th.lastcost"),"r")}${sortTh(prodFiltros,"pventa",t("prod.l.listprice"),"r")}<th></th></tr></thead>
       <tbody id="prodBody"></tbody></table></div>`
-      : emptyState(t("pr.empty.title"),t("pr.empty.sub"))}
+      : emptyState(t("pr.empty.title"),t("pr.empty.sub"), puedeEditarProductos()?{label:t("pr.btn.newprod"),onclick:"openProd()"}:null)}
   </div>`;
 }
 function renderProdRows(){

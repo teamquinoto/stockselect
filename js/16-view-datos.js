@@ -83,7 +83,10 @@ function viewDatos(){
 function esc(s){ return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 /* Iconos SVG minimalistas (stroke = currentColor), para reemplazar emojis/glyphs feos */
 /* ICO ahora vive en js/00c-icons.js (biblioteca global compartida). */
-function emptyState(t,h){ return `<div class="empty"><div class="big">∅</div><p style="font-weight:600;color:var(--text)">${t}</p><p class="hint">${h}</p></div>`; }
+function emptyState(title,hint,cta){
+  const btn = cta ? `<div class="empty-cta"><button class="btn primary" onclick="${cta.onclick}">${(window.ICO&&ICO.plus)||""}${cta.label}</button></div>` : "";
+  return `<div class="empty"><div class="big">∅</div><p style="font-weight:600;color:var(--text)">${title}</p><p class="hint">${hint}</p>${btn}</div>`;
+}
 
 /* ============================================================
    Eventos de la vista

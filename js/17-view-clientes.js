@@ -48,7 +48,7 @@ function viewClientes(){
     ? `<div class="table-scroll"><table>
         <thead><tr>${sortTh(cliSort,"nombre",t("md.lbl.customer"),"")}${sortTh(cliSort,"email",t("md.cli.email"),"")}${sortTh(cliSort,"ciudad",t("md.cli.city"),"")}${sortTh(cliSort,"pais",t("md.cli.country"),"")}${sortTh(cliSort,"ventas",t("cl.th.sales"),"r")}<th class="r">${t("cl.th.actions")}</th></tr></thead>
         <tbody>${rows}</tbody></table></div>`
-    : emptyState(t("cl.empty.title"),t("cl.empty.sub"));
+    : emptyState(t("cl.empty.title"),t("cl.empty.sub"),{label:t("cl.btn.new"),onclick:"openClienteStandalone(null)"});
   return `
   <div class="head"><div class="title"><h2>${t("cl.title")}</h2><p>${t("cl.sub",{n:db.clientes.length})}</p></div>
     <div class="actions"><button class="btn primary" data-clinew>${ICO.adduser}${t("cl.btn.new")}</button></div>

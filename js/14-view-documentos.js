@@ -55,7 +55,8 @@ function viewDocs(tipo){
       <tbody id="docBody"></tbody></table></div>`
       : emptyState(isC?t("doc.empty.purch.title"):t("doc.empty.sales.title"),
           isC?t("doc.empty.purch.sub")
-             :t("doc.empty.sales.sub"))}
+             :t("doc.empty.sales.sub"),
+          {label:isC?t("dash.newpurchase"):t("dash.newsale"), onclick:isC?"openDoc('compra')":"openDoc('venta')"})}
   </div>`;
 }
 /* Documentos visibles según rol/foco:
