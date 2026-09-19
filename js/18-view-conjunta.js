@@ -32,9 +32,9 @@ let conjDraft = null;
 const CONSIGN_ESTADOS = { TRANSITO:"en_transito", AR:"en_ar", ENTREGADO:"entregado" };
 const CONSIGN_ORDEN = [CONSIGN_ESTADOS.TRANSITO, CONSIGN_ESTADOS.AR, CONSIGN_ESTADOS.ENTREGADO];
 function consignLabel(e){
-  return e===CONSIGN_ESTADOS.TRANSITO ? "In transit (US→AR)"
-       : e===CONSIGN_ESTADOS.AR       ? "In AR (to deliver)"
-       : e===CONSIGN_ESTADOS.ENTREGADO? "Delivered"
+  return e===CONSIGN_ESTADOS.TRANSITO ? t("conj.cs.transit")
+       : e===CONSIGN_ESTADOS.AR       ? t("conj.cs.ar")
+       : e===CONSIGN_ESTADOS.ENTREGADO? t("conj.cs.delivered")
        : (e||"—");
 }
 function consignSiguiente(e){ const i=CONSIGN_ORDEN.indexOf(e); return (i>=0 && i<CONSIGN_ORDEN.length-1) ? CONSIGN_ORDEN[i+1] : null; }
@@ -181,14 +181,14 @@ function quedarseParaSelect(consignId, unidades, costoUnit, obs){
   const q = Math.min(Math.max(0, +unidades||0), cs.cantidad);
   if(q<=0) return 0;
   const p = prodById(cs.productoId);
-  if(!p){ toast("Product no longer exists for this line","warn"); return 0; }
+  if(!p){ toast(t("conj.tt.prodgone"),"warn"); return 0; }
   const store  = STORE_IDS[1] || STORE_IDS[0];             // Select (AR)
   const base   = Math.max(0, +cs.costoUnit||0);            // costo de referencia (producto)
   const landed = Math.max(0, round2(+costoUnit||0));       // costo final que entra al FIFO
   const argLeg = round2(Math.max(0, landed - base));       // lo agregado sobre el ref = tramo AR
   // enters Select's sellable stock with FIFO + kardex (shows in the product card and in Movements)
-  fifoEntrada(p, store, q, landed, "Kept for "+storeName(store)+(cs.envioRef?(" · "+cs.envioRef):""), cs.id, { us:base, intl:0, arg:argLeg });
-  moverStock(p, +q, landed, "conjunta", cs.id, "Third-party kept for "+storeName(store), { store, tipo:"tercero-keep", obs:obs||"" });
+  fifoEntrada(p, store, q, landed, t("conj.obs.keptfor",{store:storeName(store)})+(cs.envioRef?(" · "+cs.envioRef):""), cs.id, { us:base, intl:0, arg:argLeg });
+  moverStock(p, +q, landed, "conjunta", cs.id, t("conj.obs.thirdkeptfor",{store:storeName(store)}), { store, tipo:"tercero-keep", obs:obs||"" });
   p.ultimoCosto = landed;
   // reduce the consignment
   cs.cantidad = round4(cs.cantidad - q);
@@ -217,7 +217,7 @@ function quedarseParaSelect(consignId, unidades, costoUnit, obs){
 function legCostFieldHTML(id, label, hint, opts){
   opts = opts || {};
   const val = (opts.value!=null) ? opts.value : "0";
-  const pu  = opts.noPreview ? "" : `<div class="leg-pu hint" id="${id}_pu">= ${money(0,"USD")} per unit</div>`;
+  const pu  = opts.noPreview ? "" : `<div class="leg-pu hint" id="${id}_pu">${t("conj.leg.perunit",{m:money(0,"USD")})}</div>`;
   return `<div class="field" style="grid-column:1/-1"><label>${label}${hint?` <span class="hint" style="font-weight:400">${hint}</span>`:""}</label>
     <div class="cost-row">
       <input class="inp num" id="${id}" value="${val}" inputmode="decimal">
@@ -227,7 +227,7 @@ function legCostFieldHTML(id, label, hint, opts){
       </div>
     </div>
     <div class="rate-row" id="${id}_rate_row" style="display:none;margin-top:6px">
-      <span class="hint">ARS per US$1</span>
+      <span class="hint">${t("conj.leg.arsrate")}</span>
       <input class="inp num" id="${id}_rate" value="${tc()}" inputmode="decimal" style="max-width:130px">
     </div>
     ${pu}</div>`;
@@ -256,7 +256,7 @@ function wireLegPreview(inputId, totalUnits){
   const inp=document.getElementById(inputId), out=document.getElementById(inputId+"_pu");
   if(!inp||!out) return;
   const upd=()=>{ const usd=legCostRead(inputId); const pu = totalUnits>0 ? usd/totalUnits : 0;
-    out.textContent = `= ${money(round2(pu),"USD")} per unit  ·  spread across ${qty(totalUnits)} u`; };
+    out.textContent = t("conj.leg.preview",{m:money(round2(pu),"USD"),n:qty(totalUnits)}); };
   inp.oninput=upd; wireLegCcy(inputId, upd); upd();
 }
 function estadoPillMini(e){
@@ -270,7 +270,7 @@ function conjAjenoLinea(l){ return Math.max(0, (parseNum(l.total)||0) - (parseNu
 function conjUnidadesAjenas(){ return conjDraft.lineas.reduce((a,l)=> a + conjAjenoLinea(l), 0); }
 
 function openConjunta(pre){
-  if(!isAdmin()){ toast("Only admins can load joint buys","warn"); return; }
+  if(!isAdmin()){ toast(t("conj.tt.adminjoint"),"warn"); return; }
   conjDraft = pre || {
     fecha:new Date().toISOString().slice(0,10), clienteId:"", numero:"",
     totalEnvio:"", obs:"", lineas:[ nuevaConjLinea() ]
@@ -283,25 +283,25 @@ function conjUnidadesNuestras(){ return conjDraft.lineas.reduce((a,l)=> a + (par
 function renderConjModal(){
   const cli = clienteById(conjDraft.clienteId);
   const body = `
-    <p class="hint" style="margin:0 0 12px"><b>Total</b> = units of that SKU in the invoice. <b>Swan</b> = ours kept in USA · <b>→ AR</b> = ours bound for Argentina. The rest is <b>third-party</b> (not ours): pick its <b>Owner</b> and the system tracks it separately — it's only followed through the flow, never sold. <b>Cost</b> = what a unit cost YOU (0 = commission in kind). <b>Price US$</b> = optional Swan sale price.</p>
+    <p class="hint" style="margin:0 0 12px">${t("conj.jb.hint")}</p>
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0;margin-bottom:12px">
-      <div class="field" style="grid-column:1/3"><label>Client (one of the 12 locales) <span class="hint" style="font-weight:400">· optional</span></label>
+      <div class="field" style="grid-column:1/3"><label>${t("conj.l.client")} <span class="hint" style="font-weight:400">${t("conj.l.optional")}</span></label>
         <button type="button" class="ppick-btn${cli?"":" placeholder"}" id="cj_cli">
-          <span class="ppick-label">${cli?esc(clienteLinea(cli)):"— pick client —"}</span><span class="ppick-caret">▾</span>
+          <span class="ppick-label">${cli?esc(clienteLinea(cli)):t("conj.pk.pickclient")}</span><span class="ppick-caret">▾</span>
         </button></div>
-      <div class="field"><label>Date</label><input class="inp" type="date" id="cj_fe" value="${esc(conjDraft.fecha)}"></div>
-      <div class="field"><label>Shipment ref <span class="hint" style="font-weight:400">· optional</span></label><input class="inp" id="cj_nu" value="${esc(conjDraft.numero)}"></div>
-      <div class="field"><label>Total order units <span class="hint" style="font-weight:400">· memo, doesn't touch stock</span></label><input class="inp num" id="cj_tot" value="${esc(conjDraft.totalEnvio)}" placeholder="e.g. 24"></div>
+      <div class="field"><label>${t("common.date")}</label><input class="inp" type="date" id="cj_fe" value="${esc(conjDraft.fecha)}"></div>
+      <div class="field"><label>${t("conj.l.shipref")} <span class="hint" style="font-weight:400">${t("conj.l.optional")}</span></label><input class="inp" id="cj_nu" value="${esc(conjDraft.numero)}"></div>
+      <div class="field"><label>${t("conj.l.totalunits")} <span class="hint" style="font-weight:400">${t("conj.l.totalunits.hint")}</span></label><input class="inp num" id="cj_tot" value="${esc(conjDraft.totalEnvio)}" placeholder="${t("conj.ph.eg24")}"></div>
     </div>
     <div id="cjLineHost"></div>
-    <button class="btn sm" id="cjAddLine" style="margin-top:10px">+ Add line</button>
-    <div class="field" style="margin-top:12px"><label>Notes</label><input class="inp" id="cj_obs" value="${esc(conjDraft.obs)}"></div>
+    <button class="btn sm" id="cjAddLine" style="margin-top:10px">${t("conj.b.addline")}</button>
+    <div class="field" style="margin-top:12px"><label>${t("conj.l.notes")}</label><input class="inp" id="cj_obs" value="${esc(conjDraft.obs)}"></div>
   `;
-  buildModal("＋ New joint buy (commission)", body, [
-    {label:"Cancel",cls:"btn",act:()=>{ conjDraft=null; closeModal(); }},
-    {label:"Confirm intake (+stock)",cls:"btn up",act:confirmConjunta}
+  buildModal(t("conj.md.newjoint"), body, [
+    {label:t("common.cancel"),cls:"btn",act:()=>{ conjDraft=null; closeModal(); }},
+    {label:t("conj.b.confirmintake"),cls:"btn up",act:confirmConjunta}
   ], "wide doc",
-  `<div class="totrow"><span style="color:var(--muted)">Units we keep</span><span class="num" id="cjTot">${qty(conjUnidadesNuestras())}</span></div><div class="totrow"><span style="color:var(--muted)">Third-party (tracked)</span><span class="num" id="cjTotAj">${qty(conjUnidadesAjenas())}</span></div>`);
+  `<div class="totrow"><span style="color:var(--muted)">${t("conj.jb.wekeep")}</span><span class="num" id="cjTot">${qty(conjUnidadesNuestras())}</span></div><div class="totrow"><span style="color:var(--muted)">${t("conj.jb.thirdtracked")}</span><span class="num" id="cjTotAj">${qty(conjUnidadesAjenas())}</span></div>`);
   renderConjLines();
   document.getElementById("cj_fe").oninput=e=>conjDraft.fecha=e.target.value;
   document.getElementById("cj_nu").oninput=e=>conjDraft.numero=e.target.value;
@@ -316,7 +316,7 @@ function openConjClientePicker(anchor){
   if(typeof closeProductPicker==="function") closeProductPicker();
   _pickerAnchor = anchor; anchor.classList.add("open");
   const pop = document.createElement("div"); pop.className="ppick-pop";
-  pop.innerHTML = `<input class="inp ppick-search" placeholder="Search client…" autocomplete="off" spellcheck="false"><div class="ppick-list"></div>`;
+  pop.innerHTML = `<input class="inp ppick-search" placeholder="${t("conj.ph.searchclient")}" autocomplete="off" spellcheck="false"><div class="ppick-list"></div>`;
   document.body.appendChild(pop);
   const search = pop.querySelector(".ppick-search"), listEl = pop.querySelector(".ppick-list");
   const paint=(q)=>{
@@ -325,7 +325,7 @@ function openConjClientePicker(anchor){
     if(q) lista = lista.filter(c=> ((c.nombre||"")+" "+(c.empresa||"")).toLowerCase().includes(q));
     let html = lista.map(c=>`<button type="button" class="ppick-item${c.id===conjDraft.clienteId?" active":""}" data-pickcli="${c.id}">
       <span class="pi-name">${esc(c.nombre)}${c.empresa?` · ${esc(c.empresa)}`:""}</span></button>`).join("");
-    if(!lista.length) html = `<div class="ppick-empty">No clients. Add them under Customers.</div>`;
+    if(!lista.length) html = `<div class="ppick-empty">${t("conj.pk.noclients")}</div>`;
     listEl.innerHTML = html;
     listEl.querySelectorAll("[data-pickcli]").forEach(it=> it.onclick=()=>{ conjDraft.clienteId=it.dataset.pickcli; closeProductPicker(); renderConjModal(); });
   };
@@ -343,7 +343,7 @@ function openConjOwnerPicker(i, anchor){
   if(typeof closeProductPicker==="function") closeProductPicker();
   _pickerAnchor = anchor; anchor.classList.add("open");
   const pop = document.createElement("div"); pop.className="ppick-pop";
-  pop.innerHTML = `<input class="inp ppick-search" placeholder="Search owner (client/local)…" autocomplete="off" spellcheck="false"><div class="ppick-list"></div>`;
+  pop.innerHTML = `<input class="inp ppick-search" placeholder="${t("conj.ph.searchowner")}" autocomplete="off" spellcheck="false"><div class="ppick-list"></div>`;
   document.body.appendChild(pop);
   const search = pop.querySelector(".ppick-search"), listEl = pop.querySelector(".ppick-list");
   const cur = conjDraft.lineas[i].terceroId;
@@ -353,7 +353,7 @@ function openConjOwnerPicker(i, anchor){
     if(q) lista = lista.filter(c=> ((c.nombre||"")+" "+(c.empresa||"")).toLowerCase().includes(q));
     let html = lista.map(c=>`<button type="button" class="ppick-item${c.id===cur?" active":""}" data-pickowner="${c.id}">
       <span class="pi-name">${esc(c.nombre)}${c.empresa?` · ${esc(c.empresa)}`:""}</span></button>`).join("");
-    if(!lista.length) html = `<div class="ppick-empty">No clients yet. Add the third party under Customers.</div>`;
+    if(!lista.length) html = `<div class="ppick-empty">${t("conj.pk.noowners")}</div>`;
     listEl.innerHTML = html;
     listEl.querySelectorAll("[data-pickowner]").forEach(it=> it.onclick=()=>{ conjDraft.lineas[i].terceroId=it.dataset.pickowner; closeProductPicker(); renderConjLines(); });
   };
@@ -372,31 +372,31 @@ function renderConjLines(){
     const newFields = l.crear ? `
       <div style="display:flex;gap:6px;margin-top:6px">
         <input class="inp" placeholder="SKU" value="${esc(l.sku)}" data-cjk="sku" data-cji="${i}" style="max-width:110px">
-        <input class="inp" placeholder="New product name" value="${esc(l.nombre)}" data-cjk="nombre" data-cji="${i}">
+        <input class="inp" placeholder="${t("conj.ph.newprod")}" value="${esc(l.nombre)}" data-cjk="nombre" data-cji="${i}">
       </div>` : "";
     const ajeno = conjAjenoLinea(l);
     const over = (parseNum(l.total)||0) > 0 && (parseNum(l.aSwan)||0)+(parseNum(l.aTransito)||0) > (parseNum(l.total)||0);
     const ter = l.terceroId ? clienteById(l.terceroId) : null;
-    const ownerLbl = ter ? esc(ter.nombre) : "— owner —";
+    const ownerLbl = ter ? esc(ter.nombre) : t("conj.pk.pickowner");
     return `<tr>
       <td style="min-width:190px">
         <div class="ppick"><button type="button" class="ppick-btn${(!l.productoId&&!l.crear)?" placeholder":""}" data-cjpick="${i}">
-          <span class="ppick-label">${l.crear?"＋ New product":(l.productoId?esc((prodById(l.productoId)||{}).nombre||"—"):"— pick product —")}</span><span class="ppick-caret">▾</span></button></div>
+          <span class="ppick-label">${l.crear?t("conj.pk.newprod"):(l.productoId?esc((prodById(l.productoId)||{}).nombre||"—"):t("conj.pk.pickprod"))}</span><span class="ppick-caret">▾</span></button></div>
         ${newFields}
       </td>
-      <td style="width:66px"><input class="inp num" data-cjk="total" data-cji="${i}" value="${l.total}" title="Total units of this SKU in the invoice"></td>
-      <td style="width:66px"><input class="inp num" data-cjk="aSwan" data-cji="${i}" value="${l.aSwan}" title="Units kept in Swan (USA)"></td>
-      <td style="width:66px"><input class="inp num" data-cjk="aTransito" data-cji="${i}" value="${l.aTransito}" title="Ours, bound for AR (born in transit)"></td>
-      <td style="width:70px" class="r"><span class="num" data-cjajeno="${i}" title="Third-party = Total − Swan − →AR" style="color:${over?'var(--alert)':(ajeno>0?'var(--ink)':'var(--muted)')}">${over?'!':qty(ajeno)}</span></td>
-      <td style="width:150px"><button type="button" class="ppick-btn sm${ter?'':' placeholder'}" data-cjowner="${i}" title="Owner of the third-party units" ${ajeno>0?'':'disabled style="opacity:.4"'}><span class="ppick-label">${ownerLbl}</span><span class="ppick-caret">▾</span></button></td>
-      <td style="width:84px"><input class="inp num" data-cjk="costoUnit" data-cji="${i}" value="${l.costoUnit}" title="What it cost YOU to get the unit (0 = commission in kind)"></td>
-      <td style="width:92px"><input class="inp num" data-cjk="precioSwan" data-cji="${i}" value="${l.precioSwan||0}" title="Sale price in Swan (US$). Optional. Sets the Swan list price."></td>
-      <td style="width:34px"><button class="btn ghost sm" data-cjdel="${i}" title="Remove">✕</button></td>
+      <td style="width:66px"><input class="inp num" data-cjk="total" data-cji="${i}" value="${l.total}" title="${t('conj.tip.totalunits')}"></td>
+      <td style="width:66px"><input class="inp num" data-cjk="aSwan" data-cji="${i}" value="${l.aSwan}" title="${t('conj.tip.swankept')}"></td>
+      <td style="width:66px"><input class="inp num" data-cjk="aTransito" data-cji="${i}" value="${l.aTransito}" title="${t('conj.tip.toarborn')}"></td>
+      <td style="width:70px" class="r"><span class="num" data-cjajeno="${i}" title="${t('conj.tip.thirdformula')}" style="color:${over?'var(--alert)':(ajeno>0?'var(--ink)':'var(--muted)')}">${over?'!':qty(ajeno)}</span></td>
+      <td style="width:150px"><button type="button" class="ppick-btn sm${ter?'':' placeholder'}" data-cjowner="${i}" title="${t('conj.tip.owner')}" ${ajeno>0?'':'disabled style="opacity:.4"'}><span class="ppick-label">${ownerLbl}</span><span class="ppick-caret">▾</span></button></td>
+      <td style="width:84px"><input class="inp num" data-cjk="costoUnit" data-cji="${i}" value="${l.costoUnit}" title="${t('conj.tip.cost')}"></td>
+      <td style="width:92px"><input class="inp num" data-cjk="precioSwan" data-cji="${i}" value="${l.precioSwan||0}" title="${t('conj.tip.priceusd')}"></td>
+      <td style="width:34px"><button class="btn ghost sm" data-cjdel="${i}" title="${t('conj.tip.remove')}">✕</button></td>
     </tr>`;
   }).join("");
   host.innerHTML = `<div class="table-scroll"><table class="line-tbl doc-tbl">
     <colgroup><col><col style="width:70px"><col style="width:70px"><col style="width:70px"><col style="width:74px"><col style="width:154px"><col style="width:88px"><col style="width:96px"><col style="width:40px"></colgroup>
-    <thead><tr><th>Product</th><th class="r" title="Total in invoice">Total</th><th class="r" title="Swan · USA">Swan</th><th class="r" title="Ours, bound for AR (transit)">→ AR</th><th class="r" title="Third-party (auto)">3rd-party</th><th title="Owner of the third-party units">Owner</th><th class="r" title="Entry cost (0 = commission)">Cost</th><th class="r" title="Sale price in Swan (US$), optional">Price US$</th><th></th></tr></thead>
+    <thead><tr><th>${t("common.product")}</th><th class="r" title="${t("conj.th.total.tip")}">${t("conj.th.total")}</th><th class="r" title="${t("conj.th.swan.tip")}">${t("conj.th.swan")}</th><th class="r" title="${t("conj.th.toar.tip")}">${t("conj.th.toar")}</th><th class="r" title="${t("conj.th.thirdparty.tip")}">${t("conj.th.thirdparty")}</th><th title="${t("conj.tip.owner")}">${t("conj.th.owner")}</th><th class="r" title="${t("conj.th.cost.tip")}">${t("conj.th.cost")}</th><th class="r" title="${t("conj.th.priceusd.tip")}">${t("conj.th.priceusd")}</th><th></th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 
   host.querySelectorAll("[data-cjpick]").forEach(b=> b.onclick=()=> openConjProductPicker(+b.dataset.cjpick, b));
@@ -434,7 +434,7 @@ function openConjProductPicker(i, anchor){
   closeProductPicker();
   _pickerAnchor = anchor; anchor.classList.add("open");
   const pop = document.createElement("div"); pop.className="ppick-pop";
-  pop.innerHTML = `<input class="inp ppick-search" placeholder="Search by name or SKU…" autocomplete="off" spellcheck="false"><div class="ppick-list"></div>`;
+  pop.innerHTML = `<input class="inp ppick-search" placeholder="${t("dash.f.search")}" autocomplete="off" spellcheck="false"><div class="ppick-list"></div>`;
   document.body.appendChild(pop);
   const search = pop.querySelector(".ppick-search"), listEl = pop.querySelector(".ppick-list");
   const cur = conjDraft.lineas[i].productoId;
@@ -446,8 +446,8 @@ function openConjProductPicker(i, anchor){
       const sku = p.sku ? `<span class="sku">${esc(p.sku)}</span>` : "";
       return `<button type="button" class="ppick-item${p.id===cur?" active":""}" data-cjp="${p.id}">${sku}<span class="pi-name">${esc(p.nombre)}</span></button>`;
     }).join("");
-    if(!lista.length) html = `<div class="ppick-empty">No products match.</div>`;
-    html += `<button type="button" class="ppick-item new" data-cjp="__new">＋ Create new product…</button>`;
+    if(!lista.length) html = `<div class="ppick-empty">${t("conj.pk.noprods")}</div>`;
+    html += `<button type="button" class="ppick-item new" data-cjp="__new">${t("conj.pk.createprod")}</button>`;
     listEl.innerHTML = html;
     listEl.querySelectorAll("[data-cjp]").forEach(it=> it.onclick=()=>{
       const v=it.dataset.cjp; closeProductPicker();
@@ -467,7 +467,7 @@ function openConjProductPicker(i, anchor){
 }
 
 function confirmConjunta(){
-  if(!isAdmin()){ toast("Only admins can load joint buys","warn"); return; }
+  if(!isAdmin()){ toast(t("conj.tt.adminjoint"),"warn"); return; }
   // resolve lines
   const resolved = [];
   for(const l of conjDraft.lineas){
@@ -477,26 +477,26 @@ function confirmConjunta(){
     if(aSw<=0 && aTr<=0 && aj<=0) continue;   // empty line: ignored
     // over-allocation: our part can't exceed the invoice total
     if((parseNum(l.total)||0)>0 && aSw+aTr>(parseNum(l.total)||0)){
-      toast("A line has more 'ours' units than the invoice total","warn"); return;
+      toast(t("conj.tt.overours"),"warn"); return;
     }
     // if there's third-party, we REQUIRE an owner (the only manual decision of point 3)
-    if(aj>0 && !l.terceroId){ toast("A line has third-party units without an owner","warn"); return; }
+    if(aj>0 && !l.terceroId){ toast(t("conj.tt.noowner"),"warn"); return; }
     let p=null;
     if(l.crear){
       const dup = skuEnUso(l.sku, null);
       if(dup) p = dup;
       else {
-        if(!(l.nombre||"").trim()){ toast("A new product is missing its name","warn"); return; }
+        if(!(l.nombre||"").trim()){ toast(t("conj.tt.noname"),"warn"); return; }
         p = nuevoProductoBase(l.sku, l.nombre, 0);
         db.productos.push(p);
       }
     } else {
       p = prodById(l.productoId);
-      if(!p){ toast("A line has no product assigned","warn"); return; }
+      if(!p){ toast(t("conj.tt.noprod"),"warn"); return; }
     }
     resolved.push({ prod:p, total:Math.max(0,parseNum(l.total)||0), aSwan:aSw, aTransito:aTr, ajeno:aj, terceroId:l.terceroId||null, costoUnit:Math.max(0, parseNum(l.costoUnit)||0), precioSwan:Math.max(0, parseNum(l.precioSwan)||0) });
   }
-  if(!resolved.length){ toast("Add at least one unit (ours or third-party)","warn"); return; }
+  if(!resolved.length){ toast(t("conj.tt.addunit"),"warn"); return; }
 
   const cli = clienteById(conjDraft.clienteId);
   const doc = {
@@ -508,7 +508,7 @@ function confirmConjunta(){
     obs: (conjDraft.obs||"").trim(),
     lineas: resolved.map(r=>({ productoId:r.prod.id, sku:r.prod.sku, nombre:r.prod.nombre, total:r.total, aSwan:r.aSwan, aTransito:r.aTransito, ajeno:r.ajeno, terceroId:r.terceroId, costoUnit:r.costoUnit }))
   };
-  const refTxt = "Joint buy" + (doc.numero?(" "+doc.numero):"") + (cli?(" · "+cli.nombre):"");
+  const refTxt = t("conj.obs.jointref") + (doc.numero?(" "+doc.numero):"") + (cli?(" · "+cli.nombre):"");
 
   // Remito U (numbered) of the US→AR shipment: ONLY the THIRD-PARTY part. Ours (Swan / →AR)
   // is already our own stock, it doesn't travel as a transfer document. It stays saved in
@@ -556,70 +556,70 @@ function confirmConjunta(){
   conjDraft=null;
   save(); closeModal();
   const sw = doc.lineas.reduce((a,l)=>a+l.aSwan,0), tr = doc.lineas.reduce((a,l)=>a+l.aTransito,0), aj = doc.lineas.reduce((a,l)=>a+(l.ajeno||0),0);
-  const remBit = uRem ? ` · remito ${uRem.codigo}` : "";
-  toast(`Joint buy saved · +${qty(sw)} Swan · ${qty(tr)} in transit · ${qty(aj)} third-party${remBit}`, "up");
+  const remBit = uRem ? t("conj.frag.remito",{code:uRem.codigo}) : "";
+  toast(t("conj.tt.jointsaved",{sw:qty(sw),tr:qty(tr),aj:qty(aj),rem:remBit}), "up");
   render();
   // The remito stays in the Remitos section (download whenever). No pop-up.
 }
 
 /* ---- Receive in AR: moves units from TRANSIT to SWAN (with optional import cost) ---- */
 function openRecibirTransito(prodId){
-  if(!isAdmin()){ toast("Only admins can receive stock","warn"); return; }
+  if(!isAdmin()){ toast(t("conj.tt.adminrecv"),"warn"); return; }
   const p = prodById(prodId); if(!p) return;
   const held = transUnits(p);
-  if(held<=0){ toast("Nothing in transit for this product","warn"); return; }
+  if(held<=0){ toast(t("conj.tt.notransitprod"),"warn"); return; }
   const destino = STORE_IDS[1] || STORE_IDS[0];   // AR deposit (transit destination)
   const body = `
-    <p class="hint" style="margin:0 0 12px">In transit (Buenos Aires): <b>${qty(held)}</b> u · valued ${money(transValor(p), "USD")}. Delivering moves them into <b>${esc(storeName(destino))}</b> stock (sellable, AR). The <b>operator pays</b> the Argentine leg (freight + nationalization + local costs) and it's <b>capitalized into the landed cost</b>.</p>
+    <p class="hint" style="margin:0 0 12px">${t("conj.rt.hint",{n:qty(held),val:money(transValor(p),"USD"),store:esc(storeName(destino))})}</p>
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
-      <div class="field"><label>Units to receive</label><input class="inp num" id="rt_q" value="${held}"></div>
-      ${legCostFieldHTML("rt_c","Gate 3 · Arg freight + local costs","· total, optional")}
-      <div class="field" style="grid-column:1/3"><label>Notes</label><input class="inp" id="rt_obs" placeholder="e.g. shipment #, nationalization ref"></div>
+      <div class="field"><label>${t("conj.l.unitstorecv")}</label><input class="inp num" id="rt_q" value="${held}"></div>
+      ${legCostFieldHTML("rt_c",t("conj.leg.gate3"),t("conj.leg.hint.total"))}
+      <div class="field" style="grid-column:1/3"><label>${t("conj.l.notes")}</label><input class="inp" id="rt_obs" placeholder="${t("conj.ph.egship")}"></div>
     </div>`;
-  buildModal("Deliver in AR ("+esc(storeName(destino))+")", body, [
-    {label:"Cancel",cls:"btn",act:closeModal},
-    {label:"Mark delivered · "+storeName(destino),cls:"btn up",act:()=>{
+  buildModal(t("conj.md.deliverar",{store:esc(storeName(destino))}), body, [
+    {label:t("common.cancel"),cls:"btn",act:closeModal},
+    {label:t("conj.b.markdeliv",{store:storeName(destino)}),cls:"btn up",act:()=>{
       const q=Math.min(Math.max(0,parseNum(document.getElementById("rt_q").value)||0), transUnits(p));
       const cTot=legCostRead("rt_c");   // arg freight + local costs (total), in USD
       const c = q>0 ? round2(cTot/q) : 0;                                           // prorrateo por unidad
       const obs=(document.getElementById("rt_obs").value||"").trim();
-      if(q<=0){ toast("Enter a quantity","warn"); return; }
+      if(q<=0){ toast(t("conj.tt.enterqty"),"warn"); return; }
       const done = transferStock(p, TRANSITO_STORE, destino, q, c, obs, "arg");
-      if(done>0){ closeModal(); toast(`Delivered ${qty(done)} u into ${storeName(destino)}${cTot>0?` · +${money(c,"USD")}/u landed`:""}`, "up"); render(); }
+      if(done>0){ closeModal(); toast(t("conj.tt.delivered",{n:qty(done),store:storeName(destino),cost:cTot>0?t("conj.frag.landed",{m:money(c,"USD")}):""}), "up"); render(); }
     }}
   ], "mini");
   // landed-per-unit preview = total ÷ units to receive (recomputed when either changes)
   const rtC=document.getElementById("rt_c"), rtQ=document.getElementById("rt_q"), rtPu=document.getElementById("rt_c_pu");
-  const rtUpd=()=>{ const usd=legCostRead("rt_c"), u=Math.max(0,parseNum(rtQ.value)||0); rtPu.textContent = `= ${money(u>0?round2(usd/u):0,"USD")} per unit  ·  spread across ${qty(u)} u`; };
+  const rtUpd=()=>{ const usd=legCostRead("rt_c"), u=Math.max(0,parseNum(rtQ.value)||0); rtPu.textContent = t("conj.leg.preview",{m:money(u>0?round2(usd/u):0,"USD"),n:qty(u)}); };
   if(rtC&&rtQ&&rtPu){ rtC.oninput=rtUpd; rtQ.oninput=rtUpd; wireLegCcy("rt_c",rtUpd); rtUpd(); }
 }
 
 /* ---- Send to transit: moves units from a sellable deposit into the transit bucket.
    Secondary case (AR ones are born in transit), useful to send Swan (USA) stock to AR. ---- */
 function openEnviarTransito(){
-  if(!isAdmin()){ toast("Only admins can move stock","warn"); return; }
+  if(!isAdmin()){ toast(t("conj.tt.adminstock"),"warn"); return; }
   const prods = db.productos.filter(p=> STORE_IDS.some(s=> stockDe(p,s)>0))
     .sort((a,b)=> String(a.nombre||"").localeCompare(String(b.nombre||""),"en"));
-  if(!prods.length){ toast("No sellable stock to send to transit","warn"); return; }
+  if(!prods.length){ toast(t("conj.tt.nosellable"),"warn"); return; }
   const prodOpts = prods.map(p=>`<option value="${p.id}">${esc(p.sku?("["+p.sku+"] "):"")}${esc(p.nombre)}</option>`).join("");
   const body = `
-    <p class="hint" style="margin:0 0 12px">Move sellable units into transit (Swan/USA → Buenos Aires). They leave sellable stock and become Select (AR) stock when received. The <b>operator pays</b> the leg cost — it's <b>capitalized into the landed cost</b>.</p>
+    <p class="hint" style="margin:0 0 12px">${t("conj.et.hint")}</p>
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
-      <div class="field" style="grid-column:1/3"><label>Product</label><select class="inp" id="et_prod">${prodOpts}</select></div>
-      <div class="field"><label>From deposit</label><select class="inp" id="et_store"></select></div>
-      <div class="field"><label>Units</label><input class="inp num" id="et_q" value="0"></div>
-      ${legCostFieldHTML("et_cost","Gate 2 · Intl freight + wire fees","· total, optional")}
-      <div class="field" style="grid-column:1/3"><label>Notes</label><input class="inp" id="et_obs"></div>
+      <div class="field" style="grid-column:1/3"><label>${t("common.product")}</label><select class="inp" id="et_prod">${prodOpts}</select></div>
+      <div class="field"><label>${t("conj.l.fromdeposit")}</label><select class="inp" id="et_store"></select></div>
+      <div class="field"><label>${t("common.units")}</label><input class="inp num" id="et_q" value="0"></div>
+      ${legCostFieldHTML("et_cost",t("conj.leg.gate2"),t("conj.leg.hint.total"))}
+      <div class="field" style="grid-column:1/3"><label>${t("conj.l.notes")}</label><input class="inp" id="et_obs"></div>
     </div>`;
-  buildModal("Send to transit (to AR)", body, [
-    {label:"Cancel",cls:"btn",act:closeModal},
-    {label:"Send to transit",cls:"btn",act:()=>{
+  buildModal(t("conj.md.sendtransit"), body, [
+    {label:t("common.cancel"),cls:"btn",act:closeModal},
+    {label:t("conj.b.sendtransit"),cls:"btn",act:()=>{
       const p=prodById(document.getElementById("et_prod").value);
       const st=document.getElementById("et_store").value;
-      if(!p||!st){ toast("Pick a product and deposit","warn"); return; }
+      if(!p||!st){ toast(t("conj.tt.pickprodstore"),"warn"); return; }
       const q=Math.min(Math.max(0,parseNum(document.getElementById("et_q").value)||0), stockDe(p,st));
       const obs=(document.getElementById("et_obs").value||"").trim();
-      if(q<=0){ toast("Enter a quantity (deposit may be empty)","warn"); return; }
+      if(q<=0){ toast(t("conj.tt.enterqtyempty"),"warn"); return; }
       const costTot=legCostRead("et_cost");   // intl freight + wire fees (total), in USD
       const costPU = q>0 ? round2(costTot/q) : 0;                                          // prorrateo por unidad
       const done = transferStock(p, st, TRANSITO_STORE, q, costPU, obs, "intl");
@@ -627,10 +627,10 @@ function openEnviarTransito(){
         // Remito U of our own US → AR shipment (automatic numbering)
         const uRem = crearRemito({ letra:"U", tipo:"salida-us", fuente:{ tipo:"transito", id:p.id },
           lineas:[{ productoId:p.id, sku:p.sku, nombre:p.nombre, cantidad:done, rol:"ours", owner:"" }],
-          obs:obs || ("Own stock "+storeName(st)+" → AR") });
+          obs:obs || t("conj.obs.ownstock",{from:storeName(st)}) });
         save();
         closeModal();
-        toast(`Sent ${qty(done)} u to transit · remito ${uRem.codigo}${costTot>0?` · +${money(costPU,"USD")}/u landed`:""}`, "up");
+        toast(t("conj.tt.senttransit",{n:qty(done),code:uRem.codigo,cost:costTot>0?t("conj.frag.landed",{m:money(costPU,"USD")}):""}), "up");
         render();
         // Remito saved — download it from the Remitos section (no pop-up).
       }
@@ -641,13 +641,13 @@ function openEnviarTransito(){
     const p=prodById(document.getElementById("et_prod").value);
     const sel=document.getElementById("et_store");
     const conStock = STORE_IDS.filter(s=> stockDe(p,s)>0);
-    sel.innerHTML = conStock.map(s=>`<option value="${s}">${esc(storeName(s))} · ${qty(stockDe(p,s))} u</option>`).join("") || `<option value="">— no stock —</option>`;
+    sel.innerHTML = conStock.map(s=>`<option value="${s}">${esc(storeName(s))} · ${qty(stockDe(p,s))} u</option>`).join("") || `<option value="">${t("conj.et.nostore")}</option>`;
   };
   document.getElementById("et_prod").onchange=fillStores;
   fillStores();
   // landed-per-unit preview = total ÷ units
   const etC=document.getElementById("et_cost"), etQ=document.getElementById("et_q"), etPu=document.getElementById("et_cost_pu");
-  const etUpd=()=>{ const usd=legCostRead("et_cost"), u=Math.max(0,parseNum(etQ.value)||0); etPu.textContent = `= ${money(u>0?round2(usd/u):0,"USD")} per unit  ·  spread across ${qty(u)} u`; };
+  const etUpd=()=>{ const usd=legCostRead("et_cost"), u=Math.max(0,parseNum(etQ.value)||0); etPu.textContent = t("conj.leg.preview",{m:money(u>0?round2(usd/u):0,"USD"),n:qty(u)}); };
   if(etC&&etQ&&etPu){ etC.oninput=etUpd; etQ.oninput=etUpd; wireLegCcy("et_cost",etUpd); etUpd(); }
 }
 
@@ -655,35 +655,35 @@ function openEnviarTransito(){
    loss, etc. Consumes transit FIFO and leaves a "merma" (write-off) movement
    (store=transit) to trace the loss. It doesn't move to any sellable deposit. ---- */
 function openMermaTransito(prodId){
-  if(!isAdmin()){ toast("Only admins can write off stock","warn"); return; }
+  if(!isAdmin()){ toast(t("conj.tt.adminwo"),"warn"); return; }
   const p = prodById(prodId); if(!p) return;
   const held = transUnits(p);
-  if(held<=0){ toast("Nothing in transit for this product","warn"); return; }
+  if(held<=0){ toast(t("conj.tt.notransitprod"),"warn"); return; }
   const body = `
-    <p class="hint" style="margin:0 0 12px">In transit: <b>${qty(held)}</b> u. Write-off removes units that <b>won't arrive</b> (broken box, seized at customs, lost). They leave transit and do <b>not</b> become Select (AR) stock.</p>
+    <p class="hint" style="margin:0 0 12px">${t("conj.mm.hint",{n:qty(held)})}</p>
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
-      <div class="field"><label>Units to write off</label><input class="inp num" id="mm_q" value="0"></div>
-      <div class="field"><label>Reason</label>
+      <div class="field"><label>${t("conj.l.unitstowo")}</label><input class="inp num" id="mm_q" value="0"></div>
+      <div class="field"><label>${t("conj.l.reason")}</label>
         <select class="inp" id="mm_motivo">
-          <option value="broken">Broken in transit</option>
-          <option value="customs">Seized / held at customs</option>
-          <option value="lost">Lost</option>
-          <option value="other">Other</option>
+          <option value="broken">${t("conj.mm.broken")}</option>
+          <option value="customs">${t("conj.mm.customs")}</option>
+          <option value="lost">${t("conj.mm.lost")}</option>
+          <option value="other">${t("conj.mm.other")}</option>
         </select></div>
-      <div class="field" style="grid-column:1/3"><label>Notes</label><input class="inp" id="mm_obs"></div>
+      <div class="field" style="grid-column:1/3"><label>${t("conj.l.notes")}</label><input class="inp" id="mm_obs"></div>
     </div>`;
-  buildModal("Write-off from transit", body, [
-    {label:"Cancel",cls:"btn",act:closeModal},
-    {label:"Write off",cls:"btn danger",act:()=>{
+  buildModal(t("conj.md.writeoff"), body, [
+    {label:t("common.cancel"),cls:"btn",act:closeModal},
+    {label:t("conj.b.writeoff"),cls:"btn danger",act:()=>{
       const q=Math.min(Math.max(0,parseNum(document.getElementById("mm_q").value)||0), transUnits(p));
-      if(q<=0){ toast("Enter a quantity","warn"); return; }
+      if(q<=0){ toast(t("conj.tt.enterqty"),"warn"); return; }
       const motivo=document.getElementById("mm_motivo").value;
       const obs=(document.getElementById("mm_obs").value||"").trim();
-      withUndo(`Wrote off ${qty(q)} u from transit`, ()=>{
+      withUndo(t("conj.tt.woundo",{n:qty(q)}), ()=>{
         const { unit } = fifoConsumir(p, TRANSITO_STORE, q);            // consume transit FIFO
         p.stockPorTienda[TRANSITO_STORE] = round4(Math.max(0, transUnits(p) - q));
         // write-off movement in the bucket (the product card shows it but doesn't add it to the sellable balance)
-        moverStock(p, -q, unit, "merma", null, "Transit write-off · "+motivo, { store:TRANSITO_STORE, tipo:"merma", obs });
+        moverStock(p, -q, unit, "merma", null, t("conj.obs.woreason",{reason:motivo}), { store:TRANSITO_STORE, tipo:"merma", obs });
         save();
       });
       closeModal(); render();
@@ -699,8 +699,8 @@ function conjClienteNombre(d){
 
 function deleteConjunta(id){
   const d = db.conjuntas.find(x=>x.id===id); if(!d) return;
-  if(!confirm("Delete this joint buy?\n\nStock added by it (Swan + transit) will be reverted where still available. Third-party units still in transit are removed too. Units already received in AR, delivered, or sold are NOT rolled back.")) return;
-  withUndo("Joint buy deleted", ()=>{
+  if(!confirm(t("conj.cf.deljoint"))) return;
+  withUndo(t("conj.tt.jointdeleted"), ()=>{
   d.lineas.forEach(l=>{
     const p = prodById(l.productoId); if(!p) return;
     // revert Swan: remove this joint buy's FIFO layer and reduce stock (clamp to 0)
@@ -929,47 +929,47 @@ function viewConjunta(){
    ============================================================ */
 /* Receive ALL consignments in transit → AR at once. */
 function recibirTodasConsign(){
-  if(!isAdmin()){ toast("Only admins can receive stock","warn"); return; }
+  if(!isAdmin()){ toast(t("conj.tt.adminrecv"),"warn"); return; }
   const list = consignAll().filter(cs=> cs.estado===CONSIGN_ESTADOS.TRANSITO);
-  if(!list.length){ toast("Nothing in transit","warn"); return; }
+  if(!list.length){ toast(t("conj.tt.nothingtransit"),"warn"); return; }
   const u = list.reduce((a,cs)=> a+cs.cantidad, 0);
-  if(!confirm(`Receive ALL third-party in transit into AR?\n\n${list.length} item(s) · ${qty(u)} u\nYou can still add courier costs later, item by item.`)) return;
+  if(!confirm(t("conj.cf.recvall",{n:list.length,u:qty(u)}))) return;
   list.forEach(cs=> avanzarConsignacion(cs.id, { obs:"bulk receive in AR" }));
-  toast(`Received ${list.length} third-party item(s) in AR`,"up"); render();
+  toast(t("conj.tt.recvthirdn",{n:list.length}),"up"); render();
 }
 /* Deliver ALL consignments that are in AR → delivered at once. */
 function entregarTodasConsign(){
-  if(!isAdmin()){ toast("Only admins can deliver","warn"); return; }
+  if(!isAdmin()){ toast(t("conj.tt.admindeliver"),"warn"); return; }
   const list = consignAll().filter(cs=> cs.estado===CONSIGN_ESTADOS.AR);
-  if(!list.length){ toast("None in AR to deliver","warn"); return; }
+  if(!list.length){ toast(t("conj.tt.noneardeliver"),"warn"); return; }
   const u = list.reduce((a,cs)=> a+cs.cantidad, 0);
-  if(!confirm(`Mark ALL third-party in AR as delivered?\n\n${list.length} item(s) · ${qty(u)} u\nThis closes their tracking.`)) return;
+  if(!confirm(t("conj.cf.delivall",{n:list.length,u:qty(u)}))) return;
   list.forEach(cs=> avanzarConsignacion(cs.id, { obs:"bulk delivered" }));
-  toast(`Delivered ${list.length} third-party item(s)`,"up"); render();
+  toast(t("conj.tt.deliveredthird",{n:list.length}),"up"); render();
 }
 /* Deliver into AR ALL OUR OWN stock in transit, with an optional total Arg cost
    prorated over the total units (capitalized, "arg" leg). */
 function openDeliverAllOurs(){
-  if(!isAdmin()){ toast("Only admins can receive stock","warn"); return; }
+  if(!isAdmin()){ toast(t("conj.tt.adminrecv"),"warn"); return; }
   const prods = db.productos.filter(p=> transUnits(p)>0);
   const totalU = prods.reduce((a,p)=> a+transUnits(p), 0);
-  if(!prods.length || totalU<=0){ toast("Nothing of ours in transit","warn"); return; }
+  if(!prods.length || totalU<=0){ toast(t("conj.tt.nothingours"),"warn"); return; }
   const destino = STORE_IDS[1] || STORE_IDS[0];
   const body = `
-    <p class="hint" style="margin:0 0 14px">Deliver <b>everything of ours in transit</b> into <b>${esc(storeName(destino))}</b> (sellable): <b>${prods.length}</b> product(s) · <b>${qty(totalU)}</b> u. The Argentine leg cost (freight + local costs) is <b>spread across all units</b> and capitalized.</p>
+    <p class="hint" style="margin:0 0 14px">${t("conj.da.hint",{store:esc(storeName(destino)),items:prods.length,n:qty(totalU)})}</p>
     <div class="grid-form stack" style="padding:0">
-      ${legCostFieldHTML("da_cost","Gate 3 · Arg freight + local costs","· total for the whole batch, optional")}
-      <div class="field" style="grid-column:1/-1"><label>Notes</label><input class="inp" id="da_obs" placeholder="e.g. shipment #, nationalization ref"></div>
+      ${legCostFieldHTML("da_cost",t("conj.leg.gate3"),t("conj.leg.hint.batch"))}
+      <div class="field" style="grid-column:1/-1"><label>${t("conj.l.notes")}</label><input class="inp" id="da_obs" placeholder="${t("conj.ph.egship")}"></div>
     </div>`;
-  buildModal("Deliver all in AR ("+esc(storeName(destino))+")", body, [
-    {label:"Cancel",cls:"btn",act:closeModal},
-    {label:"Deliver all · "+qty(totalU)+" u",cls:"btn up",act:()=>{
+  buildModal(t("conj.md.deliverall",{store:esc(storeName(destino))}), body, [
+    {label:t("common.cancel"),cls:"btn",act:closeModal},
+    {label:t("conj.b.deliverall",{n:qty(totalU)}),cls:"btn up",act:()=>{
       const costTot=legCostRead("da_cost");
       const perU = totalU>0 ? round2(costTot/totalU) : 0;
       const obs=(document.getElementById("da_obs").value||"").trim();
       let done=0, items=0;
       prods.forEach(p=>{ const q=transUnits(p); if(q>0){ const d=transferStock(p, TRANSITO_STORE, destino, q, perU, obs, "arg"); if(d>0){ done+=d; items++; } } });
-      closeModal(); toast(`Delivered ${qty(done)} u across ${items} product(s)${costTot>0?` · +${money(perU,"USD")}/u landed`:""}`,"up"); render();
+      closeModal(); toast(t("conj.tt.deliveredacross",{n:qty(done),items:items,cost:costTot>0?t("conj.frag.landed",{m:money(perU,"USD")}):""}),"up"); render();
     }}
   ], "mini");
   wireLegPreview("da_cost", totalU);
@@ -977,38 +977,38 @@ function openDeliverAllOurs(){
 
 /* ---- Receive consignment (third-party) in AR: en_transito → en_ar, with optional courier ---- */
 function openRecibirConsignacion(id){
-  if(!isAdmin()){ toast("Only admins can receive stock","warn"); return; }
+  if(!isAdmin()){ toast(t("conj.tt.adminrecv"),"warn"); return; }
   const cs = consignAll().find(x=>x.id===id); if(!cs) return;
   const body = `
-    <p class="hint" style="margin:0 0 14px"><b>${esc(cs.nombre)}</b> · owner <b>${esc(terceroNombre(cs))}</b> · <b>${qty(cs.cantidad)}</b> u. Marks them <b>received in AR</b> (still not ours, still tracked). Add courier/financial cost per unit for cost-sharing (optional — doesn't affect margin).</p>
+    <p class="hint" style="margin:0 0 14px">${t("conj.rc.hint",{name:esc(cs.nombre),owner:esc(terceroNombre(cs)),n:qty(cs.cantidad)})}</p>
     <div class="grid-form stack" style="padding:0">
-      ${legCostFieldHTML("csc_c","Courier / financial cost per unit","· optional",{value:(cs.costoCourierUnit||0),noPreview:true})}
-      <div class="field"><label>Notes</label><input class="inp" id="csc_obs" placeholder="e.g. arrival ref"></div>
+      ${legCostFieldHTML("csc_c",t("conj.leg.courierpu"),t("conj.leg.hint.optional"),{value:(cs.costoCourierUnit||0),noPreview:true})}
+      <div class="field"><label>${t("conj.l.notes")}</label><input class="inp" id="csc_obs" placeholder="${t("conj.ph.egarrival")}"></div>
     </div>`;
-  buildModal("Receive third-party in AR", body, [
-    {label:"Cancel",cls:"btn",act:closeModal},
-    {label:"Mark received in AR",cls:"btn up",act:()=>{
+  buildModal(t("conj.md.recvthird"), body, [
+    {label:t("common.cancel"),cls:"btn",act:closeModal},
+    {label:t("conj.b.markrecvar"),cls:"btn up",act:()=>{
       const c=legCostRead("csc_c");
       const obs=(document.getElementById("csc_obs").value||"").trim();
       avanzarConsignacion(id, { costoCourierUnit:c, obs });
-      closeModal(); toast("Third-party units received in AR","up"); render();
+      closeModal(); toast(t("conj.tt.recvthirdok"),"up"); render();
     }}
   ], "mini");
   wireLegCcy("csc_c");
 }
 /* ---- Deliver consignment: en_ar → delivered (handoff to the owner) ---- */
 function entregarConsignacion(id){
-  if(!isAdmin()){ toast("Only admins can deliver","warn"); return; }
+  if(!isAdmin()){ toast(t("conj.tt.admindeliver"),"warn"); return; }
   const cs = consignAll().find(x=>x.id===id); if(!cs) return;
-  if(!confirm(`Mark as delivered to ${terceroNombre(cs)}?\n\n${cs.nombre} · ${qty(cs.cantidad)} u\nThis closes the tracking for these units.`)) return;
-  avanzarConsignacion(id, { obs:"delivered" });
-  toast("Marked delivered","up"); render();
+  if(!confirm(t("conj.cf.delivone",{owner:terceroNombre(cs),name:cs.nombre,n:qty(cs.cantidad)}))) return;
+  avanzarConsignacion(id, { obs:t("conj.obs.delivered") });
+  toast(t("conj.tt.markeddeliv"),"up"); render();
 }
 function removeConsignacion(id){
-  if(!isAdmin()){ toast("Only admins can edit tracking","warn"); return; }
+  if(!isAdmin()){ toast(t("conj.tt.admintrack"),"warn"); return; }
   const cs = consignAll().find(x=>x.id===id); if(!cs) return;
-  if(!confirm(`Remove these third-party units from tracking?\n\n${cs.nombre} · ${qty(cs.cantidad)} u · ${terceroNombre(cs)}`)) return;
-  borrarConsignacion(id); toast("Removed from tracking","warn"); render();
+  if(!confirm(t("conj.cf.untrack",{name:cs.nombre,n:qty(cs.cantidad),owner:terceroNombre(cs)}))) return;
+  borrarConsignacion(id); toast(t("conj.tt.removedtrack"),"warn"); render();
 }
 
 /* ============================================================
@@ -1066,34 +1066,34 @@ function remitoCardHTML(g){
 
 /* ---- Receive in AR the IN-TRANSIT lines of the remito (shared courier) ---- */
 function openRecibirRemito(key){
-  if(!isAdmin()){ toast("Only admins can receive stock","warn"); return; }
+  if(!isAdmin()){ toast(t("conj.tt.adminrecv"),"warn"); return; }
   const lines = remitoTargetLines(key, CONSIGN_ESTADOS.TRANSITO);
-  if(!lines.length){ toast("No in-transit lines to receive here","warn"); return; }
+  if(!lines.length){ toast(t("conj.tt.notransitrecv"),"warn"); return; }
   const totalU = lines.reduce((a,l)=>a+l.cantidad,0);
   const list = lines.map(cs=>`<tr><td>${esc(cs.nombre)}<div class="hint">${esc(cs.sku||"")} · ${esc(terceroNombre(cs))}</div></td><td class="r num">${qty(cs.cantidad)}</td></tr>`).join("");
   const body = `
-    <p class="hint" style="margin:0 0 16px"><b>Receive ${lines.length} line(s)</b> · ${qty(totalU)} u into <b>AR</b> (still third-party, still tracked). The courier / financial cost is <b>optional</b> and only for cost-sharing reports — it doesn't touch stock or margin.</p>
+    <p class="hint" style="margin:0 0 16px">${t("conj.rr.hint",{n:lines.length,u:qty(totalU)})}</p>
     <div class="recv-grid">
       <div class="recv-list">
-        <div class="recv-list-head">Products <span class="hint">· ${lines.length} line(s) · ${qty(totalU)} u</span></div>
-        <div class="table-scroll recv-scroll"><table class="rm-tbl"><thead><tr><th>Product</th><th class="r">Units</th></tr></thead><tbody>${list}</tbody></table></div>
+        <div class="recv-list-head">${t("conj.rr.products")} <span class="hint">${t("conj.rr.linesu",{n:lines.length,u:qty(totalU)})}</span></div>
+        <div class="table-scroll recv-scroll"><table class="rm-tbl"><thead><tr><th>${t("common.product")}</th><th class="r">${t("common.units")}</th></tr></thead><tbody>${list}</tbody></table></div>
       </div>
       <div class="recv-side">
         <div class="grid-form stack" style="padding:0;gap:16px">
-          ${legCostFieldHTML("rr_c","Courier / financial cost","· total for the batch, optional")}
-          <div class="field"><label>Notes</label><input class="inp" id="rr_obs" placeholder="e.g. arrival ref"></div>
+          ${legCostFieldHTML("rr_c",t("conj.leg.courier"),t("conj.leg.hint.batchtot"))}
+          <div class="field"><label>${t("conj.l.notes")}</label><input class="inp" id="rr_obs" placeholder="${t("conj.ph.egarrival")}"></div>
         </div>
       </div>
     </div>`;
-  buildModal("Receive in AR · third-party", body, [
-    {label:"Cancel",cls:"btn",act:closeModal},
-    {label:"Receive · "+qty(totalU)+" u",cls:"btn up",act:()=>{
+  buildModal(t("conj.md.recvar"), body, [
+    {label:t("common.cancel"),cls:"btn",act:closeModal},
+    {label:t("conj.b.recv",{n:qty(totalU)}),cls:"btn up",act:()=>{
       const tot = legCostRead("rr_c");
       const perU = totalU>0 ? round2(tot/totalU) : 0;
       const obs = (document.getElementById("rr_obs").value||"").trim();
       lines.forEach(cs=> avanzarConsignacion(cs.id, { costoCourierUnit:perU, obs }));
       lines.forEach(l=> delete remitoSel[l.id]);
-      closeModal(); toast(`Received ${lines.length} line(s) in AR${tot>0?` · +${money(perU,"USD")}/u courier`:""}`,"up"); render();
+      closeModal(); toast(t("conj.tt.recvlines",{n:lines.length,cost:tot>0?t("conj.frag.courier",{m:money(perU,"USD")}):""}),"up"); render();
     }}
   ], "recv");
   wireLegPreview("rr_c", totalU);
@@ -1105,9 +1105,9 @@ function openRecibirRemito(key){
    + markup = what's charged) and one for Select (enters our stock). If it goes
    all to a single side, NO A is issued. ---- */
 function openResolverAR(key){
-  if(!isAdmin()){ toast("Only admins can move stock","warn"); return; }
+  if(!isAdmin()){ toast(t("conj.tt.adminstock"),"warn"); return; }
   const lines = remitoTargetLines(key, CONSIGN_ESTADOS.AR);
-  if(!lines.length){ toast("No in-AR lines to resolve (receive them first)","warn"); return; }
+  if(!lines.length){ toast(t("conj.tt.noarlines"),"warn"); return; }
   const store = STORE_IDS[1] || STORE_IDS[0];
   const rows = lines.map((cs,i)=>{
     const acc = round2((cs.costoUnit||0)+(cs.costoCourierUnit||0));   // costo acumulado (2 puertas)
@@ -1117,22 +1117,22 @@ function openResolverAR(key){
       <td><input class="inp num res-q" id="rq_${i}" value="0" data-max="${cs.cantidad}" inputmode="numeric"></td>
       <td class="r num" id="rt_${i}">${qty(cs.cantidad)}</td>
       <td class="r num">${money(acc,"USD")}</td>
-      <td><input class="inp num" id="rc_${i}" value="${acc}" inputmode="decimal" title="Cost the Select units enter at (FIFO/COGS)"></td>
+      <td><input class="inp num" id="rc_${i}" value="${acc}" inputmode="decimal" title="${t('conj.tip.selcost')}"></td>
     </tr>`;
   }).join("");
   const body = `
-    <p class="hint" style="margin:0 0 10px">Split each product between <b>${esc(storeName(store))}</b> (our commission — enters our sellable stock) and the <b>owner</b> (their goods — delivered, never our stock). The owner is charged the <b>accumulated cost + markup</b>. A split issues two <b>A</b> remitos citing the U; all-to-one-side issues none.</p>
+    <p class="hint" style="margin:0 0 10px">${t("conj.res.hint",{store:esc(storeName(store))})}</p>
     <div class="table-scroll" style="margin-bottom:14px"><table class="rm-tbl">
-      <thead><tr><th>Product</th><th class="r">In AR</th><th style="width:84px">→ Select</th><th class="r" style="width:70px">→ Owner</th><th class="r">Acc. cost</th><th style="width:104px">Select cost/u</th></tr></thead>
+      <thead><tr><th>${t("common.product")}</th><th class="r">${t("conj.th.inar")}</th><th style="width:84px">${t("conj.th.tosel")}</th><th class="r" style="width:70px">${t("conj.th.toowner")}</th><th class="r">${t("conj.th.acccost")}</th><th style="width:104px">${t("conj.th.selcostu")}</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
-      ${legCostFieldHTML("res_extra","Extra Arg leg cost (our Select units)","· total, optional — spread across kept units")}
-      <div class="field"><label>Owner markup <span class="hint" style="font-weight:400">· % over accumulated cost, optional</span></label><input class="inp num" id="res_mk" value="0" inputmode="decimal"><div class="leg-pu hint" id="res_mk_pu">no markup</div></div>
-      <div class="field" style="grid-column:1/-1"><label>Notes</label><input class="inp" id="res_obs" placeholder="e.g. split reason"></div>
+      ${legCostFieldHTML("res_extra",t("conj.leg.extrasel"),t("conj.leg.hint.spread"))}
+      <div class="field"><label>${t("conj.l.ownermk")} <span class="hint" style="font-weight:400">${t("conj.l.ownermk.hint")}</span></label><input class="inp num" id="res_mk" value="0" inputmode="decimal"><div class="leg-pu hint" id="res_mk_pu">${t("conj.mk.none")}</div></div>
+      <div class="field" style="grid-column:1/-1"><label>${t("conj.l.notes")}</label><input class="inp" id="res_obs" placeholder="${t("conj.ph.egsplit")}"></div>
     </div>`;
-  buildModal("Resolve in AR · "+esc(store===STORE_IDS[1]?storeName(store):"AR"), body, [
-    {label:"Cancel",cls:"btn",act:closeModal},
-    {label:"Resolve",cls:"btn up",act:()=>{
+  buildModal(t("conj.md.resolve",{store:esc(store===STORE_IDS[1]?storeName(store):"AR")}), body, [
+    {label:t("common.cancel"),cls:"btn",act:closeModal},
+    {label:t("conj.b.resolve"),cls:"btn up",act:()=>{
       // U context (before mutating)
       const remId  = lines[0] && lines[0].remitoId || null;
       const conjId = lines[0] && lines[0].conjuntaId || null;
@@ -1166,27 +1166,27 @@ function openResolverAR(key){
           if(kept>0){ selLines.push({ productoId:cs.productoId, sku:cs.sku, nombre:cs.nombre, cantidad:kept, rol:"select", owner:terceroNombre(cs), costoUnit:cost }); selU += kept; }
         }
         // 3) deliver to the owner what remains of the consignment (the non-kept part)
-        if(ter>0){ avanzarConsignacion(cs.id, { obs:"delivered (resolve)" }); }
+        if(ter>0){ avanzarConsignacion(cs.id, { obs:t("conj.obs.delivresolve") }); }
         delete remitoSel[cs.id];
       });
 
-      if(selU<=0 && terU<=0){ toast("Nothing to resolve","warn"); return; }
+      if(selU<=0 && terU<=0){ toast(t("conj.tt.nothingresolve"),"warn"); return; }
 
       // Two A remitos ONLY if there was a SPLIT (something to Select AND something to the owner)
       let aSel=null, aTer=null;
       if(selU>0 && terU>0){
         const origen = uRemito ? { id:uRemito.id, codigo:uRemito.codigo } : { id:null, codigo:uCodigo };
-        aTer = crearRemito({ letra:"A", tipo:"ar-tercero", fuente:{ tipo:"resolve", id:(remId||conjId) }, origen, lineas:terLines, obs:(obs?obs+" · ":"")+"to owner"+(mkPct>0?` · +${mkPct}% markup`:"") });
-        aSel = crearRemito({ letra:"A", tipo:"ar-select",  fuente:{ tipo:"resolve", id:(remId||conjId) }, origen, lineas:selLines, obs:(obs?obs+" · ":"")+"to Select (our commission)" });
+        aTer = crearRemito({ letra:"A", tipo:"ar-tercero", fuente:{ tipo:"resolve", id:(remId||conjId) }, origen, lineas:terLines, obs:(obs?obs+" · ":"")+t("conj.obs.toowner")+(mkPct>0?t("conj.frag.markup",{p:mkPct}):"") });
+        aSel = crearRemito({ letra:"A", tipo:"ar-select",  fuente:{ tipo:"resolve", id:(remId||conjId) }, origen, lineas:selLines, obs:(obs?obs+" · ":"")+t("conj.obs.toselect") });
       }
       save(); closeModal();
       if(aSel && aTer){
-        toast(`Split ${uCodigo} → ${aTer.codigo} (owner) + ${aSel.codigo} (Select) · in Remitos`,"up");
+        toast(t("conj.tt.split",{u:uCodigo,ter:aTer.codigo,sel:aSel.codigo}),"up");
         // Both A remitos are saved and downloaded from the Remitos section.
       } else if(selU>0){
-        toast(`Kept ${qty(selU)} u for ${storeName(store)} · no split, no A`,"up");
+        toast(t("conj.tt.kept",{n:qty(selU),store:storeName(store)}),"up");
       } else {
-        toast(`Delivered ${qty(terU)} u to owner${mkPct>0?` · +${mkPct}% markup`:""} · no split, no A`,"up");
+        toast(t("conj.tt.deliveredowner",{n:qty(terU),mk:mkPct>0?t("conj.frag.markup",{p:mkPct}):""}),"up");
       }
       render();
     }}
@@ -1203,7 +1203,7 @@ function openResolverAR(key){
   };
   lines.forEach((cs,i)=>{ const el=document.getElementById("rq_"+i); if(el) el.addEventListener("input", recalc); });
   const mk=document.getElementById("res_mk"), mkOut=document.getElementById("res_mk_pu");
-  if(mk&&mkOut){ const upd=()=>{ const p=Math.max(0,parseNum(mk.value)||0); mkOut.textContent = p>0?`owner charge = accumulated cost + ${p}%`:"no markup"; }; mk.oninput=upd; upd(); }
+  if(mk&&mkOut){ const upd=()=>{ const p=Math.max(0,parseNum(mk.value)||0); mkOut.textContent = p>0?t("conj.mk.charge",{p:p}):t("conj.mk.none"); }; mk.oninput=upd; upd(); }
   recalc();
 }
 
