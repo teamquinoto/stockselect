@@ -59,7 +59,7 @@ function applyTheme(t){
   document.documentElement.setAttribute("data-theme", t);
   try{ localStorage.setItem("gstock_theme", t); }catch(e){}
   const meta=document.querySelector('meta[name="theme-color"]');
-  if(meta) meta.setAttribute("content", t==="dark" ? "#140f1f" : "#7c3aed");
+  if(meta) meta.setAttribute("content", t==="dark" ? "#14100a" : "#d97706");
   paintThemeBtn();
 }
 function toggleTheme(){ applyTheme(currentTheme()==="dark" ? "light" : "dark"); }

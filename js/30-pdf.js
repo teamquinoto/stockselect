@@ -418,7 +418,7 @@ function generarLandedCostPDF(){
   const doc = new jsPDF({ unit:"pt", format:"letter" });
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 40;
   const em = db.config.emisor||{};
-  const INK=[26,26,26], MUT=[120,120,120], LINE=[228,225,220], ACC=[124,58,237], ZEBRA=[248,247,245];
+  const INK=[26,26,26], MUT=[120,120,120], LINE=[228,225,220], ACC=[217,119,6], ZEBRA=[248,247,245];
   const setInk=c=>doc.setTextColor(c[0],c[1],c[2]);
 
   /* Header band */
