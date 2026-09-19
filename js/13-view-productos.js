@@ -12,10 +12,10 @@ function viewProd(){
   <div class="head">
     <div class="title"><h2>${t("pr.title")}</h2><p>${t("pr.sub")}</p></div>
     <div class="actions">
-      ${total?`<button class="btn" id="btnExpPrecios">⤓ Price list</button>`:""}
+      ${total?`<button class="btn" id="btnExpPrecios">${t("pr.btn.pricelist")}</button>`:""}
       ${(total&&isAdmin())?`<button class="btn" id="btnLanded" title="${t('pr.btn.landed.tip')}">${t("pr.btn.landed")}</button>`:""}
       ${(total&&isAdmin())?`<button class="btn" id="btnSel">${selMode?ICO.x+t("common.cancel"):ICO.select+t("pr.btn.select")}</button>`:""}
-      ${puedeEditarProductos()?`<button class="btn primary" data-newp>+ New product</button>`:""}
+      ${puedeEditarProductos()?`<button class="btn primary" data-newp>${t("pr.btn.newprod")}</button>`:""}
     </div>
   </div>
   <div class="panel">
@@ -50,7 +50,7 @@ function renderProdRows(){
     else { if(units<0) cls+=" neg"; else if(units===0) cls+=" zero"; else if(bajoStock(p)) cls+=" low"; }
     // en la fila de tránsito no tiene sentido el checkbox de selección
     const chk = selMode ? (isT ? `<td class="c"></td>` : `<td class="c" data-nofic><input type="checkbox" class="selchk" data-selp="${p.id}" ${selProd.has(p.id)?"checked":""}></td>`) : "";
-    const flag = isT ? ' <span class="inv-badge transit">⋯ in transit</span>' : (esBloqueado(p) ? ' <span class="pill blocked">blocked</span>' : "");
+    const flag = isT ? ` <span class="inv-badge transit">${t("pr.badge.transit")}</span>` : (esBloqueado(p) ? ` <span class="pill blocked">${t("pr.badge.blocked")}</span>` : "");
     const cost = isT ? (transitoEnFoco(p)>0 ? round2(transitoValorEnFoco(p)/transitoEnFoco(p)) : 0) : (stockEnFoco(p)>0 ? round2(valorFifoEnFoco(p)/stockEnFoco(p)) : 0);
     const perStore = sociedadColsCells(p, isT);
     const foco = effectiveStores();

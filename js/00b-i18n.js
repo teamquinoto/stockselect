@@ -308,7 +308,7 @@ var I18N = {
     // === productos ===
     "pr.title":"Products",
     "pr.sub":"Item master. Cost updates with each purchase (last landed cost); COGS is FIFO.",
-    "pr.btn.landed":"⤓ Landed cost",
+    "pr.btn.pricelist":"⤓ Price list", "pr.btn.newprod":"+ New product", "pr.badge.transit":"⋯ in transit", "pr.badge.blocked":"blocked", "pr.badge.negative":"negative", "pr.badge.reorder":"reorder", "pr.btn.landed":"⤓ Landed cost",
     "pr.btn.landed.tip":"Landed cost buildup per product (US → BA → store)",
     "pr.btn.select":"Select",
     "pr.btn.deselect":"Deselect",
@@ -931,7 +931,7 @@ var I18N = {
     // === productos ===
     "pr.title":"Productos",
     "pr.sub":"Maestro de artículos. El costo se actualiza con cada compra (último costo en destino); el COGS es FIFO.",
-    "pr.btn.landed":"⤓ Costo en destino",
+    "pr.btn.pricelist":"⤓ Lista de precios", "pr.btn.newprod":"+ Nuevo producto", "pr.badge.transit":"⋯ en tránsito", "pr.badge.blocked":"bloqueado", "pr.badge.negative":"negativo", "pr.badge.reorder":"reponer", "pr.btn.landed":"⤓ Costo en destino",
     "pr.btn.landed.tip":"Armado del costo en destino por producto (US → BA → sociedad)",
     "pr.btn.select":"Seleccionar",
     "pr.btn.deselect":"Deseleccionar",
@@ -1319,8 +1319,8 @@ var I18N = {
 
   window.langToggleHTML = function(){
     return `<div class="lang-switch" role="group" aria-label="${t("lang.arialabel")}">
-      <button type="button" class="lang-opt" data-lang-set="en" title="English"><span class="flag">\u{1F1FA}\u{1F1F8}</span><span class="lc">EN</span></button>
-      <button type="button" class="lang-opt" data-lang-set="es" title="Espa\u00f1ol"><span class="flag">\u{1F1E6}\u{1F1F7}</span><span class="lc">ES</span></button>
+      <button type="button" class="lang-opt" data-lang-set="en" title="English"><span class="lc">EN</span></button>
+      <button type="button" class="lang-opt" data-lang-set="es" title="Espa\u00f1ol"><span class="lc">ES</span></button>
     </div>`;
   };
   function syncLangToggle(){

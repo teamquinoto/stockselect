@@ -274,10 +274,10 @@ function renderDashRows(){
     let cls="stock-cell";
     if(isT) cls+=" transit";
     else { if(units<0) cls+=" neg"; else if(units===0) cls+=" zero"; else if(bajoStock(p)) cls+=" low"; }
-    const flag = isT ? '<span class="inv-badge transit">⋯ in transit</span>'
-               : esBloqueado(p) ? '<span class="pill blocked">blocked</span>'
-               : units<0 ? '<span class="pill low">negative</span>'
-               : bajoStock(p) ? '<span class="pill low">reorder</span>' : "";
+    const flag = isT ? `<span class="inv-badge transit">${t("pr.badge.transit")}</span>`
+               : esBloqueado(p) ? `<span class="pill blocked">${t("pr.badge.blocked")}</span>`
+               : units<0 ? `<span class="pill low">${t("pr.badge.negative")}</span>`
+               : bajoStock(p) ? `<span class="pill low">${t("pr.badge.reorder")}</span>` : "";
     const perStore = sociedadColsCells(p, isT);
     return `<tr data-ficha="${p.id}" class="${isT?'row-transit':''}" style="cursor:pointer">
       <td><span class="sku">${esc(p.sku||"—")}</span></td>
