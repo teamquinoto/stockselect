@@ -34,8 +34,8 @@ function viewDocs(tipo){
         ${vendedores().map(v=>`<option value="${esc(v.id)}" ${f.vend===v.id?"selected":""}>${esc(v.nombre)}</option>`).join("")}
         <option value="__none" ${f.vend==="__none"?"selected":""}>${t("doc.o.house")}</option>
       </select>` : ""}
-      <label style="font-size:12px;color:var(--muted)">From <input class="inp" id="ddesde" type="date" value="${esc(f.desde)}" style="width:128px"></label>
-      <label style="font-size:12px;color:var(--muted)">To <input class="inp" id="dhasta" type="date" value="${esc(f.hasta)}" style="width:128px"></label>
+      <label style="font-size:12px;color:var(--muted)">${t("mov.from")} <input class="inp" id="ddesde" type="date" value="${esc(f.desde)}" style="width:128px"></label>
+      <label style="font-size:12px;color:var(--muted)">${t("mov.to")} <input class="inp" id="dhasta" type="date" value="${esc(f.hasta)}" style="width:128px"></label>
       <button class="btn ghost sm" id="dclear">${t("dash.f.clear")}</button>
       <span class="hint" style="font-size:11.5px;white-space:nowrap">${t("doc.sorthint")}</span>
     </div>

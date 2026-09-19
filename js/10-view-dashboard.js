@@ -233,14 +233,14 @@ function viewDash(){
     <div class="table-scroll"><table>
       <thead><tr>
         ${sortTh(dashFiltros,"sku","SKU","")}
-        ${sortTh(dashFiltros,"nombre","Product","")}
+        ${sortTh(dashFiltros,"nombre",t("common.product"),"")}
         ${sociedadColsHead(dashFiltros)}
-        ${sortTh(dashFiltros,"stock",stockView==="cases"?"Stock (cases)":"Stock","r")}
-        ${sortTh(dashFiltros,"costo","Last cost","r")}
-        ${sortTh(dashFiltros,"valor","Valued","r")}
+        ${sortTh(dashFiltros,"stock",stockView==="cases"?t("pr.th.stockcases"):t("pr.th.stock"),"r")}
+        ${sortTh(dashFiltros,"costo",t("pr.th.lastcost"),"r")}
+        ${sortTh(dashFiltros,"valor",t("dash.th.valued"),"r")}
       </tr></thead>
       <tbody id="dashBody"></tbody>
-    </table></div>` : emptyState("No products yet","Load a purchase (you can import the PDF) or add a product by hand and stock starts moving.")}
+    </table></div>` : emptyState(t("dash.empty.title"),t("dash.empty.sub"))}
   </div>`;
 }
 

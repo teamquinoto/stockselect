@@ -149,8 +149,8 @@ function openPnLExport(){
       <div class="field"><label>${t("mov.to")}</label><input class="inp" type="date" id="pnl_d1" value="${today}"></div>
     </div>
   `, [
-    {label:"Cancel",cls:"btn",act:closeModal},
-    {label:"Export .xlsx",cls:"btn primary",act:()=>{ const d0=document.getElementById("pnl_d0").value, d1=document.getElementById("pnl_d1").value; closeModal(); exportPnL(d0,d1); }}
+    {label:t("common.cancel"),cls:"btn",act:closeModal},
+    {label:t("io.exportxlsx"),cls:"btn primary",act:()=>{ const d0=document.getElementById("pnl_d0").value, d1=document.getElementById("pnl_d1").value; closeModal(); exportPnL(d0,d1); }}
   ]);
 }
 

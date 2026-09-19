@@ -246,7 +246,7 @@ var I18N = {
     "dash.f.allstock":"All stock", "dash.f.reorder":"To reorder", "dash.f.instock":"In stock", "dash.f.outstock":"Out of stock",
     "dash.f.belowmin":"Below min", "dash.f.blocked":"Blocked", "dash.f.availtip":"Available vs. incoming (in transit)",
     "dash.f.availtransit":"Avail. + in transit", "dash.f.availonly":"Available only", "dash.f.transitonly":"In transit only",
-    "dash.f.mincost":"Min cost", "dash.f.maxcost":"Max cost", "dash.f.cleartip":"Clear filters", "dash.f.clear":"Clear",
+    "dash.f.mincost":"Min cost", "dash.f.maxcost":"Max cost", "dash.f.cleartip":"Clear filters", "lang.arialabel":"Language", "common.undo":"Undo", "io.exportxlsx":"Export .xlsx", "dash.f.clear":"Clear",
     "dash.toast.reorder":"Filtering products to reorder",
     "dash.kpi.products":"Products", "dash.kpi.sellableskus":"sellable SKUs", "dash.kpi.unitsstock":"Units in stock",
     "dash.kpi.valuation":"Valuation", "dash.kpi.fifolayers":"FIFO cost layers", "dash.kpi.transit":"In transit",
@@ -256,7 +256,7 @@ var I18N = {
     "dash.banner.prodreorder":"product(s) to reorder", "dash.banner.tap":"Tap to see what to order.",
     "dash.stockonhand":"Stock on hand", "dash.taphistory":"tap a product to see its history",
     "dash.nomatch":"No product matches the filters.", "dash.nostock":"No stock yet.",
-    "dash.valuedfifo":"Valued (FIFO)", "dash.skus":"SKUs", "dash.transit.title":"In transit → AR",
+    "dash.th.valued":"Valued", "dash.empty.title":"No products yet", "dash.empty.sub":"Load a purchase (you can import the PDF) or add a product by hand and stock starts moving.", "dash.valuedfifo":"Valued (FIFO)", "dash.skus":"SKUs", "dash.transit.title":"In transit → AR",
     "dash.transit.tap":"tap to open Joint / Transit", "dash.incomingunits":"Incoming units", "dash.valuereport":"Value (report)",
     "dash.consolidated":"consolidated", "dash.showing":"showing {n} of {total}",
     // --- Movements ---
@@ -869,7 +869,7 @@ var I18N = {
     "dash.f.allstock":"Todo el stock", "dash.f.reorder":"Para reponer", "dash.f.instock":"Con stock", "dash.f.outstock":"Sin stock",
     "dash.f.belowmin":"Bajo m\u00ednimo", "dash.f.blocked":"Bloqueado", "dash.f.availtip":"Disponible vs. en camino (en tr\u00e1nsito)",
     "dash.f.availtransit":"Disp. + en tr\u00e1nsito", "dash.f.availonly":"S\u00f3lo disponible", "dash.f.transitonly":"S\u00f3lo en tr\u00e1nsito",
-    "dash.f.mincost":"Costo m\u00edn", "dash.f.maxcost":"Costo m\u00e1x", "dash.f.cleartip":"Limpiar filtros", "dash.f.clear":"Limpiar",
+    "dash.f.mincost":"Costo m\u00edn", "dash.f.maxcost":"Costo m\u00e1x", "dash.f.cleartip":"Limpiar filtros", "lang.arialabel":"Idioma", "common.undo":"Deshacer", "io.exportxlsx":"Exportar .xlsx", "dash.f.clear":"Limpiar",
     "dash.toast.reorder":"Filtrando productos para reponer",
     "dash.kpi.products":"Productos", "dash.kpi.sellableskus":"SKUs vendibles", "dash.kpi.unitsstock":"Unidades en stock",
     "dash.kpi.valuation":"Valuaci\u00f3n", "dash.kpi.fifolayers":"capas de costo FIFO", "dash.kpi.transit":"En tr\u00e1nsito",
@@ -879,7 +879,7 @@ var I18N = {
     "dash.banner.prodreorder":"producto(s) para reponer", "dash.banner.tap":"Toc\u00e1 para ver qu\u00e9 pedir.",
     "dash.stockonhand":"Stock disponible", "dash.taphistory":"toc\u00e1 un producto para ver su historial",
     "dash.nomatch":"Ning\u00fan producto coincide con los filtros.", "dash.nostock":"Sin stock todav\u00eda.",
-    "dash.valuedfifo":"Valuado (FIFO)", "dash.skus":"SKUs", "dash.transit.title":"En tr\u00e1nsito → AR",
+    "dash.th.valued":"Valuado", "dash.empty.title":"Todavía no hay productos", "dash.empty.sub":"Cargá una compra (podés importar el PDF) o agregá un producto a mano y el stock empieza a moverse.", "dash.valuedfifo":"Valuado (FIFO)", "dash.skus":"SKUs", "dash.transit.title":"En tr\u00e1nsito → AR",
     "dash.transit.tap":"toc\u00e1 para abrir Terceros / Tr\u00e1nsito", "dash.incomingunits":"Unidades en camino", "dash.valuereport":"Valor (reporte)",
     "dash.consolidated":"consolidado", "dash.showing":"mostrando {n} de {total}",
     // --- Movimientos ---
@@ -1318,7 +1318,7 @@ var I18N = {
   };
 
   window.langToggleHTML = function(){
-    return `<div class="lang-switch" role="group" aria-label="Language">
+    return `<div class="lang-switch" role="group" aria-label="${t("lang.arialabel")}">
       <button type="button" class="lang-opt" data-lang-set="en" title="English"><span class="flag">\u{1F1FA}\u{1F1F8}</span><span class="lc">EN</span></button>
       <button type="button" class="lang-opt" data-lang-set="es" title="Espa\u00f1ol"><span class="flag">\u{1F1E6}\u{1F1F7}</span><span class="lc">ES</span></button>
     </div>`;

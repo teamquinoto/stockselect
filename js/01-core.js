@@ -740,7 +740,7 @@ function toastUndo(label){
   el.style.display = "flex"; el.style.alignItems = "center"; el.style.gap = "10px";
   const span = document.createElement("span"); span.textContent = label;
   const btn = document.createElement("button");
-  btn.textContent = "Undo";
+  btn.textContent = window.t("common.undo");
   btn.style.cssText = "background:transparent;border:1px solid currentColor;border-radius:6px;padding:2px 9px;color:inherit;cursor:pointer;font:inherit;font-weight:600";
   el.appendChild(span); el.appendChild(btn);
   cont.appendChild(el);
