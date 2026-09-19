@@ -190,22 +190,22 @@ function viewUsuarios(){
     <div class="phead"><h3>${t("usr.h.new")}</h3></div>
     <div class="grid-form">
       <p style="margin:0;color:var(--muted);font-size:13px">${t("usr.desc")}</p>
-      <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
-        <div class="field"><label>${t("usr.f.name")}</label><input class="inp" id="uNewName" style="max-width:180px"></div>
-        <div class="field"><label>${t("usr.f.user")}</label><input class="inp" id="uNewUser" placeholder="${t("usr.f.user.ph")}" style="max-width:150px"></div>
-        <div class="field"><label>${t("usr.f.pass")}</label><input class="inp" id="uNewPass" type="password" style="max-width:150px"></div>
+      <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0;gap:12px 16px">
+        <div class="field"><label>${t("usr.f.name")}</label><input class="inp" id="uNewName"></div>
+        <div class="field"><label>${t("usr.f.user")}</label><input class="inp" id="uNewUser" placeholder="${t("usr.f.user.ph")}"></div>
+        <div class="field"><label>${t("usr.f.pass")}</label><input class="inp" id="uNewPass" type="password"></div>
         <div class="field"><label>${t("usr.f.role")}</label>
-          <select class="inp" id="uNewRole" style="max-width:140px">
+          <select class="inp" id="uNewRole">
             <option value="seller">${t("usr.role.seller")}</option>
             <option value="store">${t("usr.role.store")}</option>
             <option value="admin">${t("usr.role.admin")}</option>
           </select></div>
-        <div class="field u-when-seller"><label>${t("usr.f.comm")}</label><input class="inp num" id="uComm" placeholder="${esc(String(round2((db.config.commissionRate||0)*100)))}" style="max-width:90px"></div>
+        <div class="field u-when-seller"><label>${t("usr.f.comm")}</label><input class="inp num" id="uComm" placeholder="${esc(String(round2((db.config.commissionRate||0)*100)))}"></div>
         <div class="field u-when-store" style="display:none"><label>${t("usr.f.cliente.pick")}</label>
-          <select class="inp" id="uCli" style="max-width:220px">
+          <select class="inp" id="uCli">
             <option value="">${t("usr.f.cliente.none")}</option>${cliOpts}
           </select></div>
-        <button class="btn primary" id="uAdd" style="margin-bottom:2px">${t("usr.add")}</button>
+        <div style="grid-column:1/3;margin-top:4px"><button class="btn primary" id="uAdd">${t("usr.add")}</button></div>
       </div>
     </div>
   </div>
