@@ -24,9 +24,9 @@ function viewProd(){
       <span id="selcount" class="sel-hint">${t("pr.tickhint")}</span>
       <div style="flex:1"></div>
       <div id="selactions" style="display:none">
-        <button class="btn ghost sm" id="selexp">${ICO.select}Export selected</button>
+        <button class="btn ghost sm" id="selexp">${ICO.select}${t("pr.btn.expsel")}</button>
         <button class="btn ghost sm" id="selnone">${t("pr.btn.deselect")}</button>
-        ${isAdmin()?`<button class="btn danger sm" id="seldel">${ICO.trash}Delete selected</button>`:""}
+        ${isAdmin()?`<button class="btn danger sm" id="seldel">${ICO.trash}${t("pr.btn.delsel")}</button>`:""}
       </div>
     </div>
     ${total ? `
