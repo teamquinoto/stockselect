@@ -9,7 +9,7 @@
 let view = "dash";
 /* Nav de dos niveles (ERP): cada vista pertenece a una sección de nivel 1. */
 const SECTION_OF = { dash:"op", ventas:"op", compras:"op", conjunta:"op", remitos:"op", mov:"op",
-                     prod:"cat", clientes:"cat", analisis:"fin", inv:"fin", datos:"dat" };
+                     prod:"cat", clientes:"cat", analisis:"fin", inv:"fin", datos:"dat", usuarios:"dat" };
 let activeSection = "op";
 document.querySelectorAll("#nav button, #navMob button").forEach(b=>{
   b.addEventListener("click", ()=> setView(b.dataset.view));
@@ -135,6 +135,7 @@ function render(){
   else if(view==="conjunta") m.innerHTML = isAdmin()? viewConjunta() : viewDash();
   else if(view==="remitos") m.innerHTML = isAdmin()? viewRemitos() : viewDash();
   else if(view==="datos") m.innerHTML = viewDatos();
+  else if(view==="usuarios") m.innerHTML = isAdmin()? viewUsuarios() : viewDash();
   applyRoleUI();
   if(typeof applyStaticI18n==="function") applyStaticI18n();
   activeSection = SECTION_OF[view] || activeSection;
