@@ -854,7 +854,7 @@ function viewConjunta(){
       <td>${esc(fmtDate(m.fecha))}</td>
       <td><span class="sku">${esc(m.sku||"\u2014")}</span> ${esc((p&&p.nombre)||m.nombre||"\u2014")}</td>
       <td>${esc(storeName(m.store))}</td>
-      <td>${esc(m.ref||tipos[m.tipo]||"")}</td>
+      <td>${esc(((m.tipo==="transfer-in"||m.tipo==="transfer-out") ? (m.ref||tipos[m.tipo]) : (tipos[m.tipo]||m.ref))||"")}</td>
       <td class="r num" style="color:${up?'var(--up)':'var(--alert)'}">${up?"+":"\u2212"}${qty(Math.abs(m.delta||m.cantidad||0))}</td>
     </tr>`;
   }).join("") || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px">${t("conj.empty.mov")}</td></tr>`;
