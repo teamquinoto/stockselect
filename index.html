@@ -24,20 +24,20 @@
   <div class="login-card">
     <div class="login-logo-wrap"><img src="icon-512.png" alt="" class="login-logo" width="84" height="84"></div>
     <h1>Stock Select</h1>
-    <p class="login-sub">Your inventory, synced across all your devices.</p>
-    <div class="field"><label for="loginUser">Username</label>
-      <input class="inp" id="loginUser" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="your username"></div>
-    <div class="field"><label for="loginPass">Password</label>
+    <p class="login-sub" data-i18n="core.login.sub">Your inventory, synced across all your devices.</p>
+    <div class="field"><label for="loginUser" data-i18n="core.login.user">Username</label>
+      <input class="inp" id="loginUser" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="your username" data-i18n-ph="core.login.user.ph"></div>
+    <div class="field"><label for="loginPass" data-i18n="core.login.pass">Password</label>
       <div class="pass-wrap">
         <input class="inp" id="loginPass" type="password" autocomplete="current-password" placeholder="••••••••">
-        <button type="button" class="pass-toggle" id="loginPassToggle" aria-label="Show password" title="Show password" tabindex="-1">
+        <button type="button" class="pass-toggle" id="loginPassToggle" aria-label="Show password" data-i18n-title="core.login.showpass" title="Show password" tabindex="-1">
           <svg class="eye-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
           <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
         </button>
       </div>
     </div>
     <div id="loginErr" class="login-err"></div>
-    <button class="btn primary login-btn" id="loginBtn">Sign in</button>
+    <button class="btn primary login-btn" id="loginBtn" data-i18n="core.login.signin">Sign in</button>
     <p class="login-build">build v61</p>
   </div>
 </div>
