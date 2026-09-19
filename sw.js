@@ -12,7 +12,7 @@
    ACTUALIZACIÓN CONTROLADA: no auto-activamos con skipWaiting; cuando hay
    versión nueva el SW queda "waiting" y la app muestra el botón "Update".
    ============================================================ */
-const CACHE = "mayor-stock-v62";   // v62: sección Remitos (listado + descarga a demanda, sin pop-ups); el remito de compra/conjunta NO lista lo propio (ours), sólo lo de terceros; import no vuelve a preguntar tipo/dueño (resumen + "Change"); modal "Receive in AR" más ancho y en 2 columnas
+const CACHE = "mayor-stock-v63";   // v63: paleta ámbar (styles.css), logo/iconos recoloreados y theme_color/manifest en ámbar
 
 const ASSETS = [
   "./",
