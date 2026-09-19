@@ -176,8 +176,8 @@ function migrate(d){
   // Vendedores: perfiles a los que se les atribuye la venta (y su comisión). NO son
   // sociedades: son las personas que venden. Cada uno tiene SU PROPIA tasa de comisión
   // (rate). Default Teo/Tonio; editable en Data → Sellers.
-  if(!Array.isArray(d.config.vendedores) || !d.config.vendedores.length){
-    d.config.vendedores = [ { id:"teo", nombre:"Teo", rate:d.config.commissionRate }, { id:"tonio", nombre:"Tonio", rate:d.config.commissionRate } ];
+  if(!Array.isArray(d.config.vendedores)){
+    d.config.vendedores = [];   // arrancamos SIN vendedores: se crean desde Datos -> Usuarios (y NO se regeneran solos al quedar vacío)
   }
   // Vendedores viejos sin tasa propia: heredan la global como punto de partida.
   d.config.vendedores.forEach(v=>{ if(v.rate==null) v.rate = d.config.commissionRate; });
