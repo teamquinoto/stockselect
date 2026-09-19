@@ -196,6 +196,18 @@ function viewDash(){
   const firma = firmaReposicion();
   if(!porPedir.length) limpiarMemoriaAlerta();
   const mostrarBanner = porPedir.length && !alertaDescartada(firma);
+  // --- item 7: tira de "pendientes de hoy" (usa datos que ya se calculan) ---
+  const _isAdm = isAdmin();
+  const _transitProds = _isAdm ? db.productos.filter(p=> transUnits(p)>0).length : 0;
+  const _remActivos = (_isAdm && typeof remitosActivos==="function") ? remitosActivos() : [];
+  const _remPend = _remActivos.filter(g=> g.uTransito>0 || g.uAr>0).length;
+  const _svgWarn = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>`;
+  const _svgSplit = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3M7 9l3 3-3 3M17 9l-3 3 3 3"/></svg>`;
+  const _pchips = [];
+  if(porPedir.length && !mostrarBanner) _pchips.push(`<button type="button" class="pchip warn" data-goto-pedir role="button" tabindex="0"><span class="pic">${_svgWarn}</span><span class="ptxt"><span class="pn">${porPedir.length}</span><span class="pl">${t("dash.pend.reorder")}</span></span><span class="pgo">\u203a</span></button>`);
+  if(_transitProds) _pchips.push(`<button type="button" class="pchip info" data-goto-view="conjunta" role="button" tabindex="0"><span class="pic">${ICO.plane||""}</span><span class="ptxt"><span class="pn">${_transitProds}</span><span class="pl">${t("dash.pend.transit")}</span></span><span class="pgo">\u203a</span></button>`);
+  if(_remPend) _pchips.push(`<button type="button" class="pchip split" data-goto-view="conjunta" role="button" tabindex="0"><span class="pic">${_svgSplit}</span><span class="ptxt"><span class="pn">${_remPend}</span><span class="pl">${t("dash.pend.thirdparty")}</span></span><span class="pgo">\u203a</span></button>`);
+  const pendStrip = _pchips.length ? `<div class="pendstrip"><p class="pendlabel">${t("dash.pend.title")}</p><div class="pendrow">${_pchips.join("")}</div></div>` : "";
   const consolidado = !viewUsesSociety() || activeStore==="all";
   const foco = consolidado ? t("dash.consolidated") : storeName(activeStore);
   const multi = allowedStores().length>1;
@@ -218,6 +230,8 @@ function viewDash(){
       <button class="btn down" data-open="venta">${ICO.sale}${t("dash.newsale")}</button>
     </div>
   </div>
+
+  ${pendStrip}
 
   ${mostrarBanner ? `<div class="banner warn alerta-pedido" data-goto-pedir role="button" tabindex="0" title="${t("dash.kpi.reordertip")}">
     <span aria-hidden="true">⚠</span>

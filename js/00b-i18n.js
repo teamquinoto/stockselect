@@ -686,6 +686,12 @@ var I18N = {
     "gloss.tercero":"Third-party = consignment goods you only track; never your stock or P&L.",
     "gloss.remito":"Remito = internal transfer note. Series U: US→AR · Series A: split/delivery.",
     "gloss.fifo":"FIFO = the oldest units are consumed first when computing cost of goods sold.",
+    // --- items 7 (Panel pendientes) + 8 (fila: 1 primario + overflow) ---
+    "common.more":"More",
+    "dash.pend.title":"Needs your attention",
+    "dash.pend.reorder":"products to reorder",
+    "dash.pend.transit":"in transit · receive in AR",
+    "dash.pend.thirdparty":"third-party remitos pending",
   },
   es: {
     "sec.op":"Operaciones", "sec.cat":"Cat\u00e1logo", "sec.fin":"Finanzas", "sec.dat":"Configuraci\u00f3n",
@@ -1350,6 +1356,12 @@ var I18N = {
     "gloss.tercero":"Tercero = mercadería en consignación que solo trackeás; nunca es tu stock ni tu P&L.",
     "gloss.remito":"Remito = nota de transferencia interna. Serie U: USA→AR · Serie A: reparto/entrega.",
     "gloss.fifo":"FIFO = se consumen primero las unidades más viejas al calcular el costo.",
+    // --- items 7 (Panel pendientes) + 8 (fila: 1 primario + overflow) ---
+    "common.more":"Más",
+    "dash.pend.title":"Necesitan tu atención",
+    "dash.pend.reorder":"productos para repedir",
+    "dash.pend.transit":"en tránsito · recibir en AR",
+    "dash.pend.thirdparty":"remitos de terceros pendientes",
   }
 };
 

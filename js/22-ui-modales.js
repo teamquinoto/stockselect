@@ -386,3 +386,33 @@ function openCmdK(){
   document.addEventListener("keydown", onKey, true);
   build(""); input.focus();
 }
+
+/* Overflow "⋯" de filas (item 8). Delegado y global: un solo listener para todas las filas.
+   Abre/cierra el menú hermano, cierra los demás, y cierra al hacer click afuera, al elegir
+   una opción o con Escape. No toca los handlers de los botones (siguen wireados aparte). */
+(function(){
+  function closeAll(except){
+    document.querySelectorAll(".ovf-menu:not([hidden])").forEach(function(mn){
+      if(mn===except) return;
+      mn.setAttribute("hidden","");
+      var tg=mn.parentElement && mn.parentElement.querySelector("[data-ovf]");
+      if(tg) tg.setAttribute("aria-expanded","false");
+    });
+  }
+  document.addEventListener("click", function(e){
+    var tog = e.target.closest && e.target.closest("[data-ovf]");
+    if(tog){
+      e.preventDefault(); e.stopPropagation();
+      var menu = tog.parentElement.querySelector(".ovf-menu");
+      var willOpen = menu.hasAttribute("hidden");
+      closeAll(willOpen?menu:null);
+      if(willOpen){ menu.removeAttribute("hidden"); tog.setAttribute("aria-expanded","true"); }
+      else { menu.setAttribute("hidden",""); tog.setAttribute("aria-expanded","false"); }
+      return;
+    }
+    var item = e.target.closest && e.target.closest(".ovf-menu button");
+    if(item){ closeAll(null); return; }   // el handler propio del botón ya corre; sólo cerramos
+    closeAll(null);
+  }, false);
+  document.addEventListener("keydown", function(e){ if(e.key==="Escape") closeAll(null); });
+})();

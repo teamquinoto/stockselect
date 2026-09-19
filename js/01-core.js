@@ -710,6 +710,17 @@ function infoDot(defKey){
   return `<span class="idot" tabindex="0" role="note" aria-label="${d}" title="${d}">?</span>`;
 }
 
+/* rowOverflow(primaryHTML, restHTML): deja UN botón primario visible y esconde el resto
+   detrás de un "⋯". Los botones del menú son LOS MISMOS (con sus data-*), sólo reubicados y
+   ocultos: el wireo post-render los sigue encontrando, así que no se rompe ningún handler. */
+function rowOverflow(primaryHTML, restHTML){
+  if(!restHTML) return primaryHTML;
+  const more = (typeof t==="function") ? t("common.more") : "More";
+  return `<div class="rowacts">${primaryHTML}<div class="rowovf">`+
+    `<button type="button" class="btn ghost sm ovf-toggle" data-ovf aria-haspopup="true" aria-expanded="false" title="${more}" aria-label="${more}">\u22ef</button>`+
+    `<div class="ovf-menu" hidden>${restHTML}</div></div></div>`;
+}
+
 /* ---------- Toast ---------- */
 function toast(msg, kind="up"){
   const el = document.createElement("div");

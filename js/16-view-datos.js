@@ -105,6 +105,12 @@ function wire(){
   if(typeof wireConjunta==="function") wireConjunta();
   if(typeof wireRemitos==="function") wireRemitos();
   // Alerta de reposición (banner + tarjeta): click / Enter / Espacio -> maestro filtrado
+  // Chips de "pendientes" del Panel: navegación directa a la vista (item 7)
+  m.querySelectorAll("[data-goto-view]").forEach(el=>{
+    el.style.cursor="pointer";
+    el.onclick=()=> setView(el.dataset.gotoView);
+    el.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); setView(el.dataset.gotoView); } };
+  });
   m.querySelectorAll("[data-goto-pedir]").forEach(el=>{
     el.style.cursor="pointer";
     el.onclick=irAPedidos;
