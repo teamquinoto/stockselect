@@ -755,7 +755,11 @@ function ensureRielCSS(){
 .rl-wrap{display:flex;flex-direction:column;gap:14px}
 .rl-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px}
 .rl-rhead{display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:12px}
-.rl-caret{color:var(--muted);font-size:12px;width:12px;flex:0 0 auto}
+.rl-caret{width:32px;height:32px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;border-radius:9px;border:1px solid var(--line-strong);background:var(--surface-2);color:var(--accent-ink);transition:transform .15s,background .15s,border-color .15s,color .15s}
+.rl-caret svg{width:16px;height:16px;transition:transform .2s ease}
+.rl-caret.open svg{transform:rotate(90deg)}
+.rl-rhead:hover .rl-caret{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--surface))}
+.rl-rhead:active .rl-caret{transform:translateY(1px)}
 .rl-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
 .rl-code{font-weight:700;font-size:15px}
 .rl-meta{font-size:13px;color:var(--muted)}
@@ -1022,8 +1026,8 @@ function remitoCardHTML(g){
     g.uTransito>0 ? `<span class="rl-pill">${qty(g.uTransito)} ${t("conj.pill.transit")}</span>` : "",
     g.uAr>0       ? `<span class="rl-pill ar">${qty(g.uAr)} ${t("conj.pill.ar")}</span>` : ""
   ].filter(Boolean).join(" ");
-  const head = `<div class="rl-rhead" data-remito-toggle="${esc(g.key)}">
-      <span class="rl-caret">${open?"\u25be":"\u25b8"}</span>
+  const head = `<div class="rl-rhead" data-remito-toggle="${esc(g.key)}" role="button" tabindex="0" aria-expanded="${open?'true':'false'}">
+      <span class="rl-caret ${open?'open':''}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
       <div style="flex:1;min-width:0">
         <div class="rl-code">${g.codigo?esc(g.codigo):esc(g.ref||t("conj.noref"))}</div>
         <div class="rl-meta">${g.codigo&&g.ref?esc(g.ref)+" \u00b7 ":""}${esc(fmtDate(g.fecha))} \u00b7 ${g.lineas.length} ${t("conj.products")} \u00b7 ${qty(g.uTotal)} u</div>
@@ -1225,7 +1229,7 @@ function wireConjunta(){
   // clickable counters: scroll to the matching section
   m.querySelectorAll("[data-scroll]").forEach(c=> c.onclick=()=>{ const el=document.getElementById(c.dataset.scroll); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); });
   // --- per-remito view ---
-  m.querySelectorAll("[data-remito-toggle]").forEach(h=> h.onclick=()=>{ const k=h.dataset.remitoToggle; remitoOpen[k]=!remitoOpen[k]; render(); });
+  m.querySelectorAll("[data-remito-toggle]").forEach(h=>{ const tog=()=>{ const k=h.dataset.remitoToggle; remitoOpen[k]=!remitoOpen[k]; render(); }; h.onclick=tog; h.onkeydown=(e)=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); tog(); } }; });
   m.querySelectorAll("[data-rmsel]").forEach(cb=> cb.onchange=()=>{ if(cb.checked) remitoSel[cb.dataset.rmsel]=true; else delete remitoSel[cb.dataset.rmsel]; render(); });
   m.querySelectorAll("[data-rmall]").forEach(cb=> cb.onchange=()=>{
     const g = remitosActivos().find(x=>x.key===cb.dataset.rmall);
