@@ -15,7 +15,7 @@ function viewDatos(){
   <div class="panel">
     <div class="phead"><h3>${t("dat.acct")}</h3><span class="hint" data-syncchip>●</span></div>
     <div class="grid-form">
-      <p style="margin:0;color:var(--muted);font-size:14px">
+      <p class="hint" style="margin:0">
         ${t("dat.acct.signedin",{u:`<b>${esc(session?session.user:"—")}</b>`,role:`<b>${esc(roleLbl)}</b>`})}
       </p>
       ${conf ? `<div class="banner warn">
@@ -30,7 +30,7 @@ function viewDatos(){
         <button class="btn" data-syncnow>${ICO.sync}${t("dat.syncnow")}</button>
         <button class="btn danger" data-logout>${ICO.logout}${t("tb.logout")}</button>
       </div>
-      <p style="font-size:12px;color:var(--muted);margin:0">
+      <p class="hint" style="margin:0">
         ${t("dat.inv.line",{sp:`<b>${esc(session?session.space:"main")}</b>`,rev:syncMeta.syncedRev,dirty:syncMeta.dirty?t("dat.inv.dirty"):""})}.
       </p>
     </div>
@@ -39,7 +39,7 @@ function viewDatos(){
   <div class="panel">
     <div class="phead"><h3>${t("dat.backup")}</h3></div>
     <div class="grid-form">
-      <p style="margin:0;color:var(--muted);font-size:14px">${t("dat.backup.sub")}</p>
+      <p class="hint" style="margin:0">${t("dat.backup.sub")}</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn" data-export>${ICO.export}${t("dat.exportjson")}</button>
         <button class="btn" data-import-json>${ICO.upload}${t("dat.importjson")}</button>
@@ -61,7 +61,7 @@ function viewDatos(){
       ${isAdmin()?`<div class="field"><label>${t("dat.set.remu")} <span class="hint" style="font-weight:400">${t("dat.set.remu.hint")}</span></label><input class="inp num" id="cfgRemU" value="${esc(String(remitoSeqInicio("U")))}"></div>
       <div class="field"><label>${t("dat.set.rema")} <span class="hint" style="font-weight:400">${t("dat.set.rema.hint")}</span></label><input class="inp num" id="cfgRemA" value="${esc(String(remitoSeqInicio("A")))}"></div>`:""}
       ${isAdmin()?`<div class="field"><label>${t("dat.set.defcomm")}</label><input class="inp num" id="cfgComm" value="${esc(String(round2((db.config.commissionRate||0)*100)))}"></div>
-      <div class="field" style="justify-content:flex-end"><p class="hint" style="font-size:11.5px;margin:0 0 8px">${t("dat.set.defcomm.hint")}</p></div>`:""}
+      <div class="field" style="justify-content:flex-end"><p class="hint" style="margin:0 0 8px">${t("dat.set.defcomm.hint")}</p></div>`:""}
       <button class="btn" data-savecfg style="justify-self:start;margin-top:4px">${ICO.save}${t("common.save")}</button>
     </div>
   </div>
@@ -267,7 +267,7 @@ function viewUsuarios(){
   <div class="panel">
     <div class="phead"><h3>${t("usr.h.new")}</h3></div>
     <div class="grid-form">
-      <p style="margin:0;color:var(--muted);font-size:13px">${t("usr.desc")}</p>
+      <p class="hint" style="margin:0">${t("usr.desc")}</p>
       <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
         <div class="field" style="flex:1 1 150px"><label>${t("usr.f.name")}</label><input class="inp" id="uNewName"></div>
         <div class="field" style="flex:1 1 130px"><label>${t("usr.f.user")}</label><input class="inp" id="uNewUser" placeholder="${t("usr.f.user.ph")}"></div>
@@ -311,7 +311,7 @@ function renderUsrCards(users){
       <span style="width:34px;height:34px;border-radius:50%;flex:none;display:inline-flex;align-items:center;justify-content:center;font-weight:800;background:color-mix(in srgb, var(--accent) 16%, transparent);color:var(--accent-ink,var(--accent))">${esc(usrInitial(u))}</span>
       <span style="display:flex;flex-direction:column;flex:1;min-width:0">
         <b style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(u.name||u.user)}</b>
-        <span class="hint" style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(usrSubline(u))}</span>
+        <span class="hint" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(usrSubline(u))}</span>
       </span>
       <span style="color:var(--muted);font-size:20px;line-height:1">\u203a</span>
     </div>`).join("")+`</div>`;
