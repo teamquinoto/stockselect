@@ -692,6 +692,17 @@ var I18N = {
     "dash.pend.reorder":"products to reorder",
     "dash.pend.transit":"in transit · receive in AR",
     "dash.pend.thirdparty":"third-party remitos pending",
+    // --- onboarding (tour de bienvenida) ---
+    "ob.skip":"Skip","ob.next":"Next","ob.back":"Back","ob.start":"Start","ob.stepof":"Step {n} of {total}","ob.help":"How it works",
+    "ob.l.start":"Let's start","ob.l.startsub":"5 quick steps","ob.l.swan":"Swan","ob.l.select":"Select","ob.l.usa":"USA","ob.l.ar":"Argentina",
+    "ob.l.transit":"In transit","ob.l.own":"Own","ob.l.owndesc":"enters stock + P&L","ob.l.third":"Third-party","ob.l.thirddesc":"only tracked \u00b7 ends in a split",
+    "ob.s1.t":"Welcome to Stock Select!","ob.s1.b":"Your cross-border inventory, synced across all your devices. In 5 steps I'll show you how the app thinks \u2014 you can replay this anytime.",
+    "ob.s2.t":"Two deposits: Swan and Select","ob.s2.b":"<b>Swan</b> is your deposit in the USA, where imported stock lands first. <b>Select</b> is your deposit in Argentina, the stock you sell.",
+    "ob.s3.t":"The journey goes through gates","ob.s3.b":"Goods travel USA \u2192 Argentina through gates. They leave Swan, sit <b>in transit</b>, and when you <b>receive them in AR</b> they enter Select ready to sell, with cost capitalized (FIFO).",
+    "ob.s4.t":"Own stock vs. third-party","ob.s4.b":"<b>Own</b> goods enter your stock and your P&L. <b>Third-party</b> goods (consignment) are only tracked \u2014 never your stock or your result \u2014 and end in a split with remitos.",
+    "ob.s5.t":"The Panel tells you what to do today","ob.s5.b":"At the top of the Panel you'll see the <b>pending</b> cards. Tap one and go straight to that task \u2014 no hunting around the app.",
+    "ob.s6.t":"You're all set!","ob.s6.b":"That's it. If a term trips you up, hover the \u201c?\u201d and it explains itself.",
+    "ob.ss.t":"Everything at hand","ob.ss.b":"Use <b>Ctrl K</b> to search any product or customer, and the Panel to see your stock and what needs reordering.",
   },
   es: {
     "sec.op":"Operaciones", "sec.cat":"Cat\u00e1logo", "sec.fin":"Finanzas", "sec.dat":"Configuraci\u00f3n",
@@ -1362,6 +1373,17 @@ var I18N = {
     "dash.pend.reorder":"productos para repedir",
     "dash.pend.transit":"en tránsito · recibir en AR",
     "dash.pend.thirdparty":"remitos de terceros pendientes",
+    // --- onboarding (tour de bienvenida) ---
+    "ob.skip":"Saltar","ob.next":"Siguiente","ob.back":"Atr\u00e1s","ob.start":"Empezar","ob.stepof":"Paso {n} de {total}","ob.help":"\u00bfC\u00f3mo funciona?",
+    "ob.l.start":"Empecemos","ob.l.startsub":"5 pasos r\u00e1pidos","ob.l.swan":"Swan","ob.l.select":"Select","ob.l.usa":"USA","ob.l.ar":"Argentina",
+    "ob.l.transit":"En tr\u00e1nsito","ob.l.own":"Propio","ob.l.owndesc":"entra a stock + P&L","ob.l.third":"Terceros","ob.l.thirddesc":"solo se trackea \u00b7 termina en reparto",
+    "ob.s1.t":"\u00a1Bienvenido a Stock Select!","ob.s1.b":"Tu inventario cross-border, sincronizado en todos tus dispositivos. En 5 pasos te muestro c\u00f3mo pensar la app \u2014 lo pod\u00e9s volver a ver cuando quieras.",
+    "ob.s2.t":"Dos dep\u00f3sitos: Swan y Select","ob.s2.b":"<b>Swan</b> es tu dep\u00f3sito en USA, donde cae primero la mercader\u00eda importada. <b>Select</b> es tu dep\u00f3sito en Argentina, el stock que vend\u00e9s.",
+    "ob.s3.t":"El viaje pasa por gates","ob.s3.b":"La mercader\u00eda viaja USA \u2192 Argentina cruzando puertas. Sale de Swan, queda <b>en tr\u00e1nsito</b>, y cuando la <b>recib\u00eds en AR</b> entra a Select lista para vender, con su costo capitalizado (FIFO).",
+    "ob.s4.t":"Lo propio vs. lo de terceros","ob.s4.b":"Lo <b>propio</b> entra a tu stock y a tu P&L. Lo de <b>terceros</b> (consignaci\u00f3n) solo lo tracke\u00e1s \u2014 nunca es tu stock ni tu resultado \u2014 y termina en un reparto con remitos.",
+    "ob.s5.t":"El Panel te dice qu\u00e9 hacer hoy","ob.s5.b":"Arriba del Panel vas a ver las tarjetas de <b>pendientes</b>. Toc\u00e1s una y vas directo a esa tarea \u2014 sin buscar por toda la app.",
+    "ob.s6.t":"\u00a1Listo! A darle.","ob.s6.b":"Eso es todo. Si te trab\u00e1s con alg\u00fan t\u00e9rmino, pas\u00e1 el mouse por el \u201c?\u201d y te lo explica al toque.",
+    "ob.ss.t":"Todo a mano","ob.ss.b":"Us\u00e1 <b>Ctrl K</b> para buscar cualquier producto o cliente, y el Panel para ver tu stock y qu\u00e9 hay que reponer.",
   }
 };
 

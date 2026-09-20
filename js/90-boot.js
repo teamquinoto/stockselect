@@ -85,6 +85,8 @@ if(session){
   render();
   paintSync();
   pullNow();
+  // Tour de bienvenida (solo la 1ra vez; el chequeo del flag va adentro)
+  setTimeout(function(){ if(typeof maybeStartOnboarding==="function") maybeStartOnboarding(); }, 400);
 } else {
   render();          // deja el DOM de la app armado por debajo
   showLogin();

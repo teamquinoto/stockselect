@@ -610,6 +610,7 @@ async function doLogin(){
     }
     setSyncState("idle");
     hideLogin(); render(); paintSync();
+    setTimeout(function(){ if(typeof maybeStartOnboarding==="function") maybeStartOnboarding(); }, 350);
     await pullNow();
   }catch(e){ console.error("[login] fallo:", e); errEl.textContent=t("core.login.noreach",{msg:(e&&e.message||e)}); }
   finally{ btn.disabled=false; btn.textContent=t("core.login.signin"); }
