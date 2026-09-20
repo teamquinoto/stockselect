@@ -67,7 +67,8 @@ function viewDatos(){
   </div>
 
   ${isAdmin()?`<div class="panel">
-    <div class="phead"><h3>${t("dat.fx.title")}</h3><span class="hint">${t("dat.fx.hint")}</span></div>
+    <div class="phead"><h3>${t("dat.fx.title")}</h3></div>
+    <p class="hint" style="margin:0;padding:14px 18px 0">${t("dat.fx.hint")}</p>
     <div class="grid-form" style="grid-template-columns:1fr 1fr auto;align-items:end">
       <div class="field"><label>${t("dat.fx.month")}</label><input class="inp" type="month" id="fxMes"></div>
       <div class="field"><label>${t("dat.fx.rate")}</label><input class="inp num" id="fxVal" inputmode="decimal" placeholder="0"></div>
@@ -87,7 +88,8 @@ function viewDatos(){
   </div>`:""}
 
   ${isAdmin()?`<div class="panel">
-    <div class="phead"><h3>${t("dat.bud.title")}</h3><span class="hint">${t("dat.bud.hint")}</span></div>
+    <div class="phead"><h3>${t("dat.bud.title")}</h3></div>
+    <p class="hint" style="margin:0;padding:14px 18px 0">${t("dat.bud.hint")}</p>
     <div class="grid-form" style="grid-template-columns:1fr 1fr 1fr auto;align-items:end">
       <div class="field"><label>${t("dat.fx.month")}</label><input class="inp" type="month" id="budMes"></div>
       <div class="field"><label>${t("dat.bud.net")} <span class="hint" style="font-weight:400">${monedaSym(reportCcy())}</span></label><input class="inp num" id="budNet" inputmode="decimal" placeholder="0"></div>
