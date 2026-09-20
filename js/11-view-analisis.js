@@ -1,6 +1,6 @@
 /* ============================================================
    gestordestock — 11-view-analisis.js
-   Parte de la app. Se carga como <script> en el ORDEN del index.html.
+   Parte de la app. Se carga como etiqueta script en el ORDEN del index.html.
    Todo vive en scope global (sin módulos), igual que antes.
    ============================================================ */
 /* ============================================================
@@ -440,7 +440,7 @@ function pnlWaterfallSVG(P){
     else { const prev=run; run=prev+s.v; lo=Math.min(prev,run); hi=Math.max(prev,run); }
     maxV=Math.max(maxV,hi); minV=Math.min(minV,lo); return {...s,lo,hi};
   });
-  const W=760,H=330,padT=24,padB=58,padL=6,padR=6,plot=H-padT-padB;
+  const W=1040,H=300,padT=24,padB=58,padL=6,padR=6,plot=H-padT-padB;
   const dom=(maxV-minV)||1, y=v=> padT+(maxV-v)/dom*plot;
   const n=steps.length,gap=12,bw=(W-padL-padR-gap*(n-1))/n;
   const col=t=> t==="add"?"var(--up)":t==="minus"?"var(--down)":t==="total"?"var(--accent)":"var(--surface-2)";
@@ -462,7 +462,7 @@ function pnlWaterfallSVG(P){
     const key=(s.type==="sub"||s.type==="total"||s.type==="start");
     labs+=`<text x="${(x+bw/2).toFixed(1)}" y="${H-padB+15}" text-anchor="middle" font-size="9.5" font-weight="600" fill="${key?'var(--text)':'var(--muted)'}">${s.star?'<tspan fill="var(--accent)">\u2605 </tspan>':''}${s.k}</text>`;
   });
-  return `<svg viewBox="0 0 ${W} ${H}" style="display:block;min-width:640px;max-width:820px;width:100%;height:auto;margin:0 auto" role="img" aria-label="Waterfall del estado de resultados">${grid}${conns}${bars}${vals}${labs}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="display:block;min-width:560px;width:100%;height:auto;max-height:380px;margin:0 auto" role="img" aria-label="Waterfall del estado de resultados">${grid}${conns}${bars}${vals}${labs}</svg>`;
 }
 
 /* --- Tendencia en COLUMNAS verticales (el tiempo se lee izq\u2192der) --- */
@@ -474,15 +474,17 @@ function trendChartSVG(items, fmt, color){
   const vs=data.map(d=>d.value);
   const maxV=Math.max(...vs,1), minV=Math.min(0,...vs);
   const dom=(maxV-minV)||1, y=v=> padT+(maxV-v)/dom*plot;
-  const n=data.length,gap=12,bw=Math.max(6,(W-padL-padR-gap*(n-1))/n);
+  const n=data.length,gap=12,BWMAX=90;
+  let bw=Math.max(6,(W-padL-padR-gap*(n-1))/n); bw=Math.min(bw,BWMAX);
+  const contentW=n*bw+gap*(n-1), startX=Math.max(padL,(W-contentW)/2);
   let cols="",labs="",vlab="";
   data.forEach((d,i)=>{
-    const x=padL+i*(bw+gap), yy=y(Math.max(0,d.value)), y0=y(Math.min(0,d.value)), h=Math.max(1,Math.abs(y0-yy));
+    const x=startX+i*(bw+gap), yy=y(Math.max(0,d.value)), y0=y(Math.min(0,d.value)), h=Math.max(1,Math.abs(y0-yy));
     const neg=d.value<0;
     cols+=`<rect x="${x.toFixed(1)}" y="${yy.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${neg?'var(--down)':COL}"><title>${esc(d.label)}: ${fmt(d.value)}</title></rect>`;
     const cx=x+bw/2;
     vlab+=`<text x="${cx.toFixed(1)}" y="${(yy-4).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" font-family="monospace" fill="var(--text)">${(fmt===money)?_pnlCompact(d.value):qty(d.value)}</text>`;
     labs+=`<text x="${cx.toFixed(1)}" y="${H-padB+14}" text-anchor="middle" font-size="9.5" fill="var(--muted)">${esc(d.label)}</text>`;
   });
-  return `<svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:auto" role="img" aria-label="Tendencia mensual">${cols}${vlab}${labs}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:auto;max-height:260px;margin:0 auto" role="img" aria-label="Tendencia mensual">${cols}${vlab}${labs}</svg>`;
 }

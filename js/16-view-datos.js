@@ -1,6 +1,6 @@
 /* ============================================================
    gestordestock — 16-view-datos.js
-   Parte de la app. Se carga como <script> en el ORDEN del index.html.
+   Parte de la app. Se carga como etiqueta script en el ORDEN del index.html.
    Todo vive en scope global (sin módulos), igual que antes.
    ============================================================ */
 /* ============================================================
@@ -74,7 +74,7 @@ function viewDatos(){
       <div class="field"><label>${t("dat.fx.rate")}</label><input class="inp num" id="fxVal" inputmode="decimal" placeholder="0"></div>
       <button class="btn primary" data-fxadd style="margin-bottom:2px">${ICO.plus}${t("dat.fx.add")}</button>
     </div>
-    <div style="margin-top:8px">
+    <div style="margin-top:8px;padding:0 18px 14px">
       ${(function(){
         const tm=db.config.tcMensual||{}; const ks=Object.keys(tm).filter(k=>+tm[k]>0).sort();
         if(!ks.length) return `<p class="hint" style="margin:6px 0 0">${t("dat.fx.empty")}</p>`;
@@ -96,7 +96,7 @@ function viewDatos(){
       <div class="field"><label>${t("dat.bud.contrib")} <span class="hint" style="font-weight:400">${monedaSym(reportCcy())}</span></label><input class="inp num" id="budContrib" inputmode="decimal" placeholder="0"></div>
       <button class="btn primary" data-budadd style="margin-bottom:2px">${ICO.plus}${t("dat.bud.add")}</button>
     </div>
-    <div style="margin-top:8px">
+    <div style="margin-top:8px;padding:0 18px 14px">
       ${(function(){
         const bp=db.config.presupuesto||{}; const ks=Object.keys(bp).sort();
         if(!ks.length) return `<p class="hint" style="margin:6px 0 0">${t("dat.bud.empty")}</p>`;
