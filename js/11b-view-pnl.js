@@ -112,10 +112,12 @@ function viewPnL(){
   const variance = `
   <div class="panel" style="margin-top:16px">
     <div class="phead"><h3>${t("pnl.var.title")}</h3></div>
+    <div style="padding:16px 18px">
     ${B.any ? `<div class="table-scroll"><table>
       <thead><tr><th></th><th class="r">${t("pnl.var.actual")}</th><th class="r">${t("pnl.var.budget")}</th><th class="r">${t("pnl.var.variance")}</th></tr></thead>
       <tbody>${varRow(t("pnl.kpi.net"),P.net,B.net)}${varRow(t("pnl.kpi.contrib"),P.contrib,B.contrib)}</tbody>
-    </table></div>` : `<p class="hint" style="margin:4px 0 0">${t("pnl.var.nobudget")}</p>`}
+    </table></div>` : `<p class="hint" style="margin:0">${t("pnl.var.nobudget")}</p>`}
+    </div>
   </div>`;
 
   // Tendencia mensual (columnas)

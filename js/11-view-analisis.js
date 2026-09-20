@@ -462,7 +462,7 @@ function pnlWaterfallSVG(P){
     const key=(s.type==="sub"||s.type==="total"||s.type==="start");
     labs+=`<text x="${(x+bw/2).toFixed(1)}" y="${H-padB+15}" text-anchor="middle" font-size="9.5" font-weight="600" fill="${key?'var(--text)':'var(--muted)'}">${s.star?'<tspan fill="var(--accent)">\u2605 </tspan>':''}${s.k}</text>`;
   });
-  return `<svg viewBox="0 0 ${W} ${H}" style="display:block;min-width:640px;width:100%;height:auto" role="img" aria-label="Waterfall del estado de resultados">${grid}${conns}${bars}${vals}${labs}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="display:block;min-width:640px;max-width:820px;width:100%;height:auto;margin:0 auto" role="img" aria-label="Waterfall del estado de resultados">${grid}${conns}${bars}${vals}${labs}</svg>`;
 }
 
 /* --- Tendencia en COLUMNAS verticales (el tiempo se lee izq\u2192der) --- */
