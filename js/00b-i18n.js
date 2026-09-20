@@ -305,6 +305,7 @@ var I18N = {
     "io.tt.imported":"Data imported",
     "io.tt.invalidjson":"Invalid JSON",
     "io.cf.wipe":"This wipes EVERYTHING (products, purchases, sales and movements). Are you sure?",
+    "io.wipe.title":"Delete everything", "io.wipe.prompt":"Type {word} to confirm — this cannot be undone.", "io.wipe.word":"DELETE",
     "io.tt.wiped":"Everything wiped",
     // === productos ===
     "pr.title":"Products",
@@ -1014,6 +1015,7 @@ var I18N = {
     "io.tt.imported":"Datos importados",
     "io.tt.invalidjson":"JSON inválido",
     "io.cf.wipe":"Se borra TODO (productos, compras, ventas y movimientos). ¿Seguro?",
+    "io.wipe.title":"Borrar todo", "io.wipe.prompt":"Escribí {word} para confirmar — no se puede deshacer.", "io.wipe.word":"BORRAR",
     "io.tt.wiped":"Todo borrado",
     // === productos ===
     "pr.title":"Productos",

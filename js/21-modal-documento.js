@@ -81,7 +81,7 @@ function renderDocModal(){
         <div class="origen-sum">
           <span class="origen-chip ${terc?"is-third":"is-own"}">${terc?t("md.third"):t("md.chip.own")}</span>
           ${terc?`<span class="origen-owner">${t("md.lbl.ownercolon")} <b>${owner?esc(clienteLinea(owner)):t("md.none2")}</b></span>`:""}
-          <span class="hint" style="font-size:11.5px">${t("md.setinimport")}</span>
+          <span class="hint" style="font-size:12px">${t("md.setinimport")}</span>
         </div>
         <button type="button" class="btn ghost xs" id="d_origen_edit">${t("md.btn.change")}</button>
       </div>
@@ -367,7 +367,7 @@ function renderAjuste(){
         <select class="inp" id="aj_prod">${opts}</select>
       </div>
       <div class="field"><label>${t("md.lbl.society")}</label>${storeSel}
-        ${p?`<div style="font-size:11.5px;color:var(--muted);margin-top:4px">${t("md.aj.stockline",{n:'<b class="num">'+stockActual+'</b>',cost:money(p.ultimoCosto, storeCcy(draft.tipo==="compra"?draft.store:draft.storeVenta))})}</div>`:""}
+        ${p?`<div style="font-size:12px;color:var(--muted);margin-top:4px">${t("md.aj.stockline",{n:'<b class="num">'+stockActual+'</b>',cost:money(p.ultimoCosto, storeCcy(draft.tipo==="compra"?draft.store:draft.storeVenta))})}</div>`:""}
       </div>
       <div class="field"><label>${t("md.aj.type")}</label>
         <select class="inp" id="aj_modo">

@@ -1,6 +1,6 @@
 /* ============================================================
    gestordestock — 33-ficha-producto.js
-   Parte de la app. Se carga como <script> en el ORDEN del index.html.
+   Parte de la app. Se carga como etiqueta script en el ORDEN del index.html.
    Todo vive en scope global (sin módulos), igual que antes.
    ============================================================ */
 /* ============================================================
@@ -106,7 +106,7 @@ function openSendToInvestment(id){
   const rows = stores.map(s=>{
     const av = stockDe(p,s);
     return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)">
-      <div style="flex:1"><b>${esc(storeName(s))}</b> <span style="color:var(--muted);font-size:12.5px">· ${t("fi.inv.available",{n:qty(av)})}</span></div>
+      <div style="flex:1"><b>${esc(storeName(s))}</b> <span style="color:var(--muted);font-size:13px">· ${t("fi.inv.available",{n:qty(av)})}</span></div>
       <input class="inp num" id="inv_alloc_${s}" data-max="${av}" value="0" style="width:110px">
       <button class="btn ghost sm" data-allbtn="${s}">${t("fi.inv.all")}</button>
     </div>`;

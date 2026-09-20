@@ -66,7 +66,7 @@ function viewRemitos(){
     <div class="filtros">
       <input class="inp" id="rmq" placeholder="${t('rem.ph.search')}" value="${esc(remitoQ)}" style="flex:1 1 180px;min-width:130px">
       ${q?`<button class="btn ghost sm" id="rmclear">${t("dash.f.clear")}</button>`:""}
-      ${q?`<span class="hint" style="font-size:11.5px;white-space:nowrap">${t("rem.match",{n:list.length})}</span>`:""}
+      ${q?`<span class="hint" style="font-size:12px;white-space:nowrap">${t("rem.match",{n:list.length})}</span>`:""}
     </div>
     <div class="table-scroll"><table>
       <thead><tr>

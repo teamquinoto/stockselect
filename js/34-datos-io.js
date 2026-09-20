@@ -33,8 +33,22 @@ function importJSON(){
   inp.click();
 }
 function resetAll(){
-  if(!confirm(t("io.cf.wipe"))) return;
-  db=migrate({ config:db.config, productos:[], compras:[], ventas:[], movimientos:[], clientes:[] });
-  save(); toast(t("io.tt.wiped"),"warn"); render();
+  const word = t("io.wipe.word");
+  const doWipe=()=>{
+    db=migrate({ config:db.config, productos:[], compras:[], ventas:[], movimientos:[], clientes:[] });
+    save(); closeModal(); toast(t("io.tt.wiped"),"warn"); render();
+  };
+  buildModal(t("io.wipe.title"), `
+    <p class="hint" style="margin:0 0 12px">${t("dat.grp.danger.hint")}</p>
+    <div class="field"><label>${t("io.wipe.prompt",{word:`<b>${esc(word)}</b>`})}</label>
+      <input class="inp" id="wipeConfirm" autocomplete="off" placeholder="${esc(word)}"></div>
+  `, [
+    { cls:"btn danger", label:t("dat.deleteall"), act:doWipe },
+    { cls:"btn", label:t("common.cancel"), act:closeModal }
+  ]);
+  const inp=document.getElementById("wipeConfirm");
+  const btn=document.querySelector(".mfoot .danger");
+  if(btn) btn.disabled=true;
+  if(inp) inp.oninput=()=>{ if(btn) btn.disabled = (inp.value.trim().toUpperCase()!==String(word).toUpperCase()); };
 }
 

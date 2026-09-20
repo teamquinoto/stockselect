@@ -1,6 +1,6 @@
 /* ============================================================
    gestordestock — 17-view-clientes.js
-   Parte de la app. Se carga como <script> en el ORDEN del index.html.
+   Parte de la app. Se carga como etiqueta script en el ORDEN del index.html.
    Todo vive en scope global (sin módulos), igual que antes.
    ============================================================ */
 /* ============================================================
@@ -33,8 +33,8 @@ function viewClientes(){
   const rows = list.map(c=>{
     const nv = ventasDeCliente(c.id).length;
     return `<tr>
-      <td><b>${esc(c.nombre||"—")}</b>${c.empresa?`<div class="hint" style="font-size:11.5px">${esc(c.empresa)}</div>`:""}</td>
-      <td>${esc(c.email||"—")}${c.telefono?`<div class="hint" style="font-size:11.5px">${esc(c.telefono)}</div>`:""}</td>
+      <td><b>${esc(c.nombre||"—")}</b>${c.empresa?`<div class="hint" style="font-size:12px">${esc(c.empresa)}</div>`:""}</td>
+      <td>${esc(c.email||"—")}${c.telefono?`<div class="hint" style="font-size:12px">${esc(c.telefono)}</div>`:""}</td>
       <td>${esc([c.ciudad,c.estado].filter(Boolean).join(", ")||"—")}</td>
       <td>${esc(c.pais||"—")}</td>
       <td class="r num">${nv}</td>

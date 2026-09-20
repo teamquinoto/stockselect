@@ -37,7 +37,7 @@ function viewDocs(tipo){
       <label style="font-size:12px;color:var(--muted)">${t("mov.from")} <input class="inp" id="ddesde" type="date" value="${esc(f.desde)}" style="width:128px"></label>
       <label style="font-size:12px;color:var(--muted)">${t("mov.to")} <input class="inp" id="dhasta" type="date" value="${esc(f.hasta)}" style="width:128px"></label>
       <button class="btn ghost sm" id="dclear">${t("dash.f.clear")}</button>
-      <span class="hint" style="font-size:11.5px;white-space:nowrap">${t("doc.sorthint")}</span>
+      <span class="hint" style="font-size:12px;white-space:nowrap">${t("doc.sorthint")}</span>
     </div>
     <div class="table-scroll"><table>
       <thead><tr>

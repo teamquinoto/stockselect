@@ -1,6 +1,6 @@
 /* ============================================================
    gestordestock — 10-view-dashboard.js
-   Parte de la app. Se carga como <script> en el ORDEN del index.html.
+   Parte de la app. Se carga como etiqueta script en el ORDEN del index.html.
    Todo vive en scope global (sin módulos), igual que antes.
    ============================================================ */
 /* ============================================================
@@ -351,8 +351,8 @@ function housesHTML(){
   const strip = enTr>0 ? `<div class="panel" data-goto-transit role="button" tabindex="0" style="cursor:pointer;margin-bottom:22px">
       <div class="phead"><h3>${t("dash.transit.title")}</h3><span class="hint">${t("dash.transit.tap")}</span></div>
       <div style="display:flex;gap:34px;padding:14px 18px">
-        <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600;margin-bottom:5px">${t("dash.incomingunits")}</div><div style="font-size:22px;font-weight:800;font-variant-numeric:tabular-nums">${qty(enTr)}</div></div>
-        <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600;margin-bottom:5px">${t("dash.valuereport")}</div><div style="font-size:22px;font-weight:800;font-variant-numeric:tabular-nums">${money(productosVendibles().reduce((a,p)=>a+transitoValorEnFoco(p),0))}</div></div>
+        <div><div style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600;margin-bottom:5px">${t("dash.incomingunits")}</div><div style="font-size:22px;font-weight:800;font-variant-numeric:tabular-nums">${qty(enTr)}</div></div>
+        <div><div style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600;margin-bottom:5px">${t("dash.valuereport")}</div><div style="font-size:22px;font-weight:800;font-variant-numeric:tabular-nums">${money(productosVendibles().reduce((a,p)=>a+transitoValorEnFoco(p),0))}</div></div>
       </div></div>` : "";
   return `<div class="houses">${houses}</div>${strip}`;
 }

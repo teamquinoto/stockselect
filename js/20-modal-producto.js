@@ -69,7 +69,7 @@ function openProd(id){
       <div class="field"><label>${t("prod.l.unitspercase")}</label><input class="inp num" id="p_bpc" value="${p?p.boxesPorCase:boxesCaseDefault(catActual)}"></div>
     </div>
     <p class="hint" style="font-size:12px;margin:6px 0 0">${t("prod.hint.percase")}</p>
-    ${p?`<p style="font-size:12.5px;color:var(--muted);margin:14px 0 0">${t("prod.hint.stockchanges")}</p>`:""}
+    ${p?`<p style="font-size:13px;color:var(--muted);margin:14px 0 0">${t("prod.hint.stockchanges")}</p>`:""}
   `, [
     p && isAdmin() ? {label:t("common.delete"),cls:"btn danger",act:()=>{ delProd(p.id); }} : null,
     {label:t("common.cancel"),cls:"btn",act:closeModal},
