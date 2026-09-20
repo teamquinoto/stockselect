@@ -99,6 +99,7 @@ function wire(){
   wireDashFiltros();
   wireProd();
   wireAnalisis();
+  if(typeof wirePnL==="function") wirePnL();
   wireDocFiltros();
   wireMovFiltros();
   wireClientes();

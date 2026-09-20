@@ -165,7 +165,6 @@ function ventasFiltradas(){
 }
 function viewAnalisis(){
   const rows = ventasFiltradas();
-  const P = pnlAggregate(anFiltros.desde, anFiltros.hasta);   // P&L consolidado del período (waterfall + contribución)
   const revenue = rows.reduce((a,r)=>a+r.revenue,0);
   const cogs = rows.reduce((a,r)=>a+r.cogs,0);
   const margin = round2(revenue-cogs);
@@ -257,7 +256,6 @@ function viewAnalisis(){
 
   const charts = `
   <div class="chart-grid">
-    ${pnlPanelHTML(P)}
     <div class="panel chart" style="grid-column:1/-1">
       <p class="ctitle">${t("an.trend.title")}</p>
       <p class="csub">${t("an.trend.sub",{metric:anMetric==="units"?t("an.w.units"):t("an.w.revenue")})}</p>
@@ -369,13 +367,13 @@ function pnlAggregate(desde, hasta){
     const fecha = normISO(v.fecha)||v.fecha;
     const conv  = x => convertCcyAt(x, sCcy, rep, fecha);
     const vid   = v.vendedorId || "";
-    const pv = A.perVend[vid] = A.perVend[vid] || { nombre:saleVendedorNombre(v), sales:0, cogs:0, commission:0, cargos:0, shipping:0, costos:0 };
+    const pv = A.perVend[vid] = A.perVend[vid] || { nombre:saleVendedorNombre(v), units:0, sales:0, cogs:0, commission:0, cargos:0, shipping:0, costos:0 };
     let sSales=0, sCogs=0, sCostos=0;
     (v.lineas||[]).forEach(l=>{
       const rev = conv(round2((l.precio||0)*l.cantidad));
       const cg  = conv(round2(l.cogs!=null ? l.cogs : (l.costo||0)*l.cantidad));
       A.sales+=rev; A.cogs+=cg; A.units+=l.cantidad; sSales+=rev; sCogs+=cg;
-      pv.sales+=rev; pv.cogs+=cg;
+      pv.sales+=rev; pv.cogs+=cg; pv.units+=l.cantidad;
       const k = l.productoId||l.sku||l.nombre;
       const e = A.detail[k] = A.detail[k] || { sku:l.sku||"", nombre:l.nombre||"", units:0, revenue:0, cogs:0 };
       e.units+=l.cantidad; e.revenue+=rev; e.cogs+=cg;
@@ -413,36 +411,20 @@ function _pnlCompact(n){
   return s+sym+"\u00A0"+nf0.format(a);
 }
 
-/* --- Panel del P&L en pantalla: hero de contribución + waterfall --- */
-function pnlPanelHTML(P){
-  const neg = P.contrib<0;
-  return `<div class="panel chart" style="grid-column:1/-1">
-    <p class="ctitle">Estado de resultados — del ingreso a lo que queda</p>
-    <p class="csub">Consolidado del período \u00B7 TC por mes \u00B7 verde suma, rojo resta; las barras llenas son subtotales. El \u2605 marca los cargos on-top facturados al cliente.</p>
-    <div style="display:flex;flex-wrap:wrap;gap:6px 30px;align-items:baseline;margin:4px 0 12px">
-      <div><div style="font-size:11px;color:var(--muted);font-weight:600">Margen de contribución</div>
-        <div style="font-size:30px;font-weight:800;letter-spacing:-.5px;font-variant-numeric:tabular-nums;color:${neg?'var(--alert)':'var(--text)'}">${money(P.contrib)}</div></div>
-      <div><div style="font-size:11px;color:var(--muted);font-weight:600">% s/ ingreso neto</div>
-        <div style="font-size:18px;font-weight:800;font-variant-numeric:tabular-nums">${P.net>0?nf0.format(P.contribPct*100)+'%':'—'}</div></div>
-      <div><div style="font-size:11px;color:var(--muted);font-weight:600">Margen bruto</div>
-        <div style="font-size:18px;font-weight:800;font-variant-numeric:tabular-nums">${money(P.gp)} \u00B7 ${P.net>0?nf0.format(P.gpPct*100)+'%':'—'}</div></div>
-    </div>
-    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">${pnlWaterfallSVG(P)}</div>
-  </div>`;
-}
+/* (El panel del P&L vive ahora en su propia pestaña: 11b-view-pnl.js, bilingüe) */
 
 /* --- Waterfall del P&L (SVG puro, con <title> nativo como tooltip) --- */
 function pnlWaterfallSVG(P){
   const steps=[
-    {k:"Ventas",       v:P.sales,       type:"start"},
-    {k:"+ Shipping",   v:P.shipping,    type:"add"},
-    {k:"+ Cargos",     v:P.cargos,      type:"add", star:true},
-    {k:"Ingreso neto", v:P.net,         type:"sub"},
-    {k:"\u2212 COGS",  v:-P.cogs,       type:"minus"},
-    {k:"Margen bruto", v:P.gp,          type:"sub"},
-    {k:"\u2212 Comis.",v:-P.commission, type:"minus"},
-    {k:"\u2212 Selling",v:-(P.costos.envio+P.costos.labor+P.costos.comision+P.costos.otro), type:"minus"},
-    {k:"Contribución", v:P.contrib,     type:"total"},
+    {k:t("pnl.wf.sales"),       v:P.sales,       type:"start"},
+    {k:t("pnl.wf.shipping"),    v:P.shipping,    type:"add"},
+    {k:t("pnl.wf.cargos"),      v:P.cargos,      type:"add", star:true},
+    {k:t("pnl.wf.net"),         v:P.net,         type:"sub"},
+    {k:t("pnl.wf.cogs"),        v:-P.cogs,       type:"minus"},
+    {k:t("pnl.wf.gross"),       v:P.gp,          type:"sub"},
+    {k:t("pnl.wf.commissions"), v:-P.commission, type:"minus"},
+    {k:t("pnl.wf.selling"),     v:-(P.costos.envio+P.costos.labor+P.costos.comision+P.costos.otro), type:"minus"},
+    {k:t("pnl.wf.contrib"),     v:P.contrib,     type:"total"},
   ];
   let run=0, maxV=0, minV=0;
   const geom=steps.map(s=>{ let lo,hi;
