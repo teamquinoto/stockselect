@@ -254,17 +254,18 @@ function viewAnalisis(){
     <button class="slicer-reset" id="an_clear">${t("an.sl.reset")}</button>
   </div>`;
 
+  const MC = anMetric==="units" ? "var(--metric2)" : "var(--accent)";   // #10: color = métrica (dinero=ámbar, unidades=teal); el margen va siempre en verde
   const charts = `
   <div class="chart-grid">
     <div class="panel chart" style="grid-column:1/-1">
       <p class="ctitle">${t("an.trend.title")}</p>
       <p class="csub">${t("an.trend.sub",{metric:anMetric==="units"?t("an.w.units"):t("an.w.revenue")})}</p>
-      ${trend.length ? trendChartSVG(trend, mfmt) : `<div class="cempty">${t("an.nosales")}</div>`}
+      ${trend.length ? trendChartSVG(trend, mfmt, MC) : `<div class="cempty">${t("an.nosales")}</div>`}
     </div>
     <div class="panel chart">
       <p class="ctitle">${t("an.top.title",{metric:anMetric==="units"?t("an.w.unitslow"):t("an.w.revenuelow")})}</p>
       <p class="csub">${t("an.top.sub")}</p>
-      ${rows.length ? hbars(top(byProd, mval).map(t=>({label:t.label,value:t.value,saga:sagaOfName(t.label)})), mfmt, "var(--accent)") : `<div class="cempty">${t("an.nosales")}</div>`}
+      ${rows.length ? hbars(top(byProd, mval).map(t=>({label:t.label,value:t.value,saga:sagaOfName(t.label)})), mfmt, MC) : `<div class="cempty">${t("an.nosales")}</div>`}
     </div>
     <div class="panel chart">
       <p class="ctitle">${t("an.topmargin.title")}</p>
@@ -274,17 +275,17 @@ function viewAnalisis(){
     <div class="panel chart">
       <p class="ctitle">${t("an.byseller.title",{metric:anMetric==="units"?t("an.w.units"):t("an.w.revenue")})}</p>
       <p class="csub">${t("an.byseller.sub",{m:anMetric==="units"?t("an.w.unitslow"):t("an.w.amount")})}</p>
-      ${rows.length ? hbars(top(byVend,mval), mfmt, "var(--accent)") : `<div class="cempty">${t("an.nosales.short")}</div>`}
+      ${rows.length ? hbars(top(byVend,mval), mfmt, MC) : `<div class="cempty">${t("an.nosales.short")}</div>`}
     </div>
     <div class="panel chart">
       <p class="ctitle">${t("an.bycountry.title",{metric:anMetric==="units"?t("an.w.units"):t("an.w.revenue")})}</p>
       <p class="csub">${t("an.bycountry.sub",{m:anMetric==="units"?t("an.w.unitslow"):t("an.w.amount")})}</p>
-      ${Object.keys(byPais).length ? hbars(top(byPais,mval,8), mfmt, "var(--accent)") : `<div class="cempty">${t("an.bycountry.empty")}</div>`}
+      ${Object.keys(byPais).length ? hbars(top(byPais,mval,8), mfmt, MC) : `<div class="cempty">${t("an.bycountry.empty")}</div>`}
     </div>
     <div class="panel chart">
       <p class="ctitle">${t("an.bylang.title",{metric:anMetric==="units"?t("an.w.units"):t("an.w.revenue")})}</p>
       <p class="csub">${t("an.bylang.sub",{m:anMetric==="units"?t("an.w.unitslow"):t("an.w.amount")})}</p>
-      ${Object.keys(byLang).length ? hbars(top(byLang,mval), mfmt, "var(--accent)") : `<div class="cempty">${t("an.bylang.empty")}</div>`}
+      ${Object.keys(byLang).length ? hbars(top(byLang,mval), mfmt, MC) : `<div class="cempty">${t("an.bylang.empty")}</div>`}
     </div>
     <div class="panel chart">
       <p class="ctitle">${t("an.perf.title")}</p>
@@ -354,7 +355,13 @@ function sagaOfName(nombre){
        spot único.
    Devuelve importes en la moneda de reporte + desgloses.
    ============================================================ */
+let _pnlCache = { rev:-1, map:{} };   // cache de rollups; se limpia cuando cambian los datos (_pnlRev)
 function pnlAggregate(desde, hasta){
+  // #16: si los datos no cambiaron, reusamos el rollup ya calculado (evita recorrer todas las ventas en cada render).
+  const _rev = (typeof _pnlRev!=="undefined") ? _pnlRev : 0;
+  if(_pnlCache.rev!==_rev) _pnlCache = { rev:_rev, map:{} };
+  const _key = (desde||"")+"|"+(hasta||"")+"|"+reportCcy();
+  if(_pnlCache.map[_key]) return _pnlCache.map[_key];
   const d0 = desde ? new Date(desde+"T00:00:00") : null;
   const d1 = hasta ? new Date(hasta+"T23:59:59") : null;
   const inRange = v=>{ const f=new Date((normISO(v.fecha)||v.fecha)+"T12:00:00"); if(d0&&f<d0) return false; if(d1&&f>d1) return false; return true; };
@@ -400,6 +407,7 @@ function pnlAggregate(desde, hasta){
   A.contrib = round2(A.gp - A.sellingTotal);
   A.gpPct       = A.net>0 ? A.gp/A.net : 0;
   A.contribPct  = A.net>0 ? A.contrib/A.net : 0;
+  _pnlCache.map[_key] = A;   // #16: guardamos para reusar mientras los datos no cambien
   return A;
 }
 
@@ -458,8 +466,9 @@ function pnlWaterfallSVG(P){
 }
 
 /* --- Tendencia en COLUMNAS verticales (el tiempo se lee izq\u2192der) --- */
-function trendChartSVG(items, fmt){
+function trendChartSVG(items, fmt, color){
   const data=items||[];
+  const COL = color || "var(--accent)";
   if(!data.length) return `<div class="cempty">${t("an.nosales")}</div>`;
   const W=560,H=205,padT=18,padB=28,padL=6,padR=6,plot=H-padT-padB;
   const vs=data.map(d=>d.value);
@@ -470,7 +479,7 @@ function trendChartSVG(items, fmt){
   data.forEach((d,i)=>{
     const x=padL+i*(bw+gap), yy=y(Math.max(0,d.value)), y0=y(Math.min(0,d.value)), h=Math.max(1,Math.abs(y0-yy));
     const neg=d.value<0;
-    cols+=`<rect x="${x.toFixed(1)}" y="${yy.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${neg?'var(--down)':'var(--accent)'}"><title>${esc(d.label)}: ${fmt(d.value)}</title></rect>`;
+    cols+=`<rect x="${x.toFixed(1)}" y="${yy.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${neg?'var(--down)':COL}"><title>${esc(d.label)}: ${fmt(d.value)}</title></rect>`;
     const cx=x+bw/2;
     vlab+=`<text x="${cx.toFixed(1)}" y="${(yy-4).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" font-family="monospace" fill="var(--text)">${(fmt===money)?_pnlCompact(d.value):qty(d.value)}</text>`;
     labs+=`<text x="${cx.toFixed(1)}" y="${H-padB+14}" text-anchor="middle" font-size="9.5" fill="var(--muted)">${esc(d.label)}</text>`;

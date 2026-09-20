@@ -1,14 +1,15 @@
 /* ============================================================
    gestordestock — 11b-view-pnl.js
-   Parte de la app. Se carga como <script> DESPUÉS de 11-view-analisis.js
-   (usa pnlAggregate / pnlWaterfallSVG / trendChartSVG / _pnlCompact).
+   Se carga DESPUÉS de 11-view-analisis.js (usa pnlAggregate /
+   pnlWaterfallSVG / trendChartSVG / _pnlCompact).
    ------------------------------------------------------------
-   Pestaña propia de P&L (Estado de resultados). Bilingüe (t()).
-   Vive en la sección "fin", admin-only. Consolidado del período,
-   con presets, waterfall, tendencia y tabla por vendedor con
-   color-code de negativos + flecha (señal redundante).
+   Pestaña P&L (Estado de resultados). Bilingüe. Admin-only.
+   Incluye: waterfall, tendencia, KPIs con delta vs período previo
+   (#12), tabla por vendedor con drill-down a sus ventas (#14) y
+   panel Real vs Presupuesto (#17).
    ============================================================ */
 let pnlPeriodo = "ytd";   // mtd | qtd | ytd | all
+let pnlDrill   = null;    // vendedorId expandido en la tabla (drill-down)
 
 /* Rango del preset, anclado a la venta más reciente (o a hoy). */
 function pnlRange(preset){
@@ -22,9 +23,57 @@ function pnlRange(preset){
   return { from:"", to:"" };   // all
 }
 
+/* Ventana anterior de igual duración (para los deltas de KPI, #12). */
+function pnlPriorRange(r){
+  if(!r.from || !r.to) return null;
+  const a=new Date(r.from+"T00:00:00"), b=new Date(r.to+"T00:00:00");
+  const days=Math.round((b-a)/86400000)+1;
+  const pb=new Date(a); pb.setDate(pb.getDate()-1);
+  const pa=new Date(pb); pa.setDate(pa.getDate()-(days-1));
+  const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  return { from:iso(pa), to:iso(pb) };
+}
+
+/* Chip de variación vs período previo. */
+function pnlDeltaChip(cur, prev){
+  if(prev==null || prev===0) return `<div class="sub" style="margin-top:4px">${t("pnl.delta.noprior")}</div>`;
+  const d=(cur-prev)/Math.abs(prev), up=d>=0;
+  return `<div class="sub" style="margin-top:4px;color:${up?"var(--up)":"var(--alert)"};font-weight:700">${up?"▲":"▼"} ${nf0.format(Math.abs(d)*100)}% <span style="color:var(--muted);font-weight:400">${t("pnl.delta.vsprior")}</span></div>`;
+}
+
+/* Presupuesto del período (#17): suma de objetivos mensuales en la moneda de reporte. */
+function pnlBudget(from, to){
+  const b=db.config.presupuesto||{}, rep=reportCcy();
+  const fromM=from?from.slice(0,7):"0000-00", toM=to?to.slice(0,7):"9999-99";
+  let net=0, contrib=0, any=false;
+  Object.keys(b).forEach(k=>{ const e=b[k]||{}; if((e.ccy||"USD")===rep && k>=fromM && k<=toM){ net+=(+e.net||0); contrib+=(+e.contrib||0); if((+e.net||0)||(+e.contrib||0)) any=true; } });
+  return { net:round2(net), contrib:round2(contrib), any };
+}
+
+/* Ventas de un vendedor en el período (drill-down, #14), en moneda de reporte al TC del mes. */
+function pnlSellerSales(vid, from, to){
+  const d0=from?new Date(from+"T00:00:00"):null, d1=to?new Date(to+"T23:59:59"):null;
+  const rep=reportCcy(), out=[];
+  (db.ventas||[]).forEach(v=>{
+    if((v.vendedorId||"")!==vid) return;
+    const f=normISO(v.fecha)||v.fecha, fd=new Date(f+"T12:00:00");
+    if(d0&&fd<d0) return; if(d1&&fd>d1) return;
+    const sCcy=storeCcy(v.storeVenta||v.store||STORE_IDS[0]);
+    (v.lineas||[]).forEach(l=>{
+      const rev=convertCcyAt(round2((l.precio||0)*l.cantidad), sCcy, rep, f);
+      const cg =convertCcyAt(round2(l.cogs!=null?l.cogs:(l.costo||0)*l.cantidad), sCcy, rep, f);
+      out.push({ fecha:f, nombre:l.nombre||l.sku||"—", qty:l.cantidad, revenue:rev, margin:round2(rev-cg) });
+    });
+  });
+  return out.sort((a,b)=> a.fecha<b.fecha?1:-1);
+}
+
 function viewPnL(){
-  const r = pnlRange(pnlPeriodo);
-  const P = pnlAggregate(r.from, r.to);
+  const r  = pnlRange(pnlPeriodo);
+  const P  = pnlAggregate(r.from, r.to);
+  const pr = pnlPriorRange(r);
+  const Pp = pr ? pnlAggregate(pr.from, pr.to) : null;
+  const B  = pnlBudget(r.from, r.to);
   const neg = P.contrib<0;
   const pctNet = P.net>0 ? nf0.format(P.contribPct*100)+"%" : "—";
 
@@ -42,8 +91,9 @@ function viewPnL(){
     <div class="kpi" style="border-color:color-mix(in srgb,var(--accent) 30%,var(--line));background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 9%,var(--surface)),var(--surface))">
       <div class="lbl">${t("pnl.kpi.contrib")}</div>
       <div class="val" style="color:${neg?"var(--alert)":"var(--text)"}">${money(P.contrib)}</div>
-      <div class="sub">${t("pnl.kpi.contribsub",{p:pctNet})}</div></div>
-    <div class="kpi"><div class="lbl">${t("pnl.kpi.net")}</div><div class="val">${money(P.net)}</div></div>
+      <div class="sub">${t("pnl.kpi.contribsub",{p:pctNet})}</div>
+      ${pnlDeltaChip(P.contrib, Pp?Pp.contrib:null)}</div>
+    <div class="kpi"><div class="lbl">${t("pnl.kpi.net")}</div><div class="val">${money(P.net)}</div>${pnlDeltaChip(P.net, Pp?Pp.net:null)}</div>
     <div class="kpi"><div class="lbl">${t("pnl.kpi.gross")}</div><div class="val">${money(P.gp)}</div><div class="sub">${P.net>0?nf0.format(P.gpPct*100)+"%":"—"} · ${t("pnl.kpi.grosssub")}</div></div>
     <div class="kpi"><div class="lbl">${t("pnl.kpi.cogs")}</div><div class="val">${money(P.cogs)}</div><div class="sub">${t("pnl.kpi.cogssub",{n:qty(P.units)})}</div></div>
   </div>`;
@@ -55,27 +105,55 @@ function viewPnL(){
     ${P.units ? `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">${pnlWaterfallSVG(P)}</div>` : `<div class="cempty">${t("pnl.nodata")}</div>`}
   </div>`;
 
-  // Tendencia mensual (columnas) desde P.byMonth (ingreso neto por mes).
+  // Real vs presupuesto (#17)
+  const varRow=(label,act,bud)=>{ const d=act-bud, up=d>=0;
+    return `<tr><td>${label}</td><td class="r num">${money(act)}</td><td class="r num">${money(bud)}</td>
+      <td class="r num" style="color:${up?"var(--up)":"var(--alert)"};font-weight:700">${up?"▲":"▼"} ${money(Math.abs(d))} ${bud!==0?"("+nf0.format(Math.abs(d/bud)*100)+"%)":""}</td></tr>`; };
+  const variance = `
+  <div class="panel" style="margin-top:16px">
+    <div class="phead"><h3>${t("pnl.var.title")}</h3></div>
+    ${B.any ? `<div class="table-scroll"><table>
+      <thead><tr><th></th><th class="r">${t("pnl.var.actual")}</th><th class="r">${t("pnl.var.budget")}</th><th class="r">${t("pnl.var.variance")}</th></tr></thead>
+      <tbody>${varRow(t("pnl.kpi.net"),P.net,B.net)}${varRow(t("pnl.kpi.contrib"),P.contrib,B.contrib)}</tbody>
+    </table></div>` : `<p class="hint" style="margin:4px 0 0">${t("pnl.var.nobudget")}</p>`}
+  </div>`;
+
+  // Tendencia mensual (columnas)
   const months = Object.keys(P.byMonth).sort();
   const trend = months.map(k=>{ const [y,m]=k.split("-"); return { label:`${t("cal.mon."+((+m)-1)).slice(0,3)} ${y.slice(2)}`, value:P.byMonth[k].net }; });
 
-  // Tabla por vendedor: contribución con color-code + flecha redundante.
-  const sellers = Object.values(P.perVend).map(s=>{
-    const gm = round2(s.sales - s.cogs);
-    const contrib = round2(gm + s.cargos + s.shipping - s.commission - s.costos);
-    return { nombre:s.nombre||"—", units:s.units, revenue:s.sales, gm, gmPct: s.sales>0?gm/s.sales:0, contrib };
+  // Tabla por vendedor con color-code + drill-down (#14)
+  const sellerEntries = Object.entries(P.perVend).map(([vid,s])=>{
+    const gm=round2(s.sales-s.cogs);
+    const contrib=round2(gm + s.cargos + s.shipping - s.commission - s.costos);
+    return { vid, nombre:s.nombre||"—", units:s.units, revenue:s.sales, gm, gmPct:s.sales>0?gm/s.sales:0, contrib };
   }).sort((a,b)=> b.contrib - a.contrib);
-  const tot = sellers.reduce((a,r)=>({units:a.units+r.units, revenue:a.revenue+r.revenue, gm:a.gm+r.gm, contrib:a.contrib+r.contrib}),{units:0,revenue:0,gm:0,contrib:0});
-  const sellerRows = sellers.length ? sellers.map(rw=>{
-    const loss = rw.contrib<0;
-    return `<tr style="${loss?"background:color-mix(in srgb,var(--alert) 10%,transparent)":""}">
-      <td>${esc(rw.nombre)}</td>
+  const tot = sellerEntries.reduce((a,r)=>({units:a.units+r.units, revenue:a.revenue+r.revenue, gm:a.gm+r.gm, contrib:a.contrib+r.contrib}),{units:0,revenue:0,gm:0,contrib:0});
+
+  const sellerRows = sellerEntries.length ? sellerEntries.map(rw=>{
+    const loss=rw.contrib<0, open=pnlDrill===rw.vid;
+    let html = `<tr data-pnldrill="${esc(rw.vid)}" style="cursor:pointer;${loss?"background:color-mix(in srgb,var(--alert) 10%,transparent)":""}">
+      <td>${open?"▾ ":"▸ "}${esc(rw.nombre)}</td>
       <td class="r num">${qty(rw.units)}</td>
       <td class="r num">${money(rw.revenue)}</td>
       <td class="r num">${money(rw.gm)}</td>
       <td class="r num" style="color:${rw.gm>=0?"var(--up)":"var(--alert)"}">${rw.revenue>0?nf0.format(rw.gmPct*100)+"%":"—"}</td>
       <td class="r num" style="color:${loss?"var(--alert)":"var(--up)"};font-weight:700">${loss?"▼":"▲"} ${money(rw.contrib)}</td>
     </tr>`;
+    if(open){
+      const sales=pnlSellerSales(rw.vid, r.from, r.to);
+      const inner = sales.length ? sales.map(x=>`<tr>
+          <td class="num">${esc(fmtDate(x.fecha))}</td><td>${esc(x.nombre)}</td>
+          <td class="r num">${qty(x.qty)}</td><td class="r num">${money(x.revenue)}</td>
+          <td class="r num" style="color:${x.margin>=0?"var(--up)":"var(--alert)"}">${money(x.margin)}</td>
+        </tr>`).join("") : `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:12px">${t("pnl.nodata")}</td></tr>`;
+      html += `<tr><td colspan="6" style="padding:0;background:var(--surface-2)"><div style="padding:6px 12px 10px">
+        <table style="width:100%"><thead><tr>
+          <th>${t("pnl.drill.date")}</th><th>${t("pnl.drill.product")}</th><th class="r">${t("pnl.drill.qty")}</th><th class="r">${t("pnl.th.revenue")}</th><th class="r">${t("pnl.drill.margin")}</th>
+        </tr></thead><tbody>${inner}</tbody></table>
+      </div></td></tr>`;
+    }
+    return html;
   }).join("") : `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:18px">${t("pnl.nodata")}</td></tr>`;
 
   const grid = `
@@ -83,11 +161,11 @@ function viewPnL(){
     <div class="panel chart">
       <p class="ctitle">${t("pnl.trend.title")}</p>
       <p class="csub">${t("pnl.trend.sub")}</p>
-      ${trend.length ? trendChartSVG(trend, money) : `<div class="cempty">${t("pnl.nodata")}</div>`}
+      ${trend.length ? trendChartSVG(trend, money, "var(--accent)") : `<div class="cempty">${t("pnl.nodata")}</div>`}
     </div>
     <div class="panel chart">
       <p class="ctitle">${t("pnl.byseller.title")}</p>
-      <p class="csub">${t("pnl.byseller.sub")}</p>
+      <p class="csub">${t("pnl.byseller.sub")} · ${t("pnl.drill.hint")}</p>
       <div class="table-scroll"><table>
         <thead><tr>
           <th>${t("pnl.th.seller")}</th><th class="r">${t("pnl.th.units")}</th><th class="r">${t("pnl.th.revenue")}</th>
@@ -105,13 +183,14 @@ function viewPnL(){
 
   const notes = `<p class="csub" style="margin-top:14px;line-height:1.6">${t("pnl.notes")}</p>`;
 
-  return head + kpis + waterfall + grid + notes;
+  return head + kpis + waterfall + variance + grid + notes;
 }
 
 function wirePnL(){
   const m = document.getElementById("main");
   if(!m) return;
-  m.querySelectorAll("[data-pnlp]").forEach(b=> b.onclick=()=>{ pnlPeriodo=b.dataset.pnlp; render(); });
+  m.querySelectorAll("[data-pnlp]").forEach(b=> b.onclick=()=>{ pnlPeriodo=b.dataset.pnlp; pnlDrill=null; render(); });
+  m.querySelectorAll("[data-pnldrill]").forEach(tr=> tr.onclick=()=>{ const v=tr.dataset.pnldrill; pnlDrill=(pnlDrill===v)?null:v; render(); });
   const ex = document.getElementById("pnl_export");
   if(ex) ex.onclick=()=>{ const r=pnlRange(pnlPeriodo); exportPnL(r.from||"", r.to||""); };
 }

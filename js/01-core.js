@@ -504,7 +504,8 @@ function valorEnTransitoAR(){ return round2(db.productos.reduce((a,p)=> a + tran
    and (for sellers) is later intersected with their store's stock. */
 function productosVendibles(){ return db.productos.filter(p=> !soloEnVault(p)); }
 let db = load();
-function persistLocal(){ localStorage.setItem(KEY, JSON.stringify(db)); }
+var _pnlRev = 0;   // se incrementa en cada persistencia -> invalida el cache de pnlAggregate (#16)
+function persistLocal(){ _pnlRev++; localStorage.setItem(KEY, JSON.stringify(db)); }
 
 /* ---------- Sesión ---------- */
 let session = loadSession();

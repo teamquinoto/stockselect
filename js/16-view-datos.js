@@ -66,6 +66,48 @@ function viewDatos(){
     </div>
   </div>
 
+  ${isAdmin()?`<div class="panel">
+    <div class="phead"><h3>${t("dat.fx.title")}</h3><span class="hint">${t("dat.fx.hint")}</span></div>
+    <div class="grid-form" style="grid-template-columns:1fr 1fr auto;align-items:end">
+      <div class="field"><label>${t("dat.fx.month")}</label><input class="inp" type="month" id="fxMes"></div>
+      <div class="field"><label>${t("dat.fx.rate")}</label><input class="inp num" id="fxVal" inputmode="decimal" placeholder="0"></div>
+      <button class="btn primary" data-fxadd style="margin-bottom:2px">${ICO.plus}${t("dat.fx.add")}</button>
+    </div>
+    <div style="margin-top:8px">
+      ${(function(){
+        const tm=db.config.tcMensual||{}; const ks=Object.keys(tm).filter(k=>+tm[k]>0).sort();
+        if(!ks.length) return `<p class="hint" style="margin:6px 0 0">${t("dat.fx.empty")}</p>`;
+        return ks.map(k=>{ const [y,mo]=k.split("-"); return `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)">
+          <span style="min-width:150px;font-weight:600">${t("cal.mon."+((+mo)-1))} ${y}</span>
+          <span class="num" style="flex:1;font-variant-numeric:tabular-nums">${nf0.format(tm[k])} <span class="hint" style="font-weight:400">ARS / US$1</span></span>
+          <button class="btn sm danger" data-fxdel="${k}">${t("common.delete")}</button>
+        </div>`; }).join("");
+      })()}
+    </div>
+  </div>`:""}
+
+  ${isAdmin()?`<div class="panel">
+    <div class="phead"><h3>${t("dat.bud.title")}</h3><span class="hint">${t("dat.bud.hint")}</span></div>
+    <div class="grid-form" style="grid-template-columns:1fr 1fr 1fr auto;align-items:end">
+      <div class="field"><label>${t("dat.fx.month")}</label><input class="inp" type="month" id="budMes"></div>
+      <div class="field"><label>${t("dat.bud.net")} <span class="hint" style="font-weight:400">${monedaSym(reportCcy())}</span></label><input class="inp num" id="budNet" inputmode="decimal" placeholder="0"></div>
+      <div class="field"><label>${t("dat.bud.contrib")} <span class="hint" style="font-weight:400">${monedaSym(reportCcy())}</span></label><input class="inp num" id="budContrib" inputmode="decimal" placeholder="0"></div>
+      <button class="btn primary" data-budadd style="margin-bottom:2px">${ICO.plus}${t("dat.bud.add")}</button>
+    </div>
+    <div style="margin-top:8px">
+      ${(function(){
+        const bp=db.config.presupuesto||{}; const ks=Object.keys(bp).sort();
+        if(!ks.length) return `<p class="hint" style="margin:6px 0 0">${t("dat.bud.empty")}</p>`;
+        return ks.map(k=>{ const [y,mo]=k.split("-"); const e=bp[k]||{}; const sym=monedaSym(e.ccy||"USD");
+          return `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);flex-wrap:wrap">
+          <span style="min-width:140px;font-weight:600">${t("cal.mon."+((+mo)-1))} ${y}</span>
+          <span class="num" style="flex:1;min-width:160px;font-variant-numeric:tabular-nums">${t("dat.bud.net")}: ${sym} ${nf0.format(+e.net||0)}</span>
+          <span class="num" style="flex:1;min-width:160px;font-variant-numeric:tabular-nums">${t("dat.bud.contrib")}: ${sym} ${nf0.format(+e.contrib||0)}</span>
+          <button class="btn sm danger" data-buddel="${k}">${t("common.delete")}</button>
+        </div>`; }).join("");
+      })()}
+    </div>
+  </div>`:""}
 
   <div class="panel">
     <div class="phead"><h3>${t("dat.issuer")}</h3><span class="hint">${t("dat.issuer.hint")}</span></div>
@@ -149,6 +191,34 @@ function wire(){
       tel:(document.getElementById("cfgEmTel").value||"").trim()
     };
     save(); toast(t("dat.tt.saved")); render();
+  });
+  // Tipo de cambio por mes (fix FX): alta/actualización y baja inmediatas.
+  const fxAdd=m.querySelector("[data-fxadd]");
+  if(fxAdd) fxAdd.onclick=()=>{
+    const mes=(document.getElementById("fxMes").value||"").slice(0,7);
+    const val=parseNum(document.getElementById("fxVal").value);
+    if(!/^\d{4}-\d{2}$/.test(mes)){ toast(t("dat.fx.badmonth"),"warn"); return; }
+    if(!(val>0)){ toast(t("dat.fx.badval"),"warn"); return; }
+    db.config.tcMensual=db.config.tcMensual||{}; db.config.tcMensual[mes]=round2(val);
+    save(); toast(t("dat.fx.saved")); render();
+  };
+  m.querySelectorAll("[data-fxdel]").forEach(b=> b.onclick=()=>{
+    const k=b.dataset.fxdel; if(db.config.tcMensual){ delete db.config.tcMensual[k]; save(); render(); }
+  });
+  // Presupuesto por mes (#17): objetivos de ingreso neto y contribución.
+  const budAdd=m.querySelector("[data-budadd]");
+  if(budAdd) budAdd.onclick=()=>{
+    const mes=(document.getElementById("budMes").value||"").slice(0,7);
+    const net=parseNum(document.getElementById("budNet").value)||0;
+    const con=parseNum(document.getElementById("budContrib").value)||0;
+    if(!/^\d{4}-\d{2}$/.test(mes)){ toast(t("dat.fx.badmonth"),"warn"); return; }
+    if(!(net>0) && !(con>0)){ toast(t("dat.bud.badval"),"warn"); return; }
+    db.config.presupuesto=db.config.presupuesto||{};
+    db.config.presupuesto[mes]={ net:round2(net), contrib:round2(con), ccy:reportCcy() };
+    save(); toast(t("dat.bud.saved")); render();
+  };
+  m.querySelectorAll("[data-buddel]").forEach(b=> b.onclick=()=>{
+    const k=b.dataset.buddel; if(db.config.presupuesto){ delete db.config.presupuesto[k]; save(); render(); }
   });
 
   // --- cuenta / sincronización ---
