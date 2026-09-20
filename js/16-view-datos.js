@@ -9,6 +9,9 @@
 function viewDatos(){
   const conf = syncState==="conflict";
   const roleLbl = isAdmin() ? t("dat.acct.admin") : t("dat.acct.seller",{name:esc((session&&session.name)||"—")});
+  const sepL = `<div style="height:1px;background:var(--line);margin:2px 18px"></div>`;
+  const subH = (ti,hi)=>`<div style="padding:16px 18px 0"><div style="font-size:var(--fs-sm);font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.4px">${ti}</div>${hi?`<p class="hint" style="margin:5px 0 0">${hi}</p>`:""}</div>`;
+  const saveBtn = `<button class="btn" data-savecfg style="justify-self:start;margin-top:4px">${ICO.save}${t("common.save")}</button>`;
   return `
   <div class="head"><div class="title"><h2>${t("dat.title")}</h2><p>${t("dat.sub")}</p></div></div>
 
@@ -37,19 +40,7 @@ function viewDatos(){
   </div>
 
   <div class="panel">
-    <div class="phead"><h3>${t("dat.backup")}</h3></div>
-    <div class="grid-form">
-      <p class="hint" style="margin:0">${t("dat.backup.sub")}</p>
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn" data-export>${ICO.export}${t("dat.exportjson")}</button>
-        <button class="btn" data-import-json>${ICO.upload}${t("dat.importjson")}</button>
-        ${isAdmin()?`<button class="btn danger" data-reset>${ICO.reset}${t("dat.deleteall")}</button>`:""}
-      </div>
-    </div>
-  </div>
-
-  <div class="panel">
-    <div class="phead"><h3>${t("dat.settings")}</h3></div>
+    <div class="phead"><h3>${t("dat.grp.money")}</h3></div>
     <div class="grid-form" style="grid-template-columns:1fr 1fr">
       <div class="field"><label>${t("dat.set.rate")} <span class="hint" style="font-weight:400">${t("dat.set.rate.hint")}</span></label><input class="inp num" id="cfgTC" value="${esc(String(db.config.tc||1000))}"></div>
       <div class="field"><label>${t("dat.set.repccy")} <span class="hint" style="font-weight:400">${t("dat.set.repccy.hint")}</span></label>
@@ -57,16 +48,11 @@ function viewDatos(){
           <option value="USD" ${reportCcy()==="USD"?"selected":""}>${t("dat.set.usd")}</option>
           <option value="ARS" ${reportCcy()==="ARS"?"selected":""}>${t("dat.set.ars")}</option>
         </select></div>
-      <div class="field"><label>${t("dat.set.startinv")}</label><input class="inp num" id="cfgFac" value="${esc(String(db.config.facturaInicio||101))}"></div>
-      ${isAdmin()?`<div class="field"><label>${t("dat.set.remu")} <span class="hint" style="font-weight:400">${t("dat.set.remu.hint")}</span></label><input class="inp num" id="cfgRemU" value="${esc(String(remitoSeqInicio("U")))}"></div>
-      <div class="field"><label>${t("dat.set.rema")} <span class="hint" style="font-weight:400">${t("dat.set.rema.hint")}</span></label><input class="inp num" id="cfgRemA" value="${esc(String(remitoSeqInicio("A")))}"></div>`:""}
-      <button class="btn" data-savecfg style="justify-self:start;margin-top:4px">${ICO.save}${t("common.save")}</button>
+      ${saveBtn}
     </div>
-  </div>
-
-  ${isAdmin()?`<div class="panel">
-    <div class="phead"><h3>${t("dat.fx.title")}</h3></div>
-    <p class="hint" style="margin:0;padding:14px 18px 0">${t("dat.fx.hint")}</p>
+    ${isAdmin()?`
+    ${sepL}
+    ${subH(t("dat.fx.title"), t("dat.fx.hint"))}
     <div class="grid-form" style="grid-template-columns:1fr 1fr auto;align-items:end">
       <div class="field"><label>${t("dat.fx.month")}</label><input class="inp" type="month" id="fxMes"></div>
       <div class="field"><label>${t("dat.fx.rate")}</label><input class="inp num" id="fxVal" inputmode="decimal" placeholder="0"></div>
@@ -78,8 +64,26 @@ function viewDatos(){
         if(!ks.length) return `<p class="hint" style="margin:0;padding:0 18px 14px">${t("dat.fx.empty")}</p>`;
         return `<div class="table-scroll"><table><thead><tr><th>${t("dat.fx.month")}</th><th class="r">${t("dat.fx.rate")}</th><th></th></tr></thead><tbody>`+ks.map(k=>{ const [y,mo]=k.split("-"); return `<tr><td style="font-weight:600">${t("cal.mon."+((+mo)-1))} ${y}</td><td class="r num">${nf0.format(tm[k])}</td><td class="r"><button class="btn sm danger" data-fxdel="${k}">${t("common.delete")}</button></td></tr>`; }).join("")+`</tbody></table></div>`;
       })()}
+    </div>`:""}
+  </div>
+
+  <div class="panel">
+    <div class="phead"><h3>${t("dat.grp.billing")}</h3><span class="hint">${t("dat.issuer.hint")}</span></div>
+    <div class="grid-form" style="grid-template-columns:1fr 1fr">
+      <div class="field" style="grid-column:1/3"><label>${t("dat.issuer.name")}</label><input class="inp" id="cfgEmNom" value="${esc((db.config.emisor||{}).nombre||"")}"></div>
+      <div class="field" style="grid-column:1/3"><label>${t("dat.issuer.addr")}</label><input class="inp" id="cfgEmDir" value="${esc((db.config.emisor||{}).direccion||"")}"></div>
+      <div class="field"><label>${t("dat.issuer.email")}</label><input class="inp" id="cfgEmMail" value="${esc((db.config.emisor||{}).email||"")}"></div>
+      <div class="field"><label>${t("dat.issuer.phone")}</label><input class="inp" id="cfgEmTel" value="${esc((db.config.emisor||{}).tel||"")}"></div>
     </div>
-  </div>`:""}
+    ${sepL}
+    ${subH(t("dat.grp.numbering"), "")}
+    <div class="grid-form" style="grid-template-columns:1fr 1fr">
+      <div class="field"><label>${t("dat.set.startinv")}</label><input class="inp num" id="cfgFac" value="${esc(String(db.config.facturaInicio||101))}"></div>
+      ${isAdmin()?`<div class="field"><label>${t("dat.set.remu")} <span class="hint" style="font-weight:400">${t("dat.set.remu.hint")}</span></label><input class="inp num" id="cfgRemU" value="${esc(String(remitoSeqInicio("U")))}"></div>
+      <div class="field"><label>${t("dat.set.rema")} <span class="hint" style="font-weight:400">${t("dat.set.rema.hint")}</span></label><input class="inp num" id="cfgRemA" value="${esc(String(remitoSeqInicio("A")))}"></div>`:""}
+      ${saveBtn}
+    </div>
+  </div>
 
   ${isAdmin()?`<div class="panel">
     <div class="phead"><h3>${t("dat.bud.title")}</h3></div>
@@ -100,15 +104,23 @@ function viewDatos(){
   </div>`:""}
 
   <div class="panel">
-    <div class="phead"><h3>${t("dat.issuer")}</h3><span class="hint">${t("dat.issuer.hint")}</span></div>
-    <div class="grid-form" style="grid-template-columns:1fr 1fr">
-      <div class="field" style="grid-column:1/3"><label>${t("dat.issuer.name")}</label><input class="inp" id="cfgEmNom" value="${esc((db.config.emisor||{}).nombre||"")}"></div>
-      <div class="field" style="grid-column:1/3"><label>${t("dat.issuer.addr")}</label><input class="inp" id="cfgEmDir" value="${esc((db.config.emisor||{}).direccion||"")}"></div>
-      <div class="field"><label>${t("dat.issuer.email")}</label><input class="inp" id="cfgEmMail" value="${esc((db.config.emisor||{}).email||"")}"></div>
-      <div class="field"><label>${t("dat.issuer.phone")}</label><input class="inp" id="cfgEmTel" value="${esc((db.config.emisor||{}).tel||"")}"></div>
-      <button class="btn" data-savecfg style="justify-self:start;margin-top:4px">${ICO.save}${t("common.save")}</button>
+    <div class="phead"><h3>${t("dat.grp.backup")}</h3></div>
+    <div class="grid-form">
+      <p class="hint" style="margin:0">${t("dat.backup.sub")}</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn" data-export>${ICO.export}${t("dat.exportjson")}</button>
+        <button class="btn" data-import-json>${ICO.upload}${t("dat.importjson")}</button>
+      </div>
     </div>
-  </div>`;
+  </div>
+
+  ${isAdmin()?`<div class="panel" style="border-color:color-mix(in srgb,var(--alert) 40%,var(--line))">
+    <div class="phead" style="background:var(--alert-bg)"><h3 style="color:var(--alert-ink)">${t("dat.grp.danger")}</h3></div>
+    <div class="grid-form">
+      <p class="hint" style="margin:0">${t("dat.grp.danger.hint")}</p>
+      <div><button class="btn danger" data-reset>${ICO.reset}${t("dat.deleteall")}</button></div>
+    </div>
+  </div>`:""}`;
 }
 
 /* ---------- utilidades UI ---------- */
