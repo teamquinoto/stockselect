@@ -6,12 +6,30 @@
 /* ============================================================
    Modal genérico
    ============================================================ */
+/* --- A11y modales: focus trap + retorno de foco (WCAG 2.4.3 / 4.1.2) --- */
+let _modalLastFocus=null;
+function _modalFocusables(c){
+  return Array.prototype.slice.call(c.querySelectorAll(
+    'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+  )).filter(el=> el.offsetParent!==null);
+}
+function trapTab(e){
+  if(e.key!=="Tab") return;
+  if(document.querySelector(".ppick-pop,.csel-pop,.cal-pop")) return; // popovers con su propia navegación
+  const scrim=document.getElementById("scrim"); if(!scrim) return;
+  const modal=scrim.querySelector(".modal"); if(!modal) return;
+  const f=_modalFocusables(modal); if(!f.length) return;
+  const first=f[0], last=f[f.length-1];
+  if(!modal.contains(document.activeElement)){ e.preventDefault(); first.focus(); }
+  else if(e.shiftKey && document.activeElement===first){ e.preventDefault(); last.focus(); }
+  else if(!e.shiftKey && document.activeElement===last){ e.preventDefault(); first.focus(); }
+}
 function buildModal(title, bodyHTML, buttons=[], wide=false, extraFoot=""){
   const root=document.getElementById("modalRoot");
   root.innerHTML=`
     <div class="scrim" id="scrim">
-      <div class="modal ${wide===true?'wide':(typeof wide==='string'?wide:'')}">
-        <div class="mhead"><h3>${esc(title)}</h3><button class="x" id="xClose">×</button></div>
+      <div class="modal ${wide===true?'wide':(typeof wide==='string'?wide:'')}" role="dialog" aria-modal="true" aria-labelledby="mTitle" tabindex="-1">
+        <div class="mhead"><h3 id="mTitle">${esc(title)}</h3><button class="x" id="xClose">×</button></div>
         <div class="mbody">${bodyHTML}</div>
         ${extraFoot?`<div class="mextra" style="padding:0 22px">${extraFoot}</div>`:""}
         <div class="mfoot" id="mfoot"></div>
@@ -30,6 +48,11 @@ function buildModal(title, bodyHTML, buttons=[], wide=false, extraFoot=""){
   document.getElementById("scrim").addEventListener("mousedown",e=>{ if(e.target.id==="scrim") closeModal(); });
   document.addEventListener("keydown", escClose);
   document.addEventListener("keydown", enterConfirm);
+  document.addEventListener("keydown", trapTab);
+  _modalLastFocus = document.activeElement;
+  const _m = document.getElementById("scrim").querySelector(".modal");
+  const _ff = _m && _m.querySelector('input:not([disabled]),select:not([disabled]),textarea:not([disabled]),button:not(.x):not([disabled])');
+  try{ (_ff||_m).focus({preventScroll:true}); }catch(_){ }
   return root;
 }
 function mkBtn(b){
@@ -56,6 +79,9 @@ function closeModal(){
   document.getElementById("modalRoot").innerHTML="";
   document.removeEventListener("keydown", escClose);
   document.removeEventListener("keydown", enterConfirm);
+  document.removeEventListener("keydown", trapTab);
+  if(_modalLastFocus && _modalLastFocus.focus){ try{ _modalLastFocus.focus({preventScroll:true}); }catch(_){ } }
+  _modalLastFocus=null;
 }
 
 /* ============================================================

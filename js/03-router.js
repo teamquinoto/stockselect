@@ -16,8 +16,11 @@ document.querySelectorAll("#nav button, #navMob button").forEach(b=>{
 });
 /* Nivel 1: al tocar una sección, mostramos sus vistas y saltamos a la primera visible. */
 function syncSectionUI(){
-  document.querySelectorAll('#navSections button[data-section]').forEach(b=>
-    b.classList.toggle("on", b.dataset.section===activeSection));
+  document.querySelectorAll('#navSections button[data-section]').forEach(b=>{
+    const on = b.dataset.section===activeSection;
+    b.classList.toggle("on", on);
+    if(on) b.setAttribute("aria-current","true"); else b.removeAttribute("aria-current");
+  });
   document.querySelectorAll('#nav button[data-view]').forEach(b=>
     b.classList.toggle("hide-sec", b.dataset.section!==activeSection));
 }
@@ -40,7 +43,9 @@ function setView(v){
   if(!isAdmin() && ADMIN_VIEWS.includes(v)) v="dash";
   view = v;
   document.querySelectorAll("#nav button, #navMob button").forEach(b=>{
-    b.classList.toggle("on", b.dataset.view===v);
+    const on = b.dataset.view===v;
+    b.classList.toggle("on", on);
+    if(on) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current");
   });
   render();
   // Enter transition only on tab change (not on every re-render by sort/filter).
