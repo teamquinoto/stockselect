@@ -88,6 +88,27 @@ function convertCcy(monto, from, to){
   if(from==="ARS" && to==="USD") return monto / tc();
   return monto;
 }
+/* --- FX por FECHA (fix): TC por mes, con fallback al TC único tc() ---
+   db.config.tcMensual = { "2026-08":1245, "2026-09":1310, ... }  // ARS por 1 USD
+   Se usa para valuar cada venta al TC de SU mes de devengamiento, en vez de
+   consolidar toda la historia a un único spot (que distorsiona con ventas ARS). */
+function tcAt(fecha){
+  const m = String(fecha||"").slice(0,7);
+  const tabla = (db.config && db.config.tcMensual) || {};
+  if(tabla[m] && parseFloat(tabla[m])>0) return parseFloat(tabla[m]);
+  // fallback: último TC conocido con mes <= al pedido
+  const keys = Object.keys(tabla).filter(k=> k<=m && parseFloat(tabla[k])>0).sort();
+  if(keys.length) return parseFloat(tabla[keys[keys.length-1]]);
+  return tc();   // red de seguridad: el TC único de siempre
+}
+function convertCcyAt(monto, from, to, fecha){
+  monto = +monto || 0;
+  if(!from || !to || from===to) return monto;
+  const r = tcAt(fecha);
+  if(from==="USD" && to==="ARS") return monto * r;
+  if(from==="ARS" && to==="USD") return monto / r;
+  return monto;
+}
 
 const ROLES = { ADMIN:"admin", SELLER:"seller", STORE:"store" };
 function currentRole(){ return (session && session.role) || ROLES.ADMIN; }  // Local mode (no session) = full access
@@ -168,7 +189,8 @@ function boxesCaseDefault(cat){ return BOXES_POR_CASE[cat] || 6; }
 function migrate(d){
   d.config = d.config || {};
   if(d.config.moneda==null) d.config.moneda = "$";
-  if(d.config.tc==null || !(parseFloat(d.config.tc)>0)) d.config.tc = 1000;   // ARS por 1 USD (manual, editable)
+  if(d.config.tc==null || !(parseFloat(d.config.tc)>0)) d.config.tc = 1000;   // ARS por 1 USD (manual, editable) — fallback
+  if(typeof d.config.tcMensual!=="object" || !d.config.tcMensual) d.config.tcMensual = {};   // TC por mes { "YYYY-MM": ARSporUSD } (editable en Data → Settings)
   if(d.config.reportCcy!=="ARS" && d.config.reportCcy!=="USD") d.config.reportCcy = "USD";   // moneda de reporte (default USD)
   if(d.config.facturaInicio==null) d.config.facturaInicio = 101;   // numeración US
   if(d.config.emisor==null) d.config.emisor = { nombre:"", direccion:"", email:"", tel:"" };

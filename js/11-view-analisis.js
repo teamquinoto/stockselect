@@ -154,7 +154,7 @@ function ventasFiltradas(){
       if(anFiltros.idioma && (p? (p.idioma||""):"" )!==anFiltros.idioma) return;
       const cogs = l.cogs!=null ? l.cogs : (l.costo||0)*l.cantidad;
       rows.push({ fecha:normISO(v.fecha)||v.fecha, vendedor:saleVendedorNombre(v), vendedorId:v.vendedorId||"", productoId:l.productoId, nombre:l.nombre, sku:l.sku,
-        cantidad:l.cantidad, revenue:convertCcy(round2((l.precio||0)*l.cantidad), sCcy, rep), cogs:convertCcy(round2(cogs), sCcy, rep),
+        cantidad:l.cantidad, revenue:convertCcyAt(round2((l.precio||0)*l.cantidad), sCcy, rep, normISO(v.fecha)||v.fecha), cogs:convertCcyAt(round2(cogs), sCcy, rep, normISO(v.fecha)||v.fecha),
         ccy:sCcy,
         consumed: (Array.isArray(l.consumed) && l.consumed.length) ? l.consumed : null,
         store: l.store || null,
@@ -165,6 +165,7 @@ function ventasFiltradas(){
 }
 function viewAnalisis(){
   const rows = ventasFiltradas();
+  const P = pnlAggregate(anFiltros.desde, anFiltros.hasta);   // P&L consolidado del período (waterfall + contribución)
   const revenue = rows.reduce((a,r)=>a+r.revenue,0);
   const cogs = rows.reduce((a,r)=>a+r.cogs,0);
   const margin = round2(revenue-cogs);
@@ -200,7 +201,7 @@ function viewAnalisis(){
     if(r.consumed){
       const lineUnits = r.cantidad || r.consumed.reduce((a,c)=>a+(c.cantidad||0),0);
       r.consumed.forEach(c=>{
-        const cCogs = convertCcy(round2((c.costoUnit||0)*(c.cantidad||0)), r.ccy||rep2, rep2);   // costo en moneda de la venta -> reporte
+        const cCogs = convertCcyAt(round2((c.costoUnit||0)*(c.cantidad||0)), r.ccy||rep2, rep2, r.fecha);   // costo al TC del mes de la venta
         const cRev  = lineUnits>0 ? round2(r.revenue*((c.cantidad||0)/lineUnits)) : 0;            // r.revenue ya está en reporte
         addSoc(c.sociedad, c.cantidad||0, cCogs, cRev);
       });
@@ -256,10 +257,11 @@ function viewAnalisis(){
 
   const charts = `
   <div class="chart-grid">
+    ${pnlPanelHTML(P)}
     <div class="panel chart" style="grid-column:1/-1">
       <p class="ctitle">${t("an.trend.title")}</p>
       <p class="csub">${t("an.trend.sub",{metric:anMetric==="units"?t("an.w.units"):t("an.w.revenue")})}</p>
-      ${trend.length ? hbars(trend, mfmt, "var(--accent)") : `<div class="cempty">${t("an.nosales")}</div>`}
+      ${trend.length ? trendChartSVG(trend, mfmt) : `<div class="cempty">${t("an.nosales")}</div>`}
     </div>
     <div class="panel chart">
       <p class="ctitle">${t("an.top.title",{metric:anMetric==="units"?t("an.w.unitslow"):t("an.w.revenuelow")})}</p>
@@ -274,17 +276,17 @@ function viewAnalisis(){
     <div class="panel chart">
       <p class="ctitle">${t("an.byseller.title",{metric:anMetric==="units"?t("an.w.units"):t("an.w.revenue")})}</p>
       <p class="csub">${t("an.byseller.sub",{m:anMetric==="units"?t("an.w.unitslow"):t("an.w.amount")})}</p>
-      ${rows.length ? donut("d-vend", top(byVend,mval), mfmt) : `<div class="cempty">${t("an.nosales.short")}</div>`}
+      ${rows.length ? hbars(top(byVend,mval), mfmt, "var(--accent)") : `<div class="cempty">${t("an.nosales.short")}</div>`}
     </div>
     <div class="panel chart">
       <p class="ctitle">${t("an.bycountry.title",{metric:anMetric==="units"?t("an.w.units"):t("an.w.revenue")})}</p>
       <p class="csub">${t("an.bycountry.sub",{m:anMetric==="units"?t("an.w.unitslow"):t("an.w.amount")})}</p>
-      ${Object.keys(byPais).length ? donut("d-pais", top(byPais,mval,8), mfmt) : `<div class="cempty">${t("an.bycountry.empty")}</div>`}
+      ${Object.keys(byPais).length ? hbars(top(byPais,mval,8), mfmt, "var(--accent)") : `<div class="cempty">${t("an.bycountry.empty")}</div>`}
     </div>
     <div class="panel chart">
       <p class="ctitle">${t("an.bylang.title",{metric:anMetric==="units"?t("an.w.units"):t("an.w.revenue")})}</p>
       <p class="csub">${t("an.bylang.sub",{m:anMetric==="units"?t("an.w.unitslow"):t("an.w.amount")})}</p>
-      ${Object.keys(byLang).length ? donut("d-lang", top(byLang,mval), mfmt) : `<div class="cempty">${t("an.bylang.empty")}</div>`}
+      ${Object.keys(byLang).length ? hbars(top(byLang,mval), mfmt, "var(--accent)") : `<div class="cempty">${t("an.bylang.empty")}</div>`}
     </div>
     <div class="panel chart">
       <p class="ctitle">${t("an.perf.title")}</p>
@@ -343,3 +345,153 @@ function sagaOfName(nombre){
   return p ? sagaDe(p) : "";
 }
 
+
+/* ============================================================
+   P&L CONSOLIDADO — fuente ÚNICA (la usa el Excel y la pantalla)
+   ------------------------------------------------------------
+   Recorre db.ventas del rango [desde,hasta] y arma el estado de
+   resultados. Dos fixes vs. la versión vieja:
+     · cargosCliente (on-top facturado al cliente) SUMA al ingreso;
+     · cada venta se valúa al TC de SU mes (convertCcyAt), no a un
+       spot único.
+   Devuelve importes en la moneda de reporte + desgloses.
+   ============================================================ */
+function pnlAggregate(desde, hasta){
+  const d0 = desde ? new Date(desde+"T00:00:00") : null;
+  const d1 = hasta ? new Date(hasta+"T23:59:59") : null;
+  const inRange = v=>{ const f=new Date((normISO(v.fecha)||v.fecha)+"T12:00:00"); if(d0&&f<d0) return false; if(d1&&f>d1) return false; return true; };
+  const rep = reportCcy();
+  const A = { rep, sales:0, shipping:0, cargos:0, cogs:0, commission:0,
+              costos:{envio:0,labor:0,comision:0,otro:0}, units:0,
+              detail:{}, perVend:{}, byMonth:{} };
+  (db.ventas||[]).filter(inRange).forEach(v=>{
+    const sCcy  = storeCcy(v.storeVenta||v.store||STORE_IDS[0]);
+    const fecha = normISO(v.fecha)||v.fecha;
+    const conv  = x => convertCcyAt(x, sCcy, rep, fecha);
+    const vid   = v.vendedorId || "";
+    const pv = A.perVend[vid] = A.perVend[vid] || { nombre:saleVendedorNombre(v), sales:0, cogs:0, commission:0, cargos:0, shipping:0, costos:0 };
+    let sSales=0, sCogs=0, sCostos=0;
+    (v.lineas||[]).forEach(l=>{
+      const rev = conv(round2((l.precio||0)*l.cantidad));
+      const cg  = conv(round2(l.cogs!=null ? l.cogs : (l.costo||0)*l.cantidad));
+      A.sales+=rev; A.cogs+=cg; A.units+=l.cantidad; sSales+=rev; sCogs+=cg;
+      pv.sales+=rev; pv.cogs+=cg;
+      const k = l.productoId||l.sku||l.nombre;
+      const e = A.detail[k] = A.detail[k] || { sku:l.sku||"", nombre:l.nombre||"", units:0, revenue:0, cogs:0 };
+      e.units+=l.cantidad; e.revenue+=rev; e.cogs+=cg;
+    });
+    const ship = (v.envio && v.envio.tipo==="monto") ? conv(round2(v.envio.monto||0)) : 0;
+    const carg = conv(saleCargosCliente(v));      // FIX #1: on-top que paga el cliente
+    const comm = conv(saleCommission(v));
+    A.shipping+=ship; A.cargos+=carg; A.commission+=comm;
+    pv.shipping+=ship; pv.cargos+=carg; pv.commission+=comm;
+    (v.costosExtra||[]).forEach(c=>{ const k=(c.tipo in A.costos)?c.tipo:"otro"; const m=convertCcyAt(round2(+c.monto||0), c.ccy||sCcy, rep, fecha); A.costos[k]+=m; pv.costos+=m; sCostos+=m; });
+    const mk = fecha.slice(0,7);
+    const mm = A.byMonth[mk] = A.byMonth[mk] || { net:0, gp:0, contrib:0, sales:0, cogs:0 };
+    mm.sales+=sSales; mm.cogs+=sCogs;
+    mm.net    += sSales+ship+carg;
+    mm.gp     += sSales+ship+carg-sCogs;
+    mm.contrib+= sSales+ship+carg-sCogs-comm-sCostos;
+  });
+  A.sales=round2(A.sales); A.shipping=round2(A.shipping); A.cargos=round2(A.cargos);
+  A.cogs=round2(A.cogs); A.commission=round2(A.commission);
+  Object.keys(A.costos).forEach(k=> A.costos[k]=round2(A.costos[k]));
+  A.sellingTotal = round2(A.commission + A.costos.envio + A.costos.labor + A.costos.comision + A.costos.otro);
+  A.net     = round2(A.sales + A.shipping + A.cargos);
+  A.gp      = round2(A.net - A.cogs);
+  A.contrib = round2(A.gp - A.sellingTotal);
+  A.gpPct       = A.net>0 ? A.gp/A.net : 0;
+  A.contribPct  = A.net>0 ? A.contrib/A.net : 0;
+  return A;
+}
+
+/* --- Formateo compacto para etiquetas de gráficos (moneda de reporte) --- */
+function _pnlCompact(n){
+  const a=Math.abs(n), s=n<0?"-":"", sym=monedaSym(reportCcy());
+  if(a>=1e6) return s+sym+"\u00A0"+(a/1e6).toFixed(1)+"M";
+  if(a>=1e3) return s+sym+"\u00A0"+(a/1e3).toFixed(1)+"k";
+  return s+sym+"\u00A0"+nf0.format(a);
+}
+
+/* --- Panel del P&L en pantalla: hero de contribución + waterfall --- */
+function pnlPanelHTML(P){
+  const neg = P.contrib<0;
+  return `<div class="panel chart" style="grid-column:1/-1">
+    <p class="ctitle">Estado de resultados — del ingreso a lo que queda</p>
+    <p class="csub">Consolidado del período \u00B7 TC por mes \u00B7 verde suma, rojo resta; las barras llenas son subtotales. El \u2605 marca los cargos on-top facturados al cliente.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:6px 30px;align-items:baseline;margin:4px 0 12px">
+      <div><div style="font-size:11px;color:var(--muted);font-weight:600">Margen de contribución</div>
+        <div style="font-size:30px;font-weight:800;letter-spacing:-.5px;font-variant-numeric:tabular-nums;color:${neg?'var(--alert)':'var(--text)'}">${money(P.contrib)}</div></div>
+      <div><div style="font-size:11px;color:var(--muted);font-weight:600">% s/ ingreso neto</div>
+        <div style="font-size:18px;font-weight:800;font-variant-numeric:tabular-nums">${P.net>0?nf0.format(P.contribPct*100)+'%':'—'}</div></div>
+      <div><div style="font-size:11px;color:var(--muted);font-weight:600">Margen bruto</div>
+        <div style="font-size:18px;font-weight:800;font-variant-numeric:tabular-nums">${money(P.gp)} \u00B7 ${P.net>0?nf0.format(P.gpPct*100)+'%':'—'}</div></div>
+    </div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">${pnlWaterfallSVG(P)}</div>
+  </div>`;
+}
+
+/* --- Waterfall del P&L (SVG puro, con <title> nativo como tooltip) --- */
+function pnlWaterfallSVG(P){
+  const steps=[
+    {k:"Ventas",       v:P.sales,       type:"start"},
+    {k:"+ Shipping",   v:P.shipping,    type:"add"},
+    {k:"+ Cargos",     v:P.cargos,      type:"add", star:true},
+    {k:"Ingreso neto", v:P.net,         type:"sub"},
+    {k:"\u2212 COGS",  v:-P.cogs,       type:"minus"},
+    {k:"Margen bruto", v:P.gp,          type:"sub"},
+    {k:"\u2212 Comis.",v:-P.commission, type:"minus"},
+    {k:"\u2212 Selling",v:-(P.costos.envio+P.costos.labor+P.costos.comision+P.costos.otro), type:"minus"},
+    {k:"Contribución", v:P.contrib,     type:"total"},
+  ];
+  let run=0, maxV=0, minV=0;
+  const geom=steps.map(s=>{ let lo,hi;
+    if(s.type==="start"||s.type==="sub"||s.type==="total"){ lo=Math.min(0,s.v); hi=Math.max(0,s.v); run=s.v; }
+    else { const prev=run; run=prev+s.v; lo=Math.min(prev,run); hi=Math.max(prev,run); }
+    maxV=Math.max(maxV,hi); minV=Math.min(minV,lo); return {...s,lo,hi};
+  });
+  const W=760,H=330,padT=24,padB=58,padL=6,padR=6,plot=H-padT-padB;
+  const dom=(maxV-minV)||1, y=v=> padT+(maxV-v)/dom*plot;
+  const n=steps.length,gap=12,bw=(W-padL-padR-gap*(n-1))/n;
+  const col=t=> t==="add"?"var(--up)":t==="minus"?"var(--down)":t==="total"?"var(--accent)":"var(--surface-2)";
+  const strk=t=> (t==="sub"||t==="start")?"var(--line-strong)":"none";
+  let grid="",bars="",conns="",labs="",vals="";
+  const ticks=4;
+  for(let i=0;i<=ticks;i++){ const gv=maxV-dom*(i/ticks), gy=y(gv);
+    grid+=`<line x1="${padL}" y1="${gy.toFixed(1)}" x2="${W-padR}" y2="${gy.toFixed(1)}" stroke="var(--line)" stroke-width="1"/>`
+        +`<text x="${padL+2}" y="${(gy-3).toFixed(1)}" font-size="8.5" fill="var(--muted)" font-family="monospace">${_pnlCompact(gv)}</text>`;
+  }
+  geom.forEach((s,i)=>{
+    const x=padL+i*(bw+gap), yTop=y(s.hi), yBot=y(s.lo), h=Math.max(2,yBot-yTop);
+    bars+=`<rect x="${x.toFixed(1)}" y="${yTop.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${col(s.type)}" stroke="${strk(s.type)}" stroke-width="1"><title>${s.k}: ${money(s.v)}</title></rect>`;
+    if(i<geom.length-1 && s.type!=="total"){
+      const yEnd = (s.type==="minus") ? y(s.lo) : (s.type==="add") ? y(s.hi) : y(s.v);
+      conns+=`<line x1="${x.toFixed(1)}" y1="${yEnd.toFixed(1)}" x2="${(x+bw+gap).toFixed(1)}" y2="${yEnd.toFixed(1)}" stroke="var(--line-strong)" stroke-width="1.1" stroke-dasharray="2.5 2.5"/>`;
+    }
+    vals+=`<text x="${(x+bw/2).toFixed(1)}" y="${(yTop-5).toFixed(1)}" text-anchor="middle" font-size="9.5" font-weight="700" font-family="monospace" fill="var(--text)">${_pnlCompact(s.v)}</text>`;
+    const key=(s.type==="sub"||s.type==="total"||s.type==="start");
+    labs+=`<text x="${(x+bw/2).toFixed(1)}" y="${H-padB+15}" text-anchor="middle" font-size="9.5" font-weight="600" fill="${key?'var(--text)':'var(--muted)'}">${s.star?'<tspan fill="var(--accent)">\u2605 </tspan>':''}${s.k}</text>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" style="display:block;min-width:640px;width:100%;height:auto" role="img" aria-label="Waterfall del estado de resultados">${grid}${conns}${bars}${vals}${labs}</svg>`;
+}
+
+/* --- Tendencia en COLUMNAS verticales (el tiempo se lee izq\u2192der) --- */
+function trendChartSVG(items, fmt){
+  const data=items||[];
+  if(!data.length) return `<div class="cempty">${t("an.nosales")}</div>`;
+  const W=560,H=205,padT=18,padB=28,padL=6,padR=6,plot=H-padT-padB;
+  const vs=data.map(d=>d.value);
+  const maxV=Math.max(...vs,1), minV=Math.min(0,...vs);
+  const dom=(maxV-minV)||1, y=v=> padT+(maxV-v)/dom*plot;
+  const n=data.length,gap=12,bw=Math.max(6,(W-padL-padR-gap*(n-1))/n);
+  let cols="",labs="",vlab="";
+  data.forEach((d,i)=>{
+    const x=padL+i*(bw+gap), yy=y(Math.max(0,d.value)), y0=y(Math.min(0,d.value)), h=Math.max(1,Math.abs(y0-yy));
+    const neg=d.value<0;
+    cols+=`<rect x="${x.toFixed(1)}" y="${yy.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${neg?'var(--down)':'var(--accent)'}"><title>${esc(d.label)}: ${fmt(d.value)}</title></rect>`;
+    const cx=x+bw/2;
+    vlab+=`<text x="${cx.toFixed(1)}" y="${(yy-4).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" font-family="monospace" fill="var(--text)">${(fmt===money)?_pnlCompact(d.value):qty(d.value)}</text>`;
+    labs+=`<text x="${cx.toFixed(1)}" y="${H-padB+14}" text-anchor="middle" font-size="9.5" fill="var(--muted)">${esc(d.label)}</text>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:auto" role="img" aria-label="Tendencia mensual">${cols}${vlab}${labs}</svg>`;
+}
