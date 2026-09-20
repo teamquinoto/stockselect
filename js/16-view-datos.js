@@ -74,15 +74,11 @@ function viewDatos(){
       <div class="field"><label>${t("dat.fx.rate")}</label><input class="inp num" id="fxVal" inputmode="decimal" placeholder="0"></div>
       <button class="btn primary" data-fxadd style="margin-bottom:2px">${ICO.plus}${t("dat.fx.add")}</button>
     </div>
-    <div style="margin-top:8px;padding:0 18px 14px">
+    <div style="margin-top:12px">
       ${(function(){
         const tm=db.config.tcMensual||{}; const ks=Object.keys(tm).filter(k=>+tm[k]>0).sort();
-        if(!ks.length) return `<p class="hint" style="margin:6px 0 0">${t("dat.fx.empty")}</p>`;
-        return ks.map(k=>{ const [y,mo]=k.split("-"); return `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)">
-          <span style="min-width:150px;font-weight:600">${t("cal.mon."+((+mo)-1))} ${y}</span>
-          <span class="num" style="flex:1;font-variant-numeric:tabular-nums">${nf0.format(tm[k])} <span class="hint" style="font-weight:400">ARS / US$1</span></span>
-          <button class="btn sm danger" data-fxdel="${k}">${t("common.delete")}</button>
-        </div>`; }).join("");
+        if(!ks.length) return `<p class="hint" style="margin:0;padding:0 18px 14px">${t("dat.fx.empty")}</p>`;
+        return `<div class="table-scroll"><table><thead><tr><th>${t("dat.fx.month")}</th><th class="r">${t("dat.fx.rate")}</th><th></th></tr></thead><tbody>`+ks.map(k=>{ const [y,mo]=k.split("-"); return `<tr><td style="font-weight:600">${t("cal.mon."+((+mo)-1))} ${y}</td><td class="r num">${nf0.format(tm[k])}</td><td class="r"><button class="btn sm danger" data-fxdel="${k}">${t("common.delete")}</button></td></tr>`; }).join("")+`</tbody></table></div>`;
       })()}
     </div>
   </div>`:""}
@@ -96,17 +92,11 @@ function viewDatos(){
       <div class="field"><label>${t("dat.bud.contrib")} <span class="hint" style="font-weight:400">${monedaSym(reportCcy())}</span></label><input class="inp num" id="budContrib" inputmode="decimal" placeholder="0"></div>
       <button class="btn primary" data-budadd style="margin-bottom:2px">${ICO.plus}${t("dat.bud.add")}</button>
     </div>
-    <div style="margin-top:8px;padding:0 18px 14px">
+    <div style="margin-top:12px">
       ${(function(){
         const bp=db.config.presupuesto||{}; const ks=Object.keys(bp).sort();
-        if(!ks.length) return `<p class="hint" style="margin:6px 0 0">${t("dat.bud.empty")}</p>`;
-        return ks.map(k=>{ const [y,mo]=k.split("-"); const e=bp[k]||{}; const sym=monedaSym(e.ccy||"USD");
-          return `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);flex-wrap:wrap">
-          <span style="min-width:140px;font-weight:600">${t("cal.mon."+((+mo)-1))} ${y}</span>
-          <span class="num" style="flex:1;min-width:160px;font-variant-numeric:tabular-nums">${t("dat.bud.net")}: ${sym} ${nf0.format(+e.net||0)}</span>
-          <span class="num" style="flex:1;min-width:160px;font-variant-numeric:tabular-nums">${t("dat.bud.contrib")}: ${sym} ${nf0.format(+e.contrib||0)}</span>
-          <button class="btn sm danger" data-buddel="${k}">${t("common.delete")}</button>
-        </div>`; }).join("");
+        if(!ks.length) return `<p class="hint" style="margin:0;padding:0 18px 14px">${t("dat.bud.empty")}</p>`;
+        return `<div class="table-scroll"><table><thead><tr><th>${t("dat.fx.month")}</th><th class="r">${t("dat.bud.net")}</th><th class="r">${t("dat.bud.contrib")}</th><th></th></tr></thead><tbody>`+ks.map(k=>{ const [y,mo]=k.split("-"); const e=bp[k]||{}; const sym=monedaSym(e.ccy||"USD"); return `<tr><td style="font-weight:600">${t("cal.mon."+((+mo)-1))} ${y}</td><td class="r num">${sym} ${nf0.format(+e.net||0)}</td><td class="r num">${sym} ${nf0.format(+e.contrib||0)}</td><td class="r"><button class="btn sm danger" data-buddel="${k}">${t("common.delete")}</button></td></tr>`; }).join("")+`</tbody></table></div>`;
       })()}
     </div>
   </div>`:""}
