@@ -60,8 +60,6 @@ function viewDatos(){
       <div class="field"><label>${t("dat.set.startinv")}</label><input class="inp num" id="cfgFac" value="${esc(String(db.config.facturaInicio||101))}"></div>
       ${isAdmin()?`<div class="field"><label>${t("dat.set.remu")} <span class="hint" style="font-weight:400">${t("dat.set.remu.hint")}</span></label><input class="inp num" id="cfgRemU" value="${esc(String(remitoSeqInicio("U")))}"></div>
       <div class="field"><label>${t("dat.set.rema")} <span class="hint" style="font-weight:400">${t("dat.set.rema.hint")}</span></label><input class="inp num" id="cfgRemA" value="${esc(String(remitoSeqInicio("A")))}"></div>`:""}
-      ${isAdmin()?`<div class="field"><label>${t("dat.set.defcomm")}</label><input class="inp num" id="cfgComm" value="${esc(String(round2((db.config.commissionRate||0)*100)))}"></div>
-      <div class="field" style="justify-content:flex-end"><p class="hint" style="margin:0 0 8px">${t("dat.set.defcomm.hint")}</p></div>`:""}
       <button class="btn" data-savecfg style="justify-self:start;margin-top:4px">${ICO.save}${t("common.save")}</button>
     </div>
   </div>
@@ -174,8 +172,6 @@ function wire(){
     const fi=parseInt(document.getElementById("cfgFac").value,10); if(!isNaN(fi)&&fi>0) db.config.facturaInicio=fi;
     const ru=document.getElementById("cfgRemU"); if(ru){ const n=parseInt(ru.value,10); if(!isNaN(n)&&n>0){ db.config.remitoSeq=db.config.remitoSeq||{}; db.config.remitoSeq.U={inicio:n}; } }
     const ra=document.getElementById("cfgRemA"); if(ra){ const n=parseInt(ra.value,10); if(!isNaN(n)&&n>0){ db.config.remitoSeq=db.config.remitoSeq||{}; db.config.remitoSeq.A={inicio:n}; } }
-    const commEl=document.getElementById("cfgComm");   // sólo lo renderiza el admin
-    if(commEl){ const pct=parseNum(commEl.value); if(!isNaN(pct)) db.config.commissionRate = Math.min(1, Math.max(0, round2(pct)/100)); }
     db.config.emisor = {
       nombre:(document.getElementById("cfgEmNom").value||"").trim(),
       direccion:(document.getElementById("cfgEmDir").value||"").trim(),

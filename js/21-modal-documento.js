@@ -1,6 +1,6 @@
 /* ============================================================
    gestordestock — 21-modal-documento.js
-   Parte de la app. Se carga como <script> en el ORDEN del index.html.
+   Parte de la app. Se carga como etiqueta script en el ORDEN del index.html.
    Todo vive en scope global (sin módulos), igual que antes.
    ============================================================ */
 /* ============================================================
@@ -40,12 +40,11 @@ function openDoc(tipo, pre){
       draft.storeVenta = STORE_IDS.includes(last) ? last : (STORE_IDS.find(s=> db.productos.some(p=> stockDe(p,s)>0)) || STORE_IDS[0]);
     }
     // Y elige VENDEDOR (para la comisión). Vendedor logueado => fijado a sí mismo;
-    // admin => arranca con el último vendedor usado (si sigue existiendo).
+    // admin => arranca SIEMPRE en "Casa" (0%); elige el vendedor manualmente si corresponde.
     if(isSeller()){
       draft.vendedorId = currentVendedorId() || "";
     } else if(draft.vendedorId===undefined){
-      const lv = lastVentaVend();
-      draft.vendedorId = (lv && vendedorById(lv)) ? lv : "";
+      draft.vendedorId = "";   // Casa por defecto
     }
     if(!Array.isArray(draft.costosExtra)) draft.costosExtra = [];   // costos de venta (shipping/labor/etc.)
     if(!Array.isArray(draft.cargosCliente)) draft.cargosCliente = [];   // Task 5: cargos on-top que paga el cliente
@@ -280,7 +279,7 @@ function costosDraftTotal(){ const sc=ventaCcy(); return (draft.costosExtra||[])
 function draftGrossMargin(){ return (draft.lineas||[]).reduce((a,l)=> a + ((parseNum(l.precio)||0)-(l.costoRef||0))*(parseNum(l.cantidad)||0), 0); }
 function draftCommRate(){
   if(draft.vendedorId){ const v=vendedorById(draft.vendedorId); if(v&&v.rate!=null) return v.rate; }
-  return db.config.commissionRate||0;
+  return 0;   // venta de la casa (sin vendedor) = 0% de comisión
 }
 function refreshNet(){
   const box=document.getElementById("netBox"); if(!box) return;
