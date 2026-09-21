@@ -6,6 +6,20 @@
 /* ============================================================
    Router de vistas
    ============================================================ */
+/* ── P&L DESACTIVADA TEMPORALMENTE ─────────────────────────────
+   Se oculta la pestaña en toda la UI sin borrar nada del código
+   (viewPnL, 11b-view-pnl.js, i18n y export siguen intactos).
+   Para reactivar: revertí este archivo o quitá los 3 bloques
+   marcados con "P&L desactivada temporalmente".
+   Este <style> con !important le gana al display inline que
+   applyRoleUI() reescribe en cada render -> los botones de nav
+   (desktop y mobile) quedan ocultos sin flash al cargar. */
+(function(){
+  var s = document.createElement("style");
+  s.id = "pnl-off";
+  s.textContent = '[data-view="pnl"]{display:none !important;}';
+  (document.head || document.documentElement).appendChild(s);
+})();
 let view = "dash";
 /* Nav de dos niveles (ERP): cada vista pertenece a una sección de nivel 1. */
 const SECTION_OF = { dash:"op", ventas:"op", compras:"op", conjunta:"op", remitos:"op", mov:"op",
@@ -39,6 +53,7 @@ document.addEventListener("keydown", (e)=>{
   if((e.metaKey||e.ctrlKey) && (e.key==="k"||e.key==="K")){ e.preventDefault(); if(typeof openCmdK==="function") openCmdK(); }
 });
 function setView(v){
+  if(v==="pnl") v="dash";   // ← P&L desactivada temporalmente: cualquier navegación cae al dashboard
   // gate: admin-only views (purchases, investment, analysis, data) fall back to dashboard for sellers
   if(!isAdmin() && ADMIN_VIEWS.includes(v)) v="dash";
   view = v;
@@ -131,7 +146,7 @@ function render(){
   const bar = storeBarHTML();
   if(view==="dash") m.innerHTML = bar+viewDash();
   else if(view==="analisis") m.innerHTML = bar+viewAnalisis();
-  else if(view==="pnl") m.innerHTML = isAdmin()? (bar+viewPnL()) : viewDash();
+  else if(view==="pnl") m.innerHTML = bar+viewDash();   // ← P&L desactivada temporalmente: no se invoca viewPnL()
   else if(view==="prod") m.innerHTML = bar+viewProd();
   else if(view==="compras") m.innerHTML = bar+viewDocs("compra");
   else if(view==="ventas") m.innerHTML = bar+viewDocs("venta");
