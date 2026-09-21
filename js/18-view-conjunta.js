@@ -882,7 +882,7 @@ function viewConjunta(){
 
   return `
   <div class="head"><div class="title"><h2>${t("conj.title")}</h2><p>${t("conj.sub")}</p></div>
-    <div class="actions"><button class="btn" data-enviar-transito title="${t("conj.sendtransit.tip")}">${ICO.plane}${t("conj.sendtransit")}</button><button class="btn up" data-new-conj>${ICO.plus}${t("conj.newjoint")}</button></div>
+    <div class="actions">${isAdmin()?`<button class="btn danger" data-emergencia title="${t("emg.md.title")}">${ICO.warn}${t("emg.b.short")}</button>`:""}<button class="btn" data-enviar-transito title="${t("conj.sendtransit.tip")}">${ICO.plane}${t("conj.sendtransit")}</button><button class="btn up" data-new-conj>${ICO.plus}${t("conj.newjoint")}</button></div>
   </div>
 
   ${chips}
@@ -1239,4 +1239,5 @@ function wireConjunta(){
   m.querySelectorAll("[data-rm-receive]").forEach(b=> b.onclick=()=> openRecibirRemito(b.dataset.rmReceive));
   m.querySelectorAll("[data-rm-resolve]").forEach(b=> b.onclick=()=> openResolverAR(b.dataset.rmResolve));
   m.querySelectorAll("[data-rm-pdf]").forEach(b=> b.onclick=(e)=>{ e.stopPropagation(); generarRemitoDocPDF(b.dataset.rmPdf); });
+  if (typeof wireEmergencia === "function") wireEmergencia();
 }
