@@ -191,14 +191,22 @@ function openEmergenciaOwn() {
   const prodOpts = prods.map(p => `<option value="${p.id}">${esc(p.sku ? "[" + p.sku + "] " : "")}${esc(p.nombre)}</option>`).join("");
 
   const body = `
-    <p class="hint" style="margin:0 0 12px">${t("emg.own.hint")}</p>
-    <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0;gap:12px">
-      <div class="field" style="grid-column:1/3"><label>${t("common.product")}</label><select class="inp" id="eo_prod">${prodOpts}</select></div>
-      <div class="field" style="grid-column:1/3"><label>${t("emg.own.stage")}</label>
-        <div id="eo_stages" style="display:flex;flex-direction:column;gap:6px"></div></div>
-      <div class="field"><label>${t("common.units")}</label><input class="inp num" id="eo_q" value="0"></div>
-      <div class="field"><label>${t("emg.own.costdelta")}</label><div class="leg-pu hint" id="eo_delta">—</div></div>
-      ${emergMotivoFieldHTML("eo")}
+    <p class="hint" style="margin:0 0 16px">${t("emg.own.hint")}</p>
+    <div class="recv-grid">
+      <div class="recv-list">
+        <div class="grid-form" style="padding:0;gap:14px">
+          <div class="field"><label>${t("common.product")}</label><select class="inp" id="eo_prod">${prodOpts}</select></div>
+          <div class="field"><label>${t("emg.own.stage")}</label>
+            <div id="eo_stages" style="display:flex;flex-direction:column;gap:8px"></div></div>
+          <div class="field"><label>${t("common.units")}</label><input class="inp num" id="eo_q" value="0"></div>
+        </div>
+      </div>
+      <div class="recv-side">
+        <div class="field" style="margin-bottom:16px"><label>${t("emg.own.costdelta")}</label><div class="leg-pu hint" id="eo_delta">—</div></div>
+        <div class="grid-form stack" style="padding:0;gap:14px">
+          ${emergMotivoFieldHTML("eo")}
+        </div>
+      </div>
     </div>`;
   buildModal(t("emg.own.md.title"), body, [
     { label: t("common.cancel"), cls: "btn", act: closeModal },
@@ -218,7 +226,7 @@ function openEmergenciaOwn() {
         render();
       }
     }
-  ], "mini");
+  ], "recv");
 
   // etapas disponibles del producto elegido (radio; preselecciona la más avanzada = AR)
   const renderStages = () => {
@@ -272,19 +280,12 @@ function openEmergenciaTercero() {
     </tr>`).join("");
   const totalU = cands.reduce((a, cs) => a + (cs.cantidad || 0), 0);
   const body = `
-    <p class="hint" style="margin:0 0 16px">${t("emg.ter.hint")}</p>
-    <div class="recv-grid">
-      <div class="recv-list">
-        <div class="recv-list-head">${t("common.product")} <span class="hint">${cands.length} ${t("conj.products")} · ${qty(totalU)} u</span></div>
-        <div class="table-scroll recv-scroll"><table class="rm-tbl">
-          <thead><tr><th class="c"></th><th>SKU</th><th>${t("common.product")}</th><th>${t("common.owner")}</th><th class="c">${t("conj.state")}</th><th class="r">${t("common.units")}</th></tr></thead>
-          <tbody>${rows}</tbody></table></div>
-      </div>
-      <div class="recv-side">
-        <div class="grid-form stack" style="padding:0;gap:16px">
-          ${emergMotivoFieldHTML("et")}
-        </div>
-      </div>
+    <p class="hint" style="margin:0 0 14px">${t("emg.ter.hint")} — <b>${cands.length}</b> ${t("conj.products")} · <b>${qty(totalU)}</b> u</p>
+    <div class="recv-scroll" style="max-height:58vh;margin-bottom:16px"><table class="rm-tbl">
+      <thead><tr><th class="c"></th><th>SKU</th><th>${t("common.product")}</th><th>${t("common.owner")}</th><th class="c">${t("conj.state")}</th><th class="r">${t("common.units")}</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0;gap:14px">
+      ${emergMotivoFieldHTML("et")}
     </div>`;
   buildModal(t("emg.ter.md.title"), body, [
     { label: t("common.cancel"), cls: "btn", act: closeModal },
@@ -302,7 +303,7 @@ function openEmergenciaTercero() {
         render();
       }
     }
-  ], "recv");
+  ], "wide");
 }
 
 /* Wire del botón de la toolbar (lo llama wireConjunta en 18-view-conjunta.js). */
