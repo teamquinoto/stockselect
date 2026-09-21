@@ -74,8 +74,19 @@ Una compra puede ser **`propia`** (todo entra a stock) o **`terceros`**. En terc
 
 ## Perfiles y permisos
 
-- **admin**: todo (compras, finanzas, datos, comisiones, columnas por depósito).
+Tres roles (el Worker los resuelve en `/login` y los firma en el token):
+
+- **admin**: todo (compras, finanzas, P&L, datos, comisiones, columnas por depósito, **puerta de emergencia**). El P&L (Estado de resultados, con Real vs Presupuesto y drill-down por vendedor) es admin-only.
 - **seller**: vende y ve stock total; **no** ve costos, comisiones ni desglose por depósito.
+- **store**: **portal read-only** para una tienda/cliente AR. Ve SOLO su propia mercadería en viaje US → AR y en qué puerta del recorrido está cada envío. Sin acciones. Se activa marcando al cliente en el backend (queda atado a su `terceroId`).
+
+El **ABM de usuarios** (alta/edición/borrado, con rol y `vendedorId`/`clienteId`) es admin-only y vive en el Worker (`/users`, tabla `usuarios` con hash PBKDF2).
+
+---
+
+## Puerta de emergencia (rescate de etapa) — admin-only
+
+"Break glass" para **errores operativos**, no de uso diario: revierte **un** tramo del viaje físico respetando la lógica del flujo — si el error está en Argentina la mercadería **vuelve al barco**, si está en el barco **vuelve a Miami**. Al retroceder una etapa **descapitaliza el costo de ese tramo** (le quita a cada capa FIFO el componente `d.arg` o `d.intl` que se le había sumado, dejándola en el costo de la etapa anterior — simétrico y auditable). Exige **motivo/causal obligatorio**, confirma con fricción, va envuelta en `withUndo` y deja **traza** (kardex `tipo:"emergencia"` para stock propio; `historial[{emergencia:true}]` para consignaciones). No desarma un "quedarse para Select" ya ingresado a stock (eso tiene su propio revert). Vive en `js/24-emergencia.js`.
 
 ---
 
@@ -86,14 +97,24 @@ Worker independiente con su propia base D1 y secrets. Endpoints:
 | Método | Ruta | Qué hace |
 |---|---|---|
 | GET | `/` · `/health` | Vida (sin token) |
-| POST | `/login` | user/pass → token, role, vendedorId |
-| POST | `/parse-invoice` | PDF → Gemini OCR → líneas (Bearer) |
-| GET/PUT | `/state?space=…` | Lee/guarda estado con control de `rev` (Bearer) |
+| POST | `/login` | user/pass → **token firmado (HMAC)**, role, vendedorId, store |
+| GET/POST/DELETE | `/users` | ABM de usuarios (**admin**). Hash de contraseñas PBKDF2 |
+| POST | `/parse-invoice` | PDF → Gemini OCR → líneas (**admin**, Bearer) |
+| GET/PUT | `/state?space=…` | Lee/guarda estado con control de `rev`; el GET **proyecta por rol** (store ve solo lo suyo). En cada PUT deriva el fact table (fail-safe) |
+| GET | `/rollup?desde=&hasta=&rep=USD\|ARS` | Agregaciones server-side (P&L, por mes/vendedor/producto) con FX por mes en SQL (**admin**) |
+| POST | `/reindex?space=…` | Backfill: re-deriva el fact table desde el blob ya guardado (**admin**) |
 
-**Secrets/vars:** `TOKEN`, `USERS` (JSON) o `ADMIN_USER/PASS`, `GEMINI_KEY`, `ALLOWED_ORIGINS` (opc). **Binding:** `DB` (D1).
+**Auth:** token firmado con **HMAC-SHA256** (TTL 30 días), contraseñas con **PBKDF2** (salt por usuario).
+
+**Secrets/vars:** `AUTH_SECRET` (firma el token), `USERS` (JSON) **o** `ADMIN_USER`/`ADMIN_PASS`, `GEMINI_KEY`, `ALLOWED_ORIGINS` (opc). **Binding:** `DB` (D1).
+
+**Tablas D1:** `estado` (el blob + `rev`), `usuarios`, y el **fact table** derivado `sales_header` / `sales_line` / `fx_month`.
+
+### Fact table (derivado, aditivo y fail-safe)
+En cada `PUT /state`, después de guardar el blob (que sigue siendo **la fuente de verdad**), el Worker **deriva** `sales_header`/`sales_line`/`fx_month` para ese space (borra e inserta). Lee el **COGS FIFO ya congelado por línea** (`doc.lineas[].cogs`), así reconcilia EXACTO con la pantalla. Si algo del fact table falla, el guardado del blob **no** se rompe. Migración cero-downtime: se despliega + se corre `/reindex` una vez; el front sigue calculando local y se valida que `/rollup` dé los mismos números.
 
 ### OCR de facturas — rendimiento
-El parseo usa Gemini con **thinking apagado** (`thinkingConfig.thinkingBudget: 0`), modelos rápidos reales **`gemini-2.5-flash-lite` → `gemini-2.5-flash`**, `maxOutputTokens` capado y **timeout de 45s por intento** (AbortController). Con esto una factura se resuelve en **segundos**. *(Antes tardaba minutos porque usaba modelos inexistentes y el campo de thinking equivocado — el modelo "pensaba" por default.)*
+El parseo usa Gemini con **thinking bajo** (`thinkingConfig.thinkingLevel: "low"`), en cascada de modelos rápidos **`gemini-3.8-flash` → `gemini-3.7-flash` → `gemini-2.5-flash`**, `temperature:0` y `response_mime_type:"application/json"`, con **reintentos** ante errores transitorios (429/5xx). Con esto una factura se resuelve en **segundos**.
 
 ---
 
