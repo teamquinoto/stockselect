@@ -294,7 +294,7 @@ function openEmergenciaTercero() {
         render();
       }
     }
-  ], "mini");
+  ], "wide");
 }
 
 /* Wire del botón de la toolbar (lo llama wireConjunta en 18-view-conjunta.js). */
