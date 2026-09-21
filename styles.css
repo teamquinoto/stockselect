@@ -183,7 +183,6 @@
   .head .title h2{font-size:var(--fs-2xl);margin:0 0 3px;letter-spacing:-.4px;font-weight:650}
   .head .title p{margin:0;color:var(--muted);font-size:var(--fs-md)}
   .head .actions{display:flex;gap:9px;flex-wrap:wrap;margin-left:auto;flex-shrink:0}
-  .table-scroll{overflow-x:auto}
 
   /* ---------- Buttons ---------- */
   .btn{
