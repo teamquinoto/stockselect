@@ -876,7 +876,7 @@ function viewConjunta(){
       <td class="r num">${qty(sw)}</td>
       <td class="r num">${qty(tr)}</td>
       <td class="r num">${qty(aj)}</td>
-      <td class="r" style="white-space:nowrap"><button class="btn ghost sm" data-remito-doc="${d.id}" title="${t("conj.remito.tip")}">Remito</button> <button class="btn ghost sm" data-cjdel-doc="${d.id}" style="color:var(--alert)">${t("common.delete")}</button></td>
+      <td class="r" style="white-space:nowrap"><button class="btn ghost sm" data-remito-doc="${d.id}" title="${t("conj.remito.tip")}">Remito</button> <button class="btn ghost sm" data-cjdel-doc="${d.id}" style="color:var(--alert)" title="${t("common.delete")}" aria-label="${t("common.delete")}">${ICO.trash}${t("common.delete")}</button></td>
     </tr>`;
   }).join("") || `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:18px">${t("conj.empty.hist")}</td></tr>`;
 

@@ -39,8 +39,10 @@ function viewClientes(){
       <td>${esc(c.pais||"—")}</td>
       <td class="r num">${nv}</td>
       <td class="r" style="white-space:nowrap">
-        <a href="#" data-cliedit="${c.id}">${t("common.edit")}</a>
-        <a href="#" data-clidel="${c.id}" style="color:var(--down);margin-left:10px">${t("common.delete")}</a>
+        <div style="display:inline-flex;gap:6px;justify-content:flex-end">
+          <button class="btn ghost sm" data-cliedit="${c.id}">${ICO.edit}${t("common.edit")}</button>
+          <button class="btn ghost sm" data-clidel="${c.id}" style="color:var(--alert)" title="${t("common.delete")}" aria-label="${t("common.delete")}">${ICO.trash}${t("common.delete")}</button>
+        </div>
       </td>
     </tr>`;
   }).join("");

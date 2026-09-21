@@ -324,7 +324,7 @@ function renderVendOrphans(users){
       <span class="sku" style="min-width:70px">${esc(v.id)}</span>
       <input class="inp" data-vname="${esc(v.id)}" value="${esc(v.nombre)}" style="max-width:180px">
       <span style="display:inline-flex;align-items:center;gap:4px"><input class="inp num" data-vrate="${esc(v.id)}" value="${esc(String(round2((v.rate!=null?v.rate:(db.config.commissionRate||0))*100)))}" style="max-width:80px" placeholder="%"><span class="hint" style="font-size:12px">${t("dat.sellers.comm")}</span></span>
-      <button class="btn ghost sm" data-vdel="${esc(v.id)}" style="color:var(--alert)">${t("dat.sellers.remove")}</button>
+      <button class="btn ghost sm" data-vdel="${esc(v.id)}" style="color:var(--alert)">${ICO.trash}${t("dat.sellers.remove")}</button>
     </div>`).join("")}
   </div>`;
 }
