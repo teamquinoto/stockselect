@@ -882,7 +882,7 @@ function viewConjunta(){
 
   return `
   <div class="head"><div class="title"><h2>${t("conj.title")}</h2><p>${t("conj.sub")}</p></div>
-    <div class="actions">${isAdmin()?`<button class="btn danger" data-emergencia title="${t("emg.md.title")}">${ICO.warn}${t("emg.b.short")}</button>`:""}<button class="btn" data-enviar-transito title="${t("conj.sendtransit.tip")}">${ICO.plane}${t("conj.sendtransit")}</button><button class="btn up" data-new-conj>${ICO.plus}${t("conj.newjoint")}</button></div>
+    <div class="actions">${isAdmin()?`<button class="btn danger" data-emergencia title="${t("emg.md.title")}" aria-label="${t("emg.md.title")}">${ICO.warn}</button>`:""}<button class="btn" data-enviar-transito title="${t("conj.sendtransit.tip")}">${ICO.plane}${t("conj.sendtransit")}</button><button class="btn up" data-new-conj>${ICO.plus}${t("conj.newjoint")}</button></div>
   </div>
 
   ${chips}
