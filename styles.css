@@ -179,10 +179,11 @@
   @keyframes viewIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 
   .main{padding:32px 44px 80px;max-width:1560px;width:100%;margin-inline:auto}
-  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:26px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px 12px;margin-bottom:26px;flex-wrap:wrap}
   .head .title h2{font-size:var(--fs-2xl);margin:0 0 3px;letter-spacing:-.4px;font-weight:650}
   .head .title p{margin:0;color:var(--muted);font-size:var(--fs-md)}
-  .head .actions{display:flex;gap:9px;flex-wrap:wrap}
+  .head .actions{display:flex;gap:9px;flex-wrap:wrap;margin-left:auto;flex-shrink:0}
+  .table-scroll{overflow-x:auto}
 
   /* ---------- Buttons ---------- */
   .btn{
@@ -508,6 +509,7 @@
     .main{padding:20px 16px 90px}
     .kpis{grid-template-columns:repeat(2,1fr)}
     .head{flex-direction:column;align-items:flex-start}
+    .head .actions{margin-left:0}
     .table-scroll{overflow-x:auto}
     table{min-width:560px}
   }
