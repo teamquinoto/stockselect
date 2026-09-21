@@ -270,13 +270,21 @@ function openEmergenciaTercero() {
       <td class="c">${estadoPillMini(cs.estado)}</td>
       <td class="r num">${qty(cs.cantidad)}</td>
     </tr>`).join("");
+  const totalU = cands.reduce((a, cs) => a + (cs.cantidad || 0), 0);
   const body = `
-    <p class="hint" style="margin:0 0 12px">${t("emg.ter.hint")}</p>
-    <div class="table-scroll" style="margin-bottom:12px;max-height:38vh"><table class="rm-tbl">
-      <thead><tr><th class="c"></th><th>SKU</th><th>${t("common.product")}</th><th>${t("common.owner")}</th><th class="c">${t("conj.state")}</th><th class="r">${t("common.units")}</th></tr></thead>
-      <tbody>${rows}</tbody></table></div>
-    <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0;gap:12px">
-      ${emergMotivoFieldHTML("et")}
+    <p class="hint" style="margin:0 0 16px">${t("emg.ter.hint")}</p>
+    <div class="recv-grid">
+      <div class="recv-list">
+        <div class="recv-list-head">${t("common.product")} <span class="hint">${cands.length} ${t("conj.products")} · ${qty(totalU)} u</span></div>
+        <div class="table-scroll recv-scroll"><table class="rm-tbl">
+          <thead><tr><th class="c"></th><th>SKU</th><th>${t("common.product")}</th><th>${t("common.owner")}</th><th class="c">${t("conj.state")}</th><th class="r">${t("common.units")}</th></tr></thead>
+          <tbody>${rows}</tbody></table></div>
+      </div>
+      <div class="recv-side">
+        <div class="grid-form stack" style="padding:0;gap:16px">
+          ${emergMotivoFieldHTML("et")}
+        </div>
+      </div>
     </div>`;
   buildModal(t("emg.ter.md.title"), body, [
     { label: t("common.cancel"), cls: "btn", act: closeModal },
@@ -294,7 +302,7 @@ function openEmergenciaTercero() {
         render();
       }
     }
-  ], "wide");
+  ], "recv");
 }
 
 /* Wire del botón de la toolbar (lo llama wireConjunta en 18-view-conjunta.js). */
