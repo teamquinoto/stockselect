@@ -17,7 +17,7 @@ Antes de los módulos propios se cargan 3 libs de CDN: **pdf.js**, **jsPDF** y *
 |---|---|---|
 | 00b | `js/00b-i18n.js` | **Primero de todo.** Diccionarios EN/ES + `t(key,vars)`, `lang()`/`setLang()`, `applyStaticI18n()`. Cada vista suma sus claves acá. |
 | 00c | `js/00c-icons.js` | Biblioteca de iconos SVG (`ICO.<clave>`, estilo Feather). Se carga antes de las vistas. |
-| 01 | `js/01-core.js` | Config, estado, sesión, sync con el Worker, login, formatos, toast, **`withUndo`/`doUndo`**, **roles** (`admin`/`seller`/`store`), **depósitos Swan/Select + buckets `__transito`/`__inv`**, helpers de stock, helpers de venta (margen, comisión, `saleCargosCliente`/`saleNetMargin`), **remitos numerados** (`nextRemitoNum`/`crearRemito`, series U/A) |
+| 01 | `js/01-core.js` | Config, estado, sesión, sync con el Worker, login, formatos, toast, **`withUndo`/`doUndo`**, **roles** (`admin`/`seller`/`store`), **depósitos Swan/Select + buckets `__transito`/`__inv`**, **moneda única USD** (`money(n)`, sin TC ni conversiones), helpers de stock, helpers de venta (margen, comisión, `saleCargosCliente`/`saleNetMargin`), **remitos numerados** (`nextRemitoNum`/`crearRemito`, series U/A) |
 | 02 | `js/02-engine.js` | Motor: `moverStock`, **FIFO por depósito** y **FIFO global** (venta), bóveda (`sendToInvestment`/`returnFromInvestment`), **`transferStock`** (arrastra el desglose `d:{us,intl,arg}` y capitaliza el costo del tramo) |
 | 03 | `js/03-router.js` | Router de vistas + wireo del nav |
 | 10 | `js/10-view-dashboard.js` | Panel / KPIs + tarjetas "Necesita tu atención" (reorder / tránsito / terceros) |

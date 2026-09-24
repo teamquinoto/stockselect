@@ -12,7 +12,7 @@
    ACTUALIZACIÓN CONTROLADA: no auto-activamos con skipWaiting; cuando hay
    versión nueva el SW queda "waiting" y la app muestra el botón "Update".
    ============================================================ */
-const CACHE = "mayor-stock-v64";   // v64: fix theme-color (JS pisaba el violeta en cada arranque) y acento del PDF a ámbar
+const CACHE = "mayor-stock-v65";   // v65: moneda única USD (se saca bimoneda, TC y conversiones)
 
 const ASSETS = [
   "./",

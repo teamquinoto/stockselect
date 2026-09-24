@@ -6,16 +6,18 @@ Gestor de inventario **cross-border (USA ↔ AR)** en **vanilla HTML/CSS/JS**, s
 
 ## Modelo cross-border: depósitos y buckets
 
-Dos **depósitos reales** (vendibles), cada uno factura/valúa en su moneda:
+Dos **depósitos reales** (vendibles):
 
-| Depósito | Dónde | Moneda |
-|---|---|---|
-| **Swan** | USA (Miami) | USD |
-| **Select** | Argentina | ARS |
+| Depósito | Dónde |
+|---|---|
+| **Swan** | USA (Miami) |
+| **Select** | Argentina |
+
+> **Moneda única: USD.** Todo el sistema opera en dólares (compras, ventas, costos por puerta, FIFO, valuación, P&L, remitos). No hay tipo de cambio ni conversiones: si algo se paga en pesos, se pasa a USD **a mano** antes de cargarlo.
 
 Dos **buckets** (NO vendibles, no cuentan como stock ni inflan valuación):
 
-- **`__transito`** — mercadería en viaje US → AR. Nace del lado US (USD).
+- **`__transito`** — mercadería en viaje US → AR.
 - **`__inv`** — bóveda de inversión: stock apartado con trazabilidad de costo, fuera del pool de venta.
 
 ### Flujo físico y acumulación de costos (las "puertas")
@@ -101,17 +103,17 @@ Worker independiente con su propia base D1 y secrets. Endpoints:
 | GET/POST/DELETE | `/users` | ABM de usuarios (**admin**). Hash de contraseñas PBKDF2 |
 | POST | `/parse-invoice` | PDF → Gemini OCR → líneas (**admin**, Bearer) |
 | GET/PUT | `/state?space=…` | Lee/guarda estado con control de `rev`; el GET **proyecta por rol** (store ve solo lo suyo). En cada PUT deriva el fact table (fail-safe) |
-| GET | `/rollup?desde=&hasta=&rep=USD\|ARS` | Agregaciones server-side (P&L, por mes/vendedor/producto) con FX por mes en SQL (**admin**) |
+| GET | `/rollup?desde=&hasta=` | Agregaciones server-side en USD (P&L, por mes/vendedor/producto) (**admin**) |
 | POST | `/reindex?space=…` | Backfill: re-deriva el fact table desde el blob ya guardado (**admin**) |
 
 **Auth:** token firmado con **HMAC-SHA256** (TTL 30 días), contraseñas con **PBKDF2** (salt por usuario).
 
 **Secrets/vars:** `AUTH_SECRET` (firma el token), `USERS` (JSON) **o** `ADMIN_USER`/`ADMIN_PASS`, `GEMINI_KEY`, `ALLOWED_ORIGINS` (opc). **Binding:** `DB` (D1).
 
-**Tablas D1:** `estado` (el blob + `rev`), `usuarios`, y el **fact table** derivado `sales_header` / `sales_line` / `fx_month`.
+**Tablas D1:** `estado` (el blob + `rev`), `usuarios`, y el **fact table** derivado `sales_header` / `sales_line`.
 
 ### Fact table (derivado, aditivo y fail-safe)
-En cada `PUT /state`, después de guardar el blob (que sigue siendo **la fuente de verdad**), el Worker **deriva** `sales_header`/`sales_line`/`fx_month` para ese space (borra e inserta). Lee el **COGS FIFO ya congelado por línea** (`doc.lineas[].cogs`), así reconcilia EXACTO con la pantalla. Si algo del fact table falla, el guardado del blob **no** se rompe. Migración cero-downtime: se despliega + se corre `/reindex` una vez; el front sigue calculando local y se valida que `/rollup` dé los mismos números.
+En cada `PUT /state`, después de guardar el blob (que sigue siendo **la fuente de verdad**), el Worker **deriva** `sales_header`/`sales_line` para ese space (borra e inserta). Lee el **COGS FIFO ya congelado por línea** (`doc.lineas[].cogs`), así reconcilia EXACTO con la pantalla. Si algo del fact table falla, el guardado del blob **no** se rompe. Migración cero-downtime: se despliega + se corre `/reindex` una vez; el front sigue calculando local y se valida que `/rollup` dé los mismos números.
 
 ### OCR de facturas — rendimiento
 El parseo usa Gemini con **thinking bajo** (`thinkingConfig.thinkingLevel: "low"`), en cascada de modelos rápidos **`gemini-3.8-flash` → `gemini-3.7-flash` → `gemini-2.5-flash`**, `temperature:0` y `response_mime_type:"application/json"`, con **reintentos** ante errores transitorios (429/5xx). Con esto una factura se resuelve en **segundos**.

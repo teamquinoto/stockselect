@@ -784,7 +784,6 @@
 .house .hh{display:flex;align-items:center;gap:9px;padding:13px 16px;border-bottom:1px solid var(--line);background:var(--surface-2)}
 .house .hh .flag{width:26px;height:22px;border-radius:6px;display:grid;place-items:center;font-family:var(--mono);font-size:var(--fs-2xs);font-weight:700;color:var(--on-accent);background:var(--accent)}
 .house .hh .nm{font-weight:800;font-size:var(--fs-base);letter-spacing:-.2px}
-.house .hh .cc{margin-left:auto;font-family:var(--mono);font-size:var(--fs-2xs);font-weight:700;color:var(--accent-ink);background:var(--up-bg);padding:3px 9px;border-radius:6px}
 .house .hrow{display:flex;gap:14px;padding:14px 16px;border-bottom:1px solid var(--line)}
 .house .hrow .stat{flex:1;min-width:0}
 .house .hrow .stat .l{font-size:var(--fs-2xs);text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:600;margin-bottom:5px}
@@ -926,15 +925,6 @@
 .lang-opt.on{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.14)}
 .lang-opt:not(.on):hover{color:var(--text)}
 @media(max-width:860px){ .lang-opt{padding:5px 9px} }
-
-/* --- Per-gate currency selector (USD/ARS + rate) --- */
-.cost-row{display:flex;gap:8px;align-items:center}
-.cost-row .inp{flex:1 1 auto;min-width:0}
-.ccy-seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:2px;flex:0 0 auto}
-.ccy-opt{border:0;background:transparent;color:var(--muted);font-family:var(--mono);font-size:var(--fs-xs);font-weight:700;padding:5px 10px;border-radius:6px;cursor:pointer;transition:background .12s,color .12s}
-.ccy-opt.on{background:var(--accent);color:var(--on-accent)}
-.ccy-opt:not(.on):hover{color:var(--text)}
-.rate-row{display:flex;align-items:center;gap:8px}
 
 /* ============================================================
    UX batch (PC): buscador, chip de sync, headers sticky, empty CTA, glosario
