@@ -181,7 +181,7 @@ function renderDocModal(){
       {label: editing?t("md.btn.savechanges") : (isC?t("md.btn.confirmpurchase"):t("md.btn.confirmsale")),cls:isC?"btn up":"btn down",act:confirmDoc}
     ],
     "wide doc",
-    `<div class="totrow"><span style="color:var(--muted)">${t("md.doctotal")}</span><span class="num" id="docTotal">${money(docTotal(), storeCcy(draft.tipo==="compra"?draft.store:draft.storeVenta))}</span></div>`
+    `<div class="totrow"><span style="color:var(--muted)">${t("md.doctotal")}</span><span class="num" id="docTotal">${money(docTotal())}</span></div>`
   );
   renderLines();
   const dOr=document.getElementById("d_origen");
@@ -236,13 +236,13 @@ function docTotal(){
   const envio = (draft.envio && draft.envio.tipo==="monto") ? (draft.envio.monto||0) : 0;
   return round2(totalLineas(draft.lineas) + envio + cargosClienteTotal());
 }
-/* Task 5: suma de los cargos on-top (en la moneda de la venta). */
+/* Task 5: suma de los cargos on-top (USD). */
 function cargosClienteTotal(){ return round2((draft.cargosCliente||[]).reduce((a,c)=> a + (parseNum(c.monto)||0), 0)); }
 function nuevaLineaCargo(){ return { key:uid(), nota:"", monto:0 }; }
 function renderCargos(){
   const host=document.getElementById("cargoHost"); if(!host) return;
   draft.cargosCliente = draft.cargosCliente || [];
-  const cc = storeCcy(draft.storeVenta || STORE_IDS[0]);
+  const cc = CCY_SYM;
   host.innerHTML = draft.cargosCliente.length ? draft.cargosCliente.map((c,i)=>`
     <div class="grid-form" style="grid-template-columns:1fr auto auto;padding:0;gap:8px;align-items:end;margin-bottom:6px">
       <div class="field"><label>${t("md.lbl.concept")}</label><input class="inp" data-cgnota="${i}" value="${esc(c.nota||"")}" placeholder="${t("md.ph.charge")}"></div>
@@ -256,9 +256,8 @@ function renderCargos(){
 function pintarProrateo(){
   const h=document.getElementById("d_proHint"); if(!h) return;
   const u=unidadesDoc(), extra=(draft.handling||0)+(draft.flete||0);
-  const cc=storeCcy(draft.store);
   h.textContent = (extra>0 && u>0)
-    ? t("md.pro.split",{total:money(extra, cc),u:qty(u),per:money(extra/u, cc)})
+    ? t("md.pro.split",{total:money(extra),u:qty(u),per:money(extra/u)})
     : t("md.pro.hint");
   refreshTotal();
 }
@@ -271,11 +270,9 @@ function pintarProrateo(){
    es una ESTIMACIÓN en vivo (usa el costo FIFO de referencia de cada línea);
    el número exacto queda congelado en la factura al confirmar.
    ============================================================ */
-function ventaCcy(){ return storeCcy(draft.storeVenta || STORE_IDS[0]); }
-function nuevaLineaCosto(){ return { key:uid(), tipo:"envio", nota:"", monto:0, horas:0, valorHora:0, ccy:ventaCcy() }; }
-/* Total de costos convertido a la moneda de la VENTA (cada costo puede venir en
-   su propia moneda: p.ej. una venta en US$ con horas hombre pagadas en $). */
-function costosDraftTotal(){ const sc=ventaCcy(); return (draft.costosExtra||[]).reduce((a,c)=> a + convertCcy(parseNum(c.monto)||0, c.ccy||sc, sc), 0); }
+function nuevaLineaCosto(){ return { key:uid(), tipo:"envio", nota:"", monto:0, horas:0, valorHora:0 }; }
+/* Total de costos de venta (USD). */
+function costosDraftTotal(){ return (draft.costosExtra||[]).reduce((a,c)=> a + (parseNum(c.monto)||0), 0); }
 function draftGrossMargin(){ return (draft.lineas||[]).reduce((a,l)=> a + ((parseNum(l.precio)||0)-(l.costoRef||0))*(parseNum(l.cantidad)||0), 0); }
 function draftCommRate(){
   if(draft.vendedorId){ const v=vendedorById(draft.vendedorId); if(v&&v.rate!=null) return v.rate; }
@@ -283,47 +280,43 @@ function draftCommRate(){
 }
 function refreshNet(){
   const box=document.getElementById("netBox"); if(!box) return;
-  const sc=ventaCcy();
   const gm=round2(draftGrossMargin()), rate=draftCommRate(), comm=round2(gm*rate), cost=round2(costosDraftTotal()), net=round2(gm-comm-cost);
   box.innerHTML = `
-    <div class="totrow"><span style="color:var(--muted)">${t("md.net.gross")}</span><span class="num">${money(gm, sc)}</span></div>
-    <div class="totrow"><span style="color:var(--muted)">${t("md.net.comm",{p:nf0.format(rate*100)})}</span><span class="num">${money(comm, sc)}</span></div>
-    <div class="totrow"><span style="color:var(--muted)">${t("md.net.costs")}</span><span class="num">${money(cost, sc)}</span></div>
-    <div class="totrow" style="font-weight:700"><span>${t("md.net.net")}</span><span class="num" style="color:${net<0?'var(--alert)':'var(--up)'}">${money(net, sc)}</span></div>`;
+    <div class="totrow"><span style="color:var(--muted)">${t("md.net.gross")}</span><span class="num">${money(gm)}</span></div>
+    <div class="totrow"><span style="color:var(--muted)">${t("md.net.comm",{p:nf0.format(rate*100)})}</span><span class="num">${money(comm)}</span></div>
+    <div class="totrow"><span style="color:var(--muted)">${t("md.net.costs")}</span><span class="num">${money(cost)}</span></div>
+    <div class="totrow" style="font-weight:700"><span>${t("md.net.net")}</span><span class="num" style="color:${net<0?'var(--alert)':'var(--up)'}">${money(net)}</span></div>`;
 }
 function renderCostos(){
   const host=document.getElementById("costHost"); if(!host) return;
   draft.costosExtra = draft.costosExtra || [];
-  const ccyOpts = c => Object.keys(MONEDAS).map(k=>`<option value="${k}" ${((c.ccy||ventaCcy())===k)?"selected":""}>${monedaSym(k)}</option>`).join("");
   const rows = draft.costosExtra.map((c,i)=>{
     const isLabor = c.tipo==="labor";
     const midCells = isLabor
       ? `<td style="width:64px"><input class="inp num" data-ck="horas" data-ci="${i}" value="${c.horas||0}" placeholder="${t("md.ph.hs")}" title="${t("md.tt.hours")}"></td>
          <td style="width:78px"><input class="inp num" data-ck="valorHora" data-ci="${i}" value="${c.valorHora||0}" placeholder="${t("md.ph.rate")}" title="${t("md.tt.rate")}"></td>
-         <td class="r num" data-csub="${i}" style="width:92px;color:var(--muted)">${money((parseNum(c.horas)||0)*(parseNum(c.valorHora)||0), c.ccy||ventaCcy())}</td>`
+         <td class="r num" data-csub="${i}" style="width:92px;color:var(--muted)">${money((parseNum(c.horas)||0)*(parseNum(c.valorHora)||0))}</td>`
       : `<td colspan="2"><input class="inp" data-ck="nota" data-ci="${i}" value="${esc(c.nota||"")}" placeholder="${t("md.ph.noteopt")}"></td>
          <td style="width:92px"><input class="inp num" data-ck="monto" data-ci="${i}" value="${c.monto||0}"></td>`;
     return `<tr>
       <td style="width:150px"><select class="inp" data-ck="tipo" data-ci="${i}">${COSTO_TIPOS.map(t=>`<option value="${t.id}" ${t.id===c.tipo?"selected":""}>${esc(costoTipoLabel(t.id))}</option>`).join("")}</select></td>
-      <td style="width:62px"><select class="inp" data-ck="ccy" data-ci="${i}">${ccyOpts(c)}</select></td>
       ${midCells}
       <td style="width:28px"><button class="btn ghost sm" data-cdel="${i}" title="${t("md.tt.remove")}">✕</button></td>
     </tr>`;
   }).join("");
   host.innerHTML = draft.costosExtra.length
-    ? `<div class="table-scroll"><table class="line-tbl doc-tbl"><colgroup><col style="width:150px"><col style="width:62px"><col><col><col style="width:92px"><col style="width:28px"></colgroup><tbody>${rows}</tbody></table></div>`
+    ? `<div class="table-scroll"><table class="line-tbl doc-tbl"><colgroup><col style="width:150px"><col><col><col style="width:92px"><col style="width:28px"></colgroup><tbody>${rows}</tbody></table></div>`
     : `<p class="hint" style="margin:2px 0 0;font-size:12px">${t("md.costos.empty")}</p>`;
   host.querySelectorAll("[data-ck]").forEach(inp=>{
     const i=+inp.dataset.ci, k=inp.dataset.ck;
     const handler=()=>{
       const c=draft.costosExtra[i]; if(!c) return;
       if(k==="tipo"){ c.tipo=inp.value; renderCostos(); return; }   // cambia la estructura de la fila
-      if(k==="ccy"){ c.ccy=inp.value; const sc=host.querySelector(`[data-csub="${i}"]`); if(sc) sc.textContent=money(c.monto||0, c.ccy); refreshNet(); return; }
       if(k==="nota"){ c.nota=inp.value; return; }
       c[k]=parseNum(inp.value);
       if(k==="horas"||k==="valorHora"){
         c.monto=round2((parseNum(c.horas)||0)*(parseNum(c.valorHora)||0));
-        const sc=host.querySelector(`[data-csub="${i}"]`); if(sc) sc.textContent=money(c.monto, c.ccy||ventaCcy());
+        const sc=host.querySelector(`[data-csub="${i}"]`); if(sc) sc.textContent=money(c.monto);
       }
       refreshNet();
     };
@@ -367,7 +360,7 @@ function renderAjuste(){
         <select class="inp" id="aj_prod">${opts}</select>
       </div>
       <div class="field"><label>${t("md.lbl.society")}</label>${storeSel}
-        ${p?`<div style="font-size:12px;color:var(--muted);margin-top:4px">${t("md.aj.stockline",{n:'<b class="num">'+stockActual+'</b>',cost:money(p.ultimoCosto, storeCcy(draft.tipo==="compra"?draft.store:draft.storeVenta))})}</div>`:""}
+        ${p?`<div style="font-size:12px;color:var(--muted);margin-top:4px">${t("md.aj.stockline",{n:'<b class="num">'+stockActual+'</b>',cost:money(p.ultimoCosto)})}</div>`:""}
       </div>
       <div class="field"><label>${t("md.aj.type")}</label>
         <select class="inp" id="aj_modo">

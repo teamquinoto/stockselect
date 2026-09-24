@@ -51,7 +51,7 @@ function openProd(id){
       <div class="field" id="p_wrapNeto"><label>${t("prod.l.netcost")}</label><input class="inp num" id="p_neto" value="${neto}"></div>
       <div class="field" id="p_wrapHand"><label>${t("prod.l.handling")}</label><input class="inp num" id="p_hand" value="${hand}"></div>
       <div class="field" id="p_wrapFlete"><label>${t("prod.l.freight")}</label><input class="inp num" id="p_flete" value="${fle}"></div>
-      <div class="field" style="grid-column:1/4"><label>${t("prod.l.totalcost",{ccy:db.config.moneda})}</label><input class="inp num" id="p_cos" value="${total}"></div>
+      <div class="field" style="grid-column:1/4"><label>${t("prod.l.totalcost",{ccy:CCY_SYM})}</label><input class="inp num" id="p_cos" value="${total}"></div>
     </div>
 
     <div class="phead" style="margin:16px 0 6px;padding:0"><h3 style="font-size:13px">${t("prod.l.listprice")}</h3></div>
@@ -94,8 +94,7 @@ function openProd(id){
   function pintarMargen(){
     const pv=parseNum($("p_pv").value), c=totalCosto();
     const mg = pv>0 ? (pv-c)/pv*100 : 0;
-    const mgCcy = storeCcy((document.getElementById("p_store")||{}).value || (effectiveStores()[0]||STORE_IDS[0]));
-    $("p_mgReal").textContent = pv>0 ? t("prod.mg.real",{p:nf0.format(mg),m:money(pv-c, mgCcy)}) : t("prod.mg.enter");
+    $("p_mgReal").textContent = pv>0 ? t("prod.mg.real",{p:nf0.format(mg),m:money(pv-c)}) : t("prod.mg.enter");
   }
   function syncMarkup(from){
     const c=totalCosto();

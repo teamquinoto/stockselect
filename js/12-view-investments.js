@@ -20,8 +20,8 @@ function viewInversiones(){
       <td>${esc(p.nombre)} <span class="pill inv">${t("inv.pill")}</span></td>
       <td class="c">${esc(langLabel(p.idioma))}</td>
       <td class="r num">${qty(un)}</td>
-      <td class="r num">${money(un>0?cost/un:0, "USD")}</td>
-      <td class="r num">${money(cost, "USD")}</td>
+      <td class="r num">${money(un>0?cost/un:0)}</td>
+      <td class="r num">${money(cost)}</td>
       <td class="r"><button class="btn ghost sm" data-invret="${p.id}">${t("inv.ret")}</button></td>
     </tr>`;
   }).join("");
@@ -32,7 +32,7 @@ function viewInversiones(){
   <div class="kpis">
     <div class="kpi"><div class="lbl">${t("inv.kpi.items")}</div><div class="val">${items.length}</div><div class="sub">${t("inv.kpi.itemssub")}</div></div>
     <div class="kpi"><div class="lbl">${t("inv.kpi.units")}</div><div class="val">${qty(totalUn)}</div><div class="sub">${t("inv.kpi.unitssub")}</div></div>
-    <div class="kpi"><div class="lbl">${t("inv.kpi.invested")}</div><div class="val">${money(totalCosto, "USD")}</div><div class="sub">${t("inv.kpi.investedsub")}</div></div>
+    <div class="kpi"><div class="lbl">${t("inv.kpi.invested")}</div><div class="val">${money(totalCosto)}</div><div class="sub">${t("inv.kpi.investedsub")}</div></div>
     <div class="kpi"><div class="lbl">${t("inv.kpi.portfolio")}</div><div class="val">—</div><div class="sub">${t("inv.kpi.portfoliosub")}</div></div>
   </div>
   <div class="panel">

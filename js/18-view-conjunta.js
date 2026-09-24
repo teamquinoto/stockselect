@@ -211,53 +211,27 @@ function quedarseParaSelect(consignId, unidades, costoUnit, obs){
    unit. The preview shows instantly how much it adds to each unit, so
    you understand where and how the landed cost is capitalized at each gate.
    ============================================================ */
-/* Cost field WITH per-gate currency (USD/ARS). Everything is unified to USD:
-   if ARS is chosen we ask for the rate (ARS per US$1, prefilled from the global
-   tc()) and legCostRead() divides by it. The engine only ever sees USD. */
+/* Cost field (USD). El operador carga el TOTAL del tramo ya en dólares
+   (si se pagó en pesos, lo pasa a USD a mano) y la app lo prorratea. */
 function legCostFieldHTML(id, label, hint, opts){
   opts = opts || {};
   const val = (opts.value!=null) ? opts.value : "0";
-  const pu  = opts.noPreview ? "" : `<div class="leg-pu hint" id="${id}_pu">${t("conj.leg.perunit",{m:money(0,"USD")})}</div>`;
-  return `<div class="field" style="grid-column:1/-1"><label>${label}${hint?` <span class="hint" style="font-weight:400">${hint}</span>`:""}</label>
-    <div class="cost-row">
-      <input class="inp num" id="${id}" value="${val}" inputmode="decimal">
-      <div class="ccy-seg" data-ccy-for="${id}">
-        <button type="button" class="ccy-opt on" data-ccy="USD">US$</button>
-        <button type="button" class="ccy-opt" data-ccy="ARS">AR$</button>
-      </div>
-    </div>
-    <div class="rate-row" id="${id}_rate_row" style="display:none;margin-top:6px">
-      <span class="hint">${t("conj.leg.arsrate")}</span>
-      <input class="inp num" id="${id}_rate" value="${tc()}" inputmode="decimal" style="max-width:130px">
-    </div>
+  const pu  = opts.noPreview ? "" : `<div class="leg-pu hint" id="${id}_pu">${t("conj.leg.perunit",{m:money(0)})}</div>`;
+  return `<div class="field" style="grid-column:1/-1"><label>${label} <span class="hint" style="font-weight:400">${CCY_SYM}</span>${hint?` <span class="hint" style="font-weight:400">${hint}</span>`:""}</label>
+    <input class="inp num" id="${id}" value="${val}" inputmode="decimal">
     ${pu}</div>`;
 }
-/* Read a cost field's amount already converted to USD (base currency). */
+/* Lee un campo de costo (USD). */
 function legCostRead(id){
   const inp=document.getElementById(id); if(!inp) return 0;
-  const amt=Math.max(0, parseNum(inp.value)||0);
-  const on=document.querySelector('[data-ccy-for="'+id+'"] .ccy-opt.on');
-  const ccy = on ? on.getAttribute("data-ccy") : "USD";
-  if(ccy==="ARS"){ const r=Math.max(0, parseNum((document.getElementById(id+"_rate")||{}).value)||0); return r>0 ? amt/r : 0; }
-  return amt;
-}
-/* Wire the USD/ARS toggle + rate field for a cost input. onChange re-runs any preview. */
-function wireLegCcy(id, onChange){
-  const seg=document.querySelector('[data-ccy-for="'+id+'"]'); if(!seg) return;
-  const rateRow=document.getElementById(id+"_rate_row");
-  seg.querySelectorAll(".ccy-opt").forEach(b=> b.onclick=()=>{
-    seg.querySelectorAll(".ccy-opt").forEach(x=> x.classList.toggle("on", x===b));
-    if(rateRow) rateRow.style.display = (b.getAttribute("data-ccy")==="ARS") ? "" : "none";
-    if(onChange) onChange();
-  });
-  const r=document.getElementById(id+"_rate"); if(r) r.oninput=()=>{ if(onChange) onChange(); };
+  return Math.max(0, parseNum(inp.value)||0);
 }
 function wireLegPreview(inputId, totalUnits){
   const inp=document.getElementById(inputId), out=document.getElementById(inputId+"_pu");
   if(!inp||!out) return;
   const upd=()=>{ const usd=legCostRead(inputId); const pu = totalUnits>0 ? usd/totalUnits : 0;
-    out.textContent = t("conj.leg.preview",{m:money(round2(pu),"USD"),n:qty(totalUnits)}); };
-  inp.oninput=upd; wireLegCcy(inputId, upd); upd();
+    out.textContent = t("conj.leg.preview",{m:money(round2(pu)),n:qty(totalUnits)}); };
+  inp.oninput=upd; upd();
 }
 function estadoPillMini(e){
   const col = e===CONSIGN_ESTADOS.TRANSITO ? "var(--muted)" : e===CONSIGN_ESTADOS.AR ? "var(--accent)" : "var(--up)";
@@ -570,7 +544,7 @@ function openRecibirTransito(prodId){
   if(held<=0){ toast(t("conj.tt.notransitprod"),"warn"); return; }
   const destino = STORE_IDS[1] || STORE_IDS[0];   // AR deposit (transit destination)
   const body = `
-    <p class="hint" style="margin:0 0 12px">${t("conj.rt.hint",{n:qty(held),val:money(transValor(p),"USD"),store:esc(storeName(destino))})}</p>
+    <p class="hint" style="margin:0 0 12px">${t("conj.rt.hint",{n:qty(held),val:money(transValor(p)),store:esc(storeName(destino))})}</p>
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
       <div class="field"><label>${t("conj.l.unitstorecv")}</label><input class="inp num" id="rt_q" value="${held}"></div>
       ${legCostFieldHTML("rt_c",t("conj.leg.gate3"),t("conj.leg.hint.total"))}
@@ -585,13 +559,13 @@ function openRecibirTransito(prodId){
       const obs=(document.getElementById("rt_obs").value||"").trim();
       if(q<=0){ toast(t("conj.tt.enterqty"),"warn"); return; }
       const done = transferStock(p, TRANSITO_STORE, destino, q, c, obs, "arg");
-      if(done>0){ closeModal(); toast(t("conj.tt.delivered",{n:qty(done),store:storeName(destino),cost:cTot>0?t("conj.frag.landed",{m:money(c,"USD")}):""}), "up"); render(); }
+      if(done>0){ closeModal(); toast(t("conj.tt.delivered",{n:qty(done),store:storeName(destino),cost:cTot>0?t("conj.frag.landed",{m:money(c)}):""}), "up"); render(); }
     }}
   ], "mini");
   // landed-per-unit preview = total ÷ units to receive (recomputed when either changes)
   const rtC=document.getElementById("rt_c"), rtQ=document.getElementById("rt_q"), rtPu=document.getElementById("rt_c_pu");
-  const rtUpd=()=>{ const usd=legCostRead("rt_c"), u=Math.max(0,parseNum(rtQ.value)||0); rtPu.textContent = t("conj.leg.preview",{m:money(u>0?round2(usd/u):0,"USD"),n:qty(u)}); };
-  if(rtC&&rtQ&&rtPu){ rtC.oninput=rtUpd; rtQ.oninput=rtUpd; wireLegCcy("rt_c",rtUpd); rtUpd(); }
+  const rtUpd=()=>{ const usd=legCostRead("rt_c"), u=Math.max(0,parseNum(rtQ.value)||0); rtPu.textContent = t("conj.leg.preview",{m:money(u>0?round2(usd/u):0),n:qty(u)}); };
+  if(rtC&&rtQ&&rtPu){ rtC.oninput=rtUpd; rtQ.oninput=rtUpd; rtUpd(); }
 }
 
 /* ---- Send to transit: moves units from a sellable deposit into the transit bucket.
@@ -630,7 +604,7 @@ function openEnviarTransito(){
           obs:obs || t("conj.obs.ownstock",{from:storeName(st)}) });
         save();
         closeModal();
-        toast(t("conj.tt.senttransit",{n:qty(done),code:uRem.codigo,cost:costTot>0?t("conj.frag.landed",{m:money(costPU,"USD")}):""}), "up");
+        toast(t("conj.tt.senttransit",{n:qty(done),code:uRem.codigo,cost:costTot>0?t("conj.frag.landed",{m:money(costPU)}):""}), "up");
         render();
         // Remito saved — download it from the Remitos section (no pop-up).
       }
@@ -647,8 +621,8 @@ function openEnviarTransito(){
   fillStores();
   // landed-per-unit preview = total ÷ units
   const etC=document.getElementById("et_cost"), etQ=document.getElementById("et_q"), etPu=document.getElementById("et_cost_pu");
-  const etUpd=()=>{ const usd=legCostRead("et_cost"), u=Math.max(0,parseNum(etQ.value)||0); etPu.textContent = t("conj.leg.preview",{m:money(u>0?round2(usd/u):0,"USD"),n:qty(u)}); };
-  if(etC&&etQ&&etPu){ etC.oninput=etUpd; etQ.oninput=etUpd; wireLegCcy("et_cost",etUpd); etUpd(); }
+  const etUpd=()=>{ const usd=legCostRead("et_cost"), u=Math.max(0,parseNum(etQ.value)||0); etPu.textContent = t("conj.leg.preview",{m:money(u>0?round2(usd/u):0),n:qty(u)}); };
+  if(etC&&etQ&&etPu){ etC.oninput=etUpd; etQ.oninput=etUpd; etUpd(); }
 }
 
 /* ---- Write-off of transit: reduces bucket units due to breakage, customs,
@@ -802,7 +776,7 @@ function ourTransitCardHTML(p){
     <div class="rl-head">
       <span class="rl-code">${esc(p.nombre)}</span>
       <span class="rl-badge ours">${t("conj.badge.ours")}</span>
-      <span class="rl-meta">${esc(p.sku||"\u2014")} \u00b7 ${qty(u)} u \u00b7 ${money(val,"USD")}</span>
+      <span class="rl-meta">${esc(p.sku||"\u2014")} \u00b7 ${qty(u)} u \u00b7 ${money(val)}</span>
     </div>
     ${rielHTML([{icon:"usa",label:t("conj.gate.usa")},{icon:"plane",label:t("conj.gate.transit")},{icon:"store",label:t("conj.gate.sellable")}], 1)}
     <div class="rl-foot">
@@ -973,7 +947,7 @@ function openDeliverAllOurs(){
       const obs=(document.getElementById("da_obs").value||"").trim();
       let done=0, items=0;
       prods.forEach(p=>{ const q=transUnits(p); if(q>0){ const d=transferStock(p, TRANSITO_STORE, destino, q, perU, obs, "arg"); if(d>0){ done+=d; items++; } } });
-      closeModal(); toast(t("conj.tt.deliveredacross",{n:qty(done),items:items,cost:costTot>0?t("conj.frag.landed",{m:money(perU,"USD")}):""}),"up"); render();
+      closeModal(); toast(t("conj.tt.deliveredacross",{n:qty(done),items:items,cost:costTot>0?t("conj.frag.landed",{m:money(perU)}):""}),"up"); render();
     }}
   ], "mini");
   wireLegPreview("da_cost", totalU);
@@ -998,7 +972,6 @@ function openRecibirConsignacion(id){
       closeModal(); toast(t("conj.tt.recvthirdok"),"up"); render();
     }}
   ], "mini");
-  wireLegCcy("csc_c");
 }
 /* ---- Deliver consignment: en_ar → delivered (handoff to the owner) ---- */
 function entregarConsignacion(id){
@@ -1097,7 +1070,7 @@ function openRecibirRemito(key){
       const obs = (document.getElementById("rr_obs").value||"").trim();
       lines.forEach(cs=> avanzarConsignacion(cs.id, { costoCourierUnit:perU, obs }));
       lines.forEach(l=> delete remitoSel[l.id]);
-      closeModal(); toast(t("conj.tt.recvlines",{n:lines.length,cost:tot>0?t("conj.frag.courier",{m:money(perU,"USD")}):""}),"up"); render();
+      closeModal(); toast(t("conj.tt.recvlines",{n:lines.length,cost:tot>0?t("conj.frag.courier",{m:money(perU)}):""}),"up"); render();
     }}
   ], "recv");
   wireLegPreview("rr_c", totalU);
@@ -1120,7 +1093,7 @@ function openResolverAR(key){
       <td class="r num">${qty(cs.cantidad)}</td>
       <td><input class="inp num res-q" id="rq_${i}" value="0" data-max="${cs.cantidad}" inputmode="numeric"></td>
       <td class="r num" id="rt_${i}">${qty(cs.cantidad)}</td>
-      <td class="r num">${money(acc,"USD")}</td>
+      <td class="r num">${money(acc)}</td>
       <td><input class="inp num" id="rc_${i}" value="${acc}" inputmode="decimal" title="${t('conj.tip.selcost')}"></td>
     </tr>`;
   }).join("");

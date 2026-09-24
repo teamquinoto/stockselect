@@ -87,17 +87,12 @@ function storeBarHTML(){
     STORE_IDS.forEach(s=> chips.push(`<button class="chip-btn ${activeStore===s?"on":""}" data-store="${s}">${esc(storeName(s))}</button>`));
   }
   const left = chips.length ? `<span class="sb-label" title="${esc(t("bar.society.tip"))}">${t("bar.society")}</span>${chips.join("")}` : "";
-  // REPORT currency toggle (consolidated): admin only.
-  const repSw = isAdmin() ? `<div class="sb-viewas" style="margin-left:auto"><span class="sb-label">${t("bar.reportin")}</span>
-    <button class="chip-btn ${reportCcy()==="USD"?"on":""}" data-repccy="USD">${t("bar.usd")}</button>
-    <button class="chip-btn ${reportCcy()==="ARS"?"on":""}" data-repccy="ARS">${t("bar.ars")}</button></div>` : "";
-  if(!left && !sw && !repSw) return "";
-  return `<div class="storebar">${left}${sw}${repSw}</div>`;
+  if(!left && !sw) return "";
+  return `<div class="storebar">${left}${sw}</div>`;
 }
 function wireStoreBar(){
   document.querySelectorAll("[data-store]").forEach(b=> b.onclick=()=>{ activeStore=b.dataset.store; render(); });
   document.querySelectorAll("[data-stockview]").forEach(b=> b.onclick=()=>{ stockView=b.dataset.stockview; render(); });
-  document.querySelectorAll("[data-repccy]").forEach(b=> b.onclick=()=>{ db.config.reportCcy = b.dataset.repccy==="ARS"?"ARS":"USD"; save(); render(); });
 }
 function applyRoleUI(){
   // hide admin-only nav entries for sellers

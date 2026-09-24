@@ -8,12 +8,11 @@
    Usa jsPDF (UMD por CDN, cacheado por el SW para uso offline).
    ============================================================ */
 function pdfReady(){ return !!(window.jspdf && window.jspdf.jsPDF); }
-function pdfMoney(n, ccy){ return monedaSym(ccy || reportCcy()) + " " + nf2.format(n||0); }
+function pdfMoney(n){ return CCY_SYM + " " + nf2.format(n||0); }
 
 function generarInvoicePDF(id){
   if(!pdfReady()){ toast(t("pdf.err.gen"),"warn"); return; }
   const d = db.ventas.find(v=>v.id===id); if(!d){ toast(t("pdf.err.saleNotFound"),"warn"); return; }
-  const dCcy = storeCcy(d.storeVenta||d.store||STORE_IDS[0]);   // el invoice se emite en la moneda del depósito
   const cli = d.cliente || (d.clienteId?clienteById(d.clienteId):null);
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit:"pt", format:"letter" });
@@ -95,8 +94,8 @@ function generarInvoicePDF(id){
     doc.text(wrapped, cItem+6, tTop);
     setInk(INK);
     doc.text(qty(l.cantidad), cQty+wQty, tTop, {align:"right"});
-    doc.text(pdfMoney(l.precio, dCcy), cUnit+wUnit, tTop, {align:"right"});
-    doc.setFont("helvetica","bold"); doc.text(pdfMoney(l.cantidad*l.precio, dCcy), cAmt+wAmt, tTop, {align:"right"}); doc.setFont("helvetica","normal");
+    doc.text(pdfMoney(l.precio), cUnit+wUnit, tTop, {align:"right"});
+    doc.setFont("helvetica","bold"); doc.text(pdfMoney(l.cantidad*l.precio), cAmt+wAmt, tTop, {align:"right"}); doc.setFont("helvetica","normal");
     y += rowH;
     doc.setDrawColor(LINE[0],LINE[1],LINE[2]); doc.line(M, y-6, W-M, y-6);
   });
@@ -113,15 +112,15 @@ function generarInvoicePDF(id){
     doc.text(label, boxX, y); setInk(opts.bold?INK:INK);
     doc.text(val, W-M, y, {align:"right"}); y+= opts.big?22:16;
   };
-  line(t("pdf.subtotal"), pdfMoney(sub, dCcy));
-  line(t("pdf.shipping"), d.envio && d.envio.tipo==="free" ? t("pdf.free") : pdfMoney(envio, dCcy));
-  (d.cargosCliente||[]).forEach(c=> line(c.nota||t("pdf.charge"), pdfMoney(c.monto||0, dCcy)));   // Task 5
+  line(t("pdf.subtotal"), pdfMoney(sub));
+  line(t("pdf.shipping"), d.envio && d.envio.tipo==="free" ? t("pdf.free") : pdfMoney(envio));
+  (d.cargosCliente||[]).forEach(c=> line(c.nota||t("pdf.charge"), pdfMoney(c.monto||0)));   // Task 5
   y+=4;
   doc.setDrawColor(ACC[0],ACC[1],ACC[2]); doc.setLineWidth(1.2); doc.line(boxX, y-8, W-M, y-8); doc.setLineWidth(1);
   y+=4;
   doc.setFillColor(ACC[0],ACC[1],ACC[2]);
   const total=(d.total!=null)?d.total:round2(sub+envio+((d.cargosCliente||[]).reduce((a,c)=>a+(c.monto||0),0)));
-  line(t("pdf.total"), pdfMoney(total, dCcy), {bold:true, big:true});
+  line(t("pdf.total"), pdfMoney(total), {bold:true, big:true});
 
   /* ---------- Footer ---------- */
   setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
@@ -211,8 +210,8 @@ function generarRemitoPDF(conjuntaId){
     doc.text(doc.splitTextToSize(f.owner, wOwn), cOwn, tTop);
     setInk(INK); doc.setFontSize(9.5);
     doc.text(qty(f.qty), cQty+wQty, tTop, {align:"right"});
-    doc.text(pdfMoney(f.costo, "USD"), cUnit+wUnit, tTop, {align:"right"});
-    doc.setFont("helvetica","bold"); doc.text(pdfMoney(f.qty*f.costo, "USD"), cAmt+wAmt, tTop, {align:"right"}); doc.setFont("helvetica","normal");
+    doc.text(pdfMoney(f.costo), cUnit+wUnit, tTop, {align:"right"});
+    doc.setFont("helvetica","bold"); doc.text(pdfMoney(f.qty*f.costo), cAmt+wAmt, tTop, {align:"right"}); doc.setFont("helvetica","normal");
     totQ+=f.qty; totAmt+=f.qty*f.costo;
     y+=rowH; doc.setDrawColor(LINE[0],LINE[1],LINE[2]); doc.line(M, y-6, W-M, y-6);
   });
@@ -226,7 +225,7 @@ function generarRemitoPDF(conjuntaId){
   };
   line(t("pdf.rem.totunits"), qty(totQ));
   doc.setDrawColor(ACC[0],ACC[1],ACC[2]); doc.setLineWidth(1.2); doc.line(boxX, y-8, W-M, y-8); doc.setLineWidth(1); y+=4;
-  line(t("pdf.rem.refvalue"), pdfMoney(totAmt, "USD"), {bold:true, big:true});
+  line(t("pdf.rem.refvalue"), pdfMoney(totAmt), {bold:true, big:true});
 
   /* Footer */
   setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
@@ -305,14 +304,14 @@ function generarRemitoDocPDF(remitoId){
   let rightCols;
   if(esTercero) rightCols = [
     { h:t("pdf.th.qty"), w:44, val:f=>qty(f.qty) },
-    { h:t("pdf.th.costu"), w:62, val:f=>pdfMoney(f.costo,"USD") },
-    { h:t("pdf.th.chargeu"), w:62, val:f=>pdfMoney(f.charge,"USD") },
-    { h:t("pdf.total"), w:70, val:f=>pdfMoney(f.qty*f.charge,"USD"), bold:true },
+    { h:t("pdf.th.costu"), w:62, val:f=>pdfMoney(f.costo) },
+    { h:t("pdf.th.chargeu"), w:62, val:f=>pdfMoney(f.charge) },
+    { h:t("pdf.total"), w:70, val:f=>pdfMoney(f.qty*f.charge), bold:true },
   ];
   else if(esSelect) rightCols = [
     { h:t("pdf.th.qty"), w:44, val:f=>qty(f.qty) },
-    { h:t("pdf.th.costu"), w:64, val:f=>pdfMoney(f.costo,"USD") },
-    { h:t("pdf.th.value"), w:70, val:f=>pdfMoney(f.qty*f.costo,"USD"), bold:true },
+    { h:t("pdf.th.costu"), w:64, val:f=>pdfMoney(f.costo) },
+    { h:t("pdf.th.value"), w:70, val:f=>pdfMoney(f.qty*f.costo), bold:true },
   ];
   else rightCols = [ { h:t("pdf.th.qty"), w:60, val:f=>qty(f.qty) } ];
   let cx = W-M; for(let k=rightCols.length-1;k>=0;k--){ rightCols[k].xr=cx; cx-=rightCols[k].w; }
@@ -350,8 +349,8 @@ function generarRemitoDocPDF(remitoId){
     doc.text(val, W-M, y, {align:"right"}); y+= opts.big?22:16;
   };
   tline(t("pdf.remdoc.totunits"), qty(totQ));
-  if(esTercero){ doc.setDrawColor(ACC[0],ACC[1],ACC[2]); doc.setLineWidth(1.2); doc.line(boxX, y-8, W-M, y-8); doc.setLineWidth(1); y+=4; tline(t("pdf.remdoc.tocharge"), pdfMoney(totCharge,"USD"), {bold:true, big:true}); }
-  else if(esSelect){ tline(t("pdf.remdoc.valuecost"), pdfMoney(totValue,"USD"), {bold:true}); }
+  if(esTercero){ doc.setDrawColor(ACC[0],ACC[1],ACC[2]); doc.setLineWidth(1.2); doc.line(boxX, y-8, W-M, y-8); doc.setLineWidth(1); y+=4; tline(t("pdf.remdoc.tocharge"), pdfMoney(totCharge), {bold:true, big:true}); }
+  else if(esSelect){ tline(t("pdf.remdoc.valuecost"), pdfMoney(totValue), {bold:true}); }
 
   /* Footer */
   setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
@@ -465,11 +464,11 @@ function generarLandedCostPDF(){
     doc.text(nomTrim, cItem+6, y+1);
     doc.text(String(b.units), cUn, y+1, {align:"right"});
     setInk(MUT);
-    doc.text(pdfMoney(b.us,"USD"), cUs, y+1, {align:"right"});
-    doc.text(b.intl>0?pdfMoney(b.intl,"USD"):"—", cIn, y+1, {align:"right"});
-    doc.text(b.arg>0?pdfMoney(b.arg,"USD"):"—", cAr, y+1, {align:"right"});
+    doc.text(pdfMoney(b.us), cUs, y+1, {align:"right"});
+    doc.text(b.intl>0?pdfMoney(b.intl):"—", cIn, y+1, {align:"right"});
+    doc.text(b.arg>0?pdfMoney(b.arg):"—", cAr, y+1, {align:"right"});
     setInk(INK); doc.setFont("helvetica","bold");
-    doc.text(pdfMoney(b.total,"USD"), cTot, y+1, {align:"right"});
+    doc.text(pdfMoney(b.total), cTot, y+1, {align:"right"});
     y+=18;
     tU+=b.units; sUs+=b.us*b.units; sIn+=b.intl*b.units; sAr+=b.arg*b.units; sTot+=b.total*b.units;
   });
@@ -479,10 +478,10 @@ function generarLandedCostPDF(){
   setInk(INK); doc.setFont("helvetica","bold"); doc.setFontSize(9);
   doc.text(t("pdf.lc.onhand"), cItem+6, y+6);
   doc.text(String(round2(tU)), cUn, y+6, {align:"right"});
-  doc.text(pdfMoney(round2(sUs),"USD"), cUs, y+6, {align:"right"});
-  doc.text(pdfMoney(round2(sIn),"USD"), cIn, y+6, {align:"right"});
-  doc.text(pdfMoney(round2(sAr),"USD"), cAr, y+6, {align:"right"});
-  doc.text(pdfMoney(round2(sTot),"USD"), cTot, y+6, {align:"right"});
+  doc.text(pdfMoney(round2(sUs)), cUs, y+6, {align:"right"});
+  doc.text(pdfMoney(round2(sIn)), cIn, y+6, {align:"right"});
+  doc.text(pdfMoney(round2(sAr)), cAr, y+6, {align:"right"});
+  doc.text(pdfMoney(round2(sTot)), cTot, y+6, {align:"right"});
 
   doc.save("landed-cost-"+new Date().toISOString().slice(0,10)+".pdf");
   toast(t("pdf.lc.downloaded"));

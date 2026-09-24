@@ -137,25 +137,20 @@ function ventasFiltradas(){
   const desde = anFiltros.desde ? new Date(anFiltros.desde+"T00:00:00") : null;
   const hasta = anFiltros.hasta ? new Date(anFiltros.hasta+"T23:59:59") : null;
   const rows=[];
-  const rep = reportCcy();
   db.ventas.forEach(v=>{
-    // Análisis es admin-only: se ven todas las ventas. Cada venta puede estar en
-    // una moneda distinta (Swan USD / Select ARS): convertimos a la moneda de
-    // reporte al armar la fila, así todos los agregados suman en una sola moneda.
+    // Análisis es admin-only: se ven todas las ventas. Todo está en USD.
     if(anFiltros.vend && (v.vendedorId||"")!==anFiltros.vend) return;
     if(anFiltros.pais && ((v.cliente&&v.cliente.pais)||"")!==anFiltros.pais) return;
     const f=new Date(v.fecha+"T12:00:00");
     if(desde && f<desde) return;
     if(hasta && f>hasta) return;
-    const sCcy = storeCcy(v.storeVenta||v.store||STORE_IDS[0]);
     v.lineas.forEach(l=>{
       const p=prodById(l.productoId);
       if(anFiltros.saga && (p? sagaDe(p): "")!==anFiltros.saga) return;
       if(anFiltros.idioma && (p? (p.idioma||""):"" )!==anFiltros.idioma) return;
       const cogs = l.cogs!=null ? l.cogs : (l.costo||0)*l.cantidad;
       rows.push({ fecha:normISO(v.fecha)||v.fecha, vendedor:saleVendedorNombre(v), vendedorId:v.vendedorId||"", productoId:l.productoId, nombre:l.nombre, sku:l.sku,
-        cantidad:l.cantidad, revenue:convertCcyAt(round2((l.precio||0)*l.cantidad), sCcy, rep, normISO(v.fecha)||v.fecha), cogs:convertCcyAt(round2(cogs), sCcy, rep, normISO(v.fecha)||v.fecha),
-        ccy:sCcy,
+        cantidad:l.cantidad, revenue:round2((l.precio||0)*l.cantidad), cogs:round2(cogs),
         consumed: (Array.isArray(l.consumed) && l.consumed.length) ? l.consumed : null,
         store: l.store || null,
         pais:(v.cliente&&v.cliente.pais)||"", saga:p?sagaDe(p):"", idioma:p?(p.idioma||""):"" });
@@ -196,12 +191,11 @@ function viewAnalisis(){
     e.units += units; e.cogs = round2(e.cogs + cogsv); e.revenue = round2(e.revenue + rev);
   };
   rows.forEach(r=>{
-    const rep2 = reportCcy();
     if(r.consumed){
       const lineUnits = r.cantidad || r.consumed.reduce((a,c)=>a+(c.cantidad||0),0);
       r.consumed.forEach(c=>{
-        const cCogs = convertCcyAt(round2((c.costoUnit||0)*(c.cantidad||0)), r.ccy||rep2, rep2, r.fecha);   // costo al TC del mes de la venta
-        const cRev  = lineUnits>0 ? round2(r.revenue*((c.cantidad||0)/lineUnits)) : 0;            // r.revenue ya está en reporte
+        const cCogs = round2((c.costoUnit||0)*(c.cantidad||0));
+        const cRev  = lineUnits>0 ? round2(r.revenue*((c.cantidad||0)/lineUnits)) : 0;
         addSoc(c.sociedad, c.cantidad||0, cCogs, cRev);
       });
     } else {
@@ -351,46 +345,42 @@ function sagaOfName(nombre){
    Recorre db.ventas del rango [desde,hasta] y arma el estado de
    resultados. Dos fixes vs. la versión vieja:
      · cargosCliente (on-top facturado al cliente) SUMA al ingreso;
-     · cada venta se valúa al TC de SU mes (convertCcyAt), no a un
-       spot único.
-   Devuelve importes en la moneda de reporte + desgloses.
+     · todo en USD (moneda única), sin conversiones.
+   Devuelve importes en USD + desgloses.
    ============================================================ */
 let _pnlCache = { rev:-1, map:{} };   // cache de rollups; se limpia cuando cambian los datos (_pnlRev)
 function pnlAggregate(desde, hasta){
   // #16: si los datos no cambiaron, reusamos el rollup ya calculado (evita recorrer todas las ventas en cada render).
   const _rev = (typeof _pnlRev!=="undefined") ? _pnlRev : 0;
   if(_pnlCache.rev!==_rev) _pnlCache = { rev:_rev, map:{} };
-  const _key = (desde||"")+"|"+(hasta||"")+"|"+reportCcy();
+  const _key = (desde||"")+"|"+(hasta||"");
   if(_pnlCache.map[_key]) return _pnlCache.map[_key];
   const d0 = desde ? new Date(desde+"T00:00:00") : null;
   const d1 = hasta ? new Date(hasta+"T23:59:59") : null;
   const inRange = v=>{ const f=new Date((normISO(v.fecha)||v.fecha)+"T12:00:00"); if(d0&&f<d0) return false; if(d1&&f>d1) return false; return true; };
-  const rep = reportCcy();
-  const A = { rep, sales:0, shipping:0, cargos:0, cogs:0, commission:0,
+  const A = { sales:0, shipping:0, cargos:0, cogs:0, commission:0,
               costos:{envio:0,labor:0,comision:0,otro:0}, units:0,
               detail:{}, perVend:{}, byMonth:{} };
   (db.ventas||[]).filter(inRange).forEach(v=>{
-    const sCcy  = storeCcy(v.storeVenta||v.store||STORE_IDS[0]);
     const fecha = normISO(v.fecha)||v.fecha;
-    const conv  = x => convertCcyAt(x, sCcy, rep, fecha);
     const vid   = v.vendedorId || "";
     const pv = A.perVend[vid] = A.perVend[vid] || { nombre:saleVendedorNombre(v), units:0, sales:0, cogs:0, commission:0, cargos:0, shipping:0, costos:0 };
     let sSales=0, sCogs=0, sCostos=0;
     (v.lineas||[]).forEach(l=>{
-      const rev = conv(round2((l.precio||0)*l.cantidad));
-      const cg  = conv(round2(l.cogs!=null ? l.cogs : (l.costo||0)*l.cantidad));
+      const rev = round2((l.precio||0)*l.cantidad);
+      const cg  = round2(l.cogs!=null ? l.cogs : (l.costo||0)*l.cantidad);
       A.sales+=rev; A.cogs+=cg; A.units+=l.cantidad; sSales+=rev; sCogs+=cg;
       pv.sales+=rev; pv.cogs+=cg; pv.units+=l.cantidad;
       const k = l.productoId||l.sku||l.nombre;
       const e = A.detail[k] = A.detail[k] || { sku:l.sku||"", nombre:l.nombre||"", units:0, revenue:0, cogs:0 };
       e.units+=l.cantidad; e.revenue+=rev; e.cogs+=cg;
     });
-    const ship = (v.envio && v.envio.tipo==="monto") ? conv(round2(v.envio.monto||0)) : 0;
-    const carg = conv(saleCargosCliente(v));      // FIX #1: on-top que paga el cliente
-    const comm = conv(saleCommission(v));
+    const ship = (v.envio && v.envio.tipo==="monto") ? round2(v.envio.monto||0) : 0;
+    const carg = saleCargosCliente(v);      // FIX #1: on-top que paga el cliente
+    const comm = saleCommission(v);
     A.shipping+=ship; A.cargos+=carg; A.commission+=comm;
     pv.shipping+=ship; pv.cargos+=carg; pv.commission+=comm;
-    (v.costosExtra||[]).forEach(c=>{ const k=(c.tipo in A.costos)?c.tipo:"otro"; const m=convertCcyAt(round2(+c.monto||0), c.ccy||sCcy, rep, fecha); A.costos[k]+=m; pv.costos+=m; sCostos+=m; });
+    (v.costosExtra||[]).forEach(c=>{ const k=(c.tipo in A.costos)?c.tipo:"otro"; const m=round2(+c.monto||0); A.costos[k]+=m; pv.costos+=m; sCostos+=m; });
     const mk = fecha.slice(0,7);
     const mm = A.byMonth[mk] = A.byMonth[mk] || { net:0, gp:0, contrib:0, sales:0, cogs:0 };
     mm.sales+=sSales; mm.cogs+=sCogs;
@@ -411,9 +401,9 @@ function pnlAggregate(desde, hasta){
   return A;
 }
 
-/* --- Formateo compacto para etiquetas de gráficos (moneda de reporte) --- */
+/* --- Formateo compacto para etiquetas de gráficos (USD) --- */
 function _pnlCompact(n){
-  const a=Math.abs(n), s=n<0?"-":"", sym=monedaSym(reportCcy());
+  const a=Math.abs(n), s=n<0?"-":"", sym=CCY_SYM;
   if(a>=1e6) return s+sym+"\u00A0"+(a/1e6).toFixed(1)+"M";
   if(a>=1e3) return s+sym+"\u00A0"+(a/1e3).toFixed(1)+"k";
   return s+sym+"\u00A0"+nf0.format(a);

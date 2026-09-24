@@ -41,27 +41,26 @@ function pnlDeltaChip(cur, prev){
   return `<div class="sub" style="margin-top:4px;color:${up?"var(--up)":"var(--alert)"};font-weight:700">${up?"▲":"▼"} ${nf0.format(Math.abs(d)*100)}% <span style="color:var(--muted);font-weight:400">${t("pnl.delta.vsprior")}</span></div>`;
 }
 
-/* Presupuesto del período (#17): suma de objetivos mensuales en la moneda de reporte. */
+/* Presupuesto del período (#17): suma de objetivos mensuales (USD). */
 function pnlBudget(from, to){
-  const b=db.config.presupuesto||{}, rep=reportCcy();
+  const b=db.config.presupuesto||{};
   const fromM=from?from.slice(0,7):"0000-00", toM=to?to.slice(0,7):"9999-99";
   let net=0, contrib=0, any=false;
-  Object.keys(b).forEach(k=>{ const e=b[k]||{}; if((e.ccy||"USD")===rep && k>=fromM && k<=toM){ net+=(+e.net||0); contrib+=(+e.contrib||0); if((+e.net||0)||(+e.contrib||0)) any=true; } });
+  Object.keys(b).forEach(k=>{ const e=b[k]||{}; if(k>=fromM && k<=toM){ net+=(+e.net||0); contrib+=(+e.contrib||0); if((+e.net||0)||(+e.contrib||0)) any=true; } });
   return { net:round2(net), contrib:round2(contrib), any };
 }
 
-/* Ventas de un vendedor en el período (drill-down, #14), en moneda de reporte al TC del mes. */
+/* Ventas de un vendedor en el período (drill-down, #14), en USD. */
 function pnlSellerSales(vid, from, to){
   const d0=from?new Date(from+"T00:00:00"):null, d1=to?new Date(to+"T23:59:59"):null;
-  const rep=reportCcy(), out=[];
+  const out=[];
   (db.ventas||[]).forEach(v=>{
     if((v.vendedorId||"")!==vid) return;
     const f=normISO(v.fecha)||v.fecha, fd=new Date(f+"T12:00:00");
     if(d0&&fd<d0) return; if(d1&&fd>d1) return;
-    const sCcy=storeCcy(v.storeVenta||v.store||STORE_IDS[0]);
     (v.lineas||[]).forEach(l=>{
-      const rev=convertCcyAt(round2((l.precio||0)*l.cantidad), sCcy, rep, f);
-      const cg =convertCcyAt(round2(l.cogs!=null?l.cogs:(l.costo||0)*l.cantidad), sCcy, rep, f);
+      const rev=round2((l.precio||0)*l.cantidad);
+      const cg =round2(l.cogs!=null?l.cogs:(l.costo||0)*l.cantidad);
       out.push({ fecha:f, nombre:l.nombre||l.sku||"—", qty:l.cantidad, revenue:rev, margin:round2(rev-cg) });
     });
   });

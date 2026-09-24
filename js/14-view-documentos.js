@@ -89,20 +89,17 @@ function sortTh(f, key, label, align){
    caemos al último costo actual del producto (aproximación honesta). */
 function docKpisHTML(tipo, list){
   const isC = tipo==="compra";
-  const rep = reportCcy();
   let total=0, uds=0, cogs=0;
   list.forEach(d=>{
-    const dCcy = storeCcy(isC ? (d.store||STORE_IDS[0]) : (d.storeVenta||d.store||STORE_IDS[0]));
     // Punto 8: usar el TOTAL guardado del documento (incluye flete/handling y
-    // el redondeo por renglón). Cada documento se convierte a la moneda de reporte
-    // porque la lista puede mezclar depósitos en USD y ARS.
+    // el redondeo por renglón). Todo en USD.
     const dt = (d.total!=null) ? d.total : round2((d.lineas||[]).reduce((a,l)=>a+round2((l.cantidad||0)*(l.precio||0)),0) + (isC?((d.handling||0)+(d.flete||0)):0));
-    total += convertCcy(dt, dCcy, rep);
+    total += dt;
     (d.lineas||[]).forEach(l=>{
       uds   += (l.cantidad||0);
       if(!isC){
         const c = (l.cogs!=null) ? l.cogs : (l.cantidad||0)*((l.costo!=null)?l.costo:((prodById(l.productoId)||{}).ultimoCosto||0));
-        cogs += convertCcy((l.cogs!=null) ? l.cogs : c, dCcy, rep);
+        cogs += c;
       }
     });
   });
@@ -117,7 +114,7 @@ function docKpisHTML(tipo, list){
   const margen = total - cogs;
   const margenPct = total>0 ? (margen/total*100) : 0;
   const commKpi = isAdmin() ? `
-    <div class="kpi"><div class="lbl">${t("doc.kpi.comm")}</div><div class="val">${money(list.reduce((a,d)=>a+convertCcy(saleCommission(d), storeCcy(d.storeVenta||d.store||STORE_IDS[0]), rep),0))}</div><div class="sub">${t("doc.kpi.commsub")}</div></div>` : "";
+    <div class="kpi"><div class="lbl">${t("doc.kpi.comm")}</div><div class="val">${money(list.reduce((a,d)=>a+saleCommission(d),0))}</div><div class="sub">${t("doc.kpi.commsub")}</div></div>` : "";
   return `
     <div class="kpi"><div class="lbl">${t("doc.kpi.sales")}</div><div class="val">${n}</div><div class="sub">${t("doc.kpi.inrange")}</div></div>
     <div class="kpi"><div class="lbl">${t("doc.kpi.unitss")}</div><div class="val">${qty(uds)}</div><div class="sub">${t("doc.kpi.itemsout")}</div></div>
@@ -176,10 +173,9 @@ function renderDocRows(tipo){
   const cols = 6 + (showSocCol?1:0) + (showVendCol?1:0) + (isC?1:0) + (showComm?1:0);
   body.innerHTML = list.map(d=>{
     const items=d.lineas.reduce((a,l)=>a+l.cantidad,0);
-    const dCcy = storeCcy(isC ? (d.store||STORE_IDS[0]) : (d.storeVenta||d.store||STORE_IDS[0]));
     const received = d.status===INVOICE_STATUS.RECEIVED;
     const statusCell = isC ? `<td class="c"><span class="inv-badge ${received?'received':'transit'}">${received?t('doc.badge.received'):t('doc.badge.transit')}</span></td>` : "";
-    const commCell = showComm ? `<td class="r num">${money(saleCommission(d), dCcy)}</td>` : "";
+    const commCell = showComm ? `<td class="r num">${money(saleCommission(d))}</td>` : "";
     return `<tr>
       <td class="num">${esc(d.numero||"—")}</td>
       <td>${esc(fmtDate(d.fecha))}</td>
@@ -187,7 +183,7 @@ function renderDocRows(tipo){
       ${showVendCol?`<td>${esc(saleVendedorNombre(d))}</td>`:""}
       <td>${esc(d.contraparte||"—")}</td>
       <td class="c num">${qty(items)}</td>
-      <td class="r num">${money(d.total, dCcy)}</td>
+      <td class="r num">${money(d.total)}</td>
       ${statusCell}
       ${commCell}
       <td class="r" style="white-space:nowrap">${(()=>{const canStatus=(isC&&puedeComprar());const bStatus=canStatus?`<button class="btn ghost sm" data-invstatus="${d.id}">${received?ICO.plane+t('doc.act.marktransit'):ICO.receive+t('doc.act.markreceived')}</button>`:"";const bView=`<button class="btn ghost sm" data-vdoc="${tipo}:${d.id}">${ICO.view}${t("doc.act.view")}</button>`;const bCopy=tipo==="venta"?`<button class="btn ghost sm" data-copydoc="${tipo}:${d.id}">${ICO.copy}${t("doc.act.copy")}</button>`:"";const bEdit=`<button class="btn ghost sm" data-editdoc="${tipo}:${d.id}">${ICO.edit}${t("common.edit")}</button>`;const bDel=`<button class="btn ghost sm" data-deldoc="${tipo}:${d.id}" style="color:var(--alert)" title="${t("common.delete")}" aria-label="${t("common.delete")}">${ICO.trash}${t("common.delete")}</button>`;const primary=canStatus?bStatus:bView;const rest=canStatus?(bView+bCopy+bEdit+bDel):(bCopy+bEdit+bDel);return rowOverflow(primary,rest);})()}</td>

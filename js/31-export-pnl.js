@@ -12,18 +12,16 @@
      · el Excel y la vista reconcilian por construcción;
      · los CARGOS ON-TOP facturados al cliente entran como ingreso
        (antes quedaban afuera → fix);
-     · las ventas en ARS se valúan al TC del mes de cada venta
-       (convertCcyAt), no a un spot único (fix).
+     · todo en USD (moneda única, sin conversiones).
    Hojas: Income Statement · By seller · Detail by product.
    ============================================================ */
 function exportPnL(desde, hasta){
   if(!window.XLSX){ toast(t("pnl.tt.noxlsx"),"warn"); return; }
 
   const A   = pnlAggregate(desde, hasta);   // <-- fuente ÚNICA (misma que la pantalla)
-  const rep = A.rep;
 
-  // ---- Formatos de celda (en la moneda de REPORTE) ----
-  const repSym = monedaSym(rep);
+  // ---- Formatos de celda (USD) ----
+  const repSym = CCY_SYM;
   const MFMT = '"'+repSym+'\u00A0"#,##0.00;("'+repSym+'\u00A0"#,##0.00)';
   const PFMT = '0.0%';
   const setFmt = (ws, ref, z)=>{ const c=ws[ref]; if(c && typeof c.v==="number") c.z=z; };
@@ -37,7 +35,7 @@ function exportPnL(desde, hasta){
   const IS = [
     ["Income Statement (Preliminary)"],
     [period],
-    [`Amounts in ${rep} \u00B7 FX: monthly rate at each sale's date`],
+    ["Amounts in USD"],
     [""],
     ["Concept", "Consolidated", "% of revenue"],
     ["Product sales", A.sales, pct(A.sales)],
@@ -66,7 +64,6 @@ function exportPnL(desde, hasta){
     ["\u2022 COGS uses the actual FIFO cost layers of the deposit each sale shipped from (not last cost)."],
     ["\u2022 Inbound freight/handling is capitalized into landed cost, so it is already inside COGS."],
     ["\u2022 Extra charges billed to customers (intl freight, wire fees, nationalization, service markup) are customer-paid, so they add to revenue."],
-    ["\u2022 Sales in ARS are converted at the FX rate of each sale's month (db.config.tcMensual), not a single spot rate."],
     ["\u2022 Selling costs (commission, shipping, man-hours, etc.) are charged per sale and sit below gross profit."],
     ["\u2022 Operating expenses (structure) are not captured here — plug them into your cost model."],
   ];

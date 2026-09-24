@@ -68,7 +68,9 @@ function fifoDevolver(prod, store, consumed){
   for(let i=consumed.length-1;i>=0;i--){
     const c = consumed[i];
     if(c.synthetic) continue; // synthetic shortfall wasn't real stock
-    layers.unshift({ id:uid(), fecha:new Date().toISOString(), cantidad:c.cantidad, costoUnit:c.costoUnit, ref:"revert" });
+    const L = { id:uid(), fecha:new Date().toISOString(), cantidad:c.cantidad, costoUnit:c.costoUnit, ref:"revert" };
+    if(c.d) L.d = { us:c.d.us||0, intl:c.d.intl||0, arg:c.d.arg||0 };   // conserva el desglose por puerta (landed cost PDF)
+    layers.unshift(L);
   }
 }
 const round4 = n => Math.round((n||0)*10000)/10000;
@@ -126,7 +128,7 @@ function fifoConsumirGlobal(prod, cantidad){
     const take = Math.min(c.L.cantidad, need);
     if(take<=0) continue;
     cogs += take * c.L.costoUnit;
-    consumed.push({ sociedad:c.sociedad, costoUnit:c.L.costoUnit, cantidad:take });
+    consumed.push({ sociedad:c.sociedad, costoUnit:c.L.costoUnit, cantidad:take, d:c.L.d });
     (porSoc[c.sociedad] = porSoc[c.sociedad] || { cantidad:0, cogs:0 });
     porSoc[c.sociedad].cantidad += take;
     porSoc[c.sociedad].cogs = round2(porSoc[c.sociedad].cogs + take*c.L.costoUnit);
@@ -157,7 +159,9 @@ function fifoDevolverGlobal(prod, consumed, fallbackSoc){
     const c = consumed[i];
     if(c.synthetic) continue;   // el faltante sintético no era stock real
     const soc = isStore(c.sociedad) ? c.sociedad : (isStore(fallbackSoc)?fallbackSoc:STORE_IDS[0]);
-    fifoLayers(prod, soc).unshift({ id:uid(), fecha:new Date().toISOString(), cantidad:c.cantidad, costoUnit:c.costoUnit, ref:"revert" });
+    const L = { id:uid(), fecha:new Date().toISOString(), cantidad:c.cantidad, costoUnit:c.costoUnit, ref:"revert" };
+    if(c.d) L.d = { us:c.d.us||0, intl:c.d.intl||0, arg:c.d.arg||0 };   // conserva el desglose por puerta
+    fifoLayers(prod, soc).unshift(L);
     repuesto[soc] = round4((repuesto[soc]||0) + c.cantidad);
   }
   return repuesto;

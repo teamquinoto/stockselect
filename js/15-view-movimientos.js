@@ -115,7 +115,7 @@ function renderMovRows(){
       </div>
       <div class="fright">
         <div class="fdelta ${deltaCls}">${up?'+':'−'}${qty(Math.abs(signed))}</div>
-        <div class="fval">${money(m.valorUnit, storeCcy(m.store))}${accion?` &nbsp;${accion}`:""}</div>
+        <div class="fval">${money(m.valorUnit)}${accion?` &nbsp;${accion}`:""}</div>
       </div>
     </div>`;
   }).join("") || `<div class="fitem" style="display:block;text-align:center;color:var(--muted);padding:22px">${t("mov.nomatch")}</div>`;

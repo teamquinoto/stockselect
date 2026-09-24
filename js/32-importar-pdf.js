@@ -259,7 +259,7 @@ function showImportEditor(fname, parsed){
       ${t("imp.detected",{n:items.length,file:esc(fname),meta:metaBits?` \u00B7 <span style="font-weight:400">${metaBits}</span>`:""})}
     </div>
     <div id="importOrigenBar"></div>
-    ${meta.flete? `<div class="banner" style="white-space:normal">${t("imp.freight",{amount:money(meta.flete, "USD")})}</div>`:""}
+    ${meta.flete? `<div class="banner" style="white-space:normal">${t("imp.freight",{amount:money(meta.flete)})}</div>`:""}
     <p style="font-size:12px;color:var(--muted);margin:0 0 8px">
       ${t("imp.costhint")}
     </p>

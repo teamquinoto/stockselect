@@ -251,8 +251,8 @@ function openEmergenciaOwn() {
     if (!p || !legKey || q <= 0) { out.textContent = "—"; return; }
     const pk = emergPeekOwn(p, legKey, q);
     out.innerHTML = pk.descap > 0
-      ? `${money(pk.cur, "USD")} → <strong>${money(pk.neo, "USD")}</strong> <span class="hint">(${t("emg.own.descap", { m: money(pk.descap, "USD") })})</span>`
-      : `${money(pk.cur, "USD")} <span class="hint">(${t("emg.own.nodescap")})</span>`;
+      ? `${money(pk.cur)} → <strong>${money(pk.neo)}</strong> <span class="hint">(${t("emg.own.descap", { m: money(pk.descap) })})</span>`
+      : `${money(pk.cur)} <span class="hint">(${t("emg.own.nodescap")})</span>`;
   };
   document.getElementById("eo_prod").onchange = renderStages;
   document.getElementById("eo_q").oninput = updDelta;

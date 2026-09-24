@@ -318,9 +318,9 @@ function wireDashFiltros(){
    COMMAND CENTER — dual-pane por depósito (Select·USA / Swan·AR)
    + franja de tránsito. Sólo admin y con 2+ depósitos; si no,
    el dashboard cae al set de KPIs clásico. Reusa la valuación
-   FIFO por depósito (fifoLayers) y money() por moneda nativa.
+   FIFO por depósito (fifoLayers), todo en USD.
    ============================================================ */
-function valFifoStoreNativo(store){
+function valFifoStore(store){
   return productosVendibles().reduce((a,p)=> a + fifoLayers(p,store).reduce((x,L)=>x+L.cantidad*L.costoUnit,0), 0);
 }
 function unidadesStore(store){ return productosVendibles().reduce((a,p)=> a + stockDe(p,store), 0); }
@@ -332,15 +332,15 @@ function topProdsStore(store,n){
 }
 function housesHTML(){
   const houses = STORE_IDS.map(s=>{
-    const val=valFifoStoreNativo(s), un=unidadesStore(s), sk=skusConStock(s);
-    const flag = storeCcy(s)==="USD" ? "US" : "AR";
+    const val=valFifoStore(s), un=unidadesStore(s), sk=skusConStock(s);
+    const flag = storePais(s) || "—";
     const list = topProdsStore(s,3).map(o=>
       `<div class="li"><span>${esc(o.p.nombre)} <span class="sku">${esc(o.p.sku||"—")}</span></span><span class="q">${qty(o.u)}</span></div>`
     ).join("") || `<div class="li" style="color:var(--muted)">${t("dash.nostock")}</div>`;
     return `<div class="house">
-      <div class="hh"><span class="flag">${flag}</span><span class="nm">${esc(storeName(s))}</span><span class="cc">${storeCcy(s)}</span></div>
+      <div class="hh"><span class="flag">${flag}</span><span class="nm">${esc(storeName(s))}</span></div>
       <div class="hrow">
-        <div class="stat"><div class="l">${t("dash.valuedfifo")}</div><div class="v">${money(val, storeCcy(s))}</div></div>
+        <div class="stat"><div class="l">${t("dash.valuedfifo")}</div><div class="v">${money(val)}</div></div>
         <div class="stat"><div class="l">${t("common.units")}</div><div class="v">${qty(un)}</div></div>
         <div class="stat"><div class="l">${t("dash.skus")}</div><div class="v">${qty(sk)}</div></div>
       </div>

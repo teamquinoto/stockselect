@@ -55,8 +55,8 @@ function renderProdRows(){
     const perStore = sociedadColsCells(p, isT);
     const foco = effectiveStores();
     const priceCell = isT ? "—" : (foco.length===1
-      ? (((p.precioVentaPorTienda&&p.precioVentaPorTienda[foco[0]])||0)>0 ? money(p.precioVentaPorTienda[foco[0]], storeCcy(foco[0])) : "—")
-      : "—");   // consolidado: el precio varía por depósito y moneda -> ver por depósito
+      ? (((p.precioVentaPorTienda&&p.precioVentaPorTienda[foco[0]])||0)>0 ? money(p.precioVentaPorTienda[foco[0]]) : "—")
+      : "—");   // consolidado: el precio varía por depósito -> ver por depósito
     return `<tr data-ficha="${p.id}" class="${isT?'row-transit':''}" style="cursor:pointer">
       ${chk}
       <td><span class="sku">${esc(p.sku||"—")}</span></td>

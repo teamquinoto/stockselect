@@ -35,7 +35,7 @@ function openFicha(id){
       <td class="num">${fecha}</td>
       <td>${pill}${m.store?` <span class="pill" style="opacity:.7">${esc(storeName(m.store))}</span>`:""}</td>
       <td class="r delta ${isAdj?'flat':(up?'up':'down')}">${up?'+':'−'}${qty(Math.abs(signed))}</td>
-      <td class="r num">${money(m.valorUnit, storeCcy(m.store))}</td>
+      <td class="r num">${money(m.valorUnit)}</td>
       <td class="r num" style="font-weight:600">${qty(bal)}</td>
       <td>${origen}</td>
     </tr>`;
@@ -95,7 +95,7 @@ function openFicha(id){
     const [t,i]=b.dataset.fdoc.split(":"); verDoc(t,i);
   });
 }
-function valorFifoTotal(p){ const rep=reportCcy(); return round2(STORE_IDS.reduce((a,s)=> a + convertCcy(fifoLayers(p,s).reduce((x,L)=>x+L.cantidad*L.costoUnit,0), storeCcy(s), rep), 0)); }
+function valorFifoTotal(p){ return round2(STORE_IDS.reduce((a,s)=> a + fifoLayers(p,s).reduce((x,L)=>x+L.cantidad*L.costoUnit,0), 0)); }
 
 /* Point 4: pick quantities per store when moving stock to the vault
    (all · part of each store · one store only). */
@@ -143,7 +143,7 @@ function openReturnFromInvestment(id){
   if(held<=0){ toast(t("fi.ret.nothing"),"warn"); return; }
   const opts = STORE_IDS.map(s=>`<option value="${s}">${esc(storeName(s))}</option>`).join("");
   const body = `
-    <p class="hint" style="margin:0 0 12px">${t("fi.ret.hint",{n:qty(held),m:money(invValor(p),"USD")})}</p>
+    <p class="hint" style="margin:0 0 12px">${t("fi.ret.hint",{n:qty(held),m:money(invValor(p))})}</p>
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
       <div class="field"><label>${t("fi.ret.deststore")}</label><select class="inp" id="inv_ret_store">${opts}</select></div>
       <div class="field"><label>${t("fi.ret.qty")}</label><input class="inp num" id="inv_ret_q" value="${held}"></div>

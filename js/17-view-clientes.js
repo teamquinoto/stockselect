@@ -130,7 +130,6 @@ function lineaOurs(l){
 function renderLines(){
   const isC = draft.tipo==="compra";
   const terc = isC && draft.origen==="terceros";   // PUNTO 1: factura de terceros -> columna "Ours" por línea
-  const docCcy = storeCcy(isC?draft.store:draft.storeVenta);
   const host = document.getElementById("lineHost");
   const rows = draft.lineas.map((l,i)=>{
     const p = prodById(l.productoId);
@@ -153,7 +152,7 @@ function renderLines(){
           <td style="width:80px" class="col-ours"><input class="inp num" data-k="aNuestro" data-i="${i}" value="${ours}" title="${t("cl.tt.ourskeep")}"></td>
           <td class="r num" style="width:66px;color:var(--muted)" data-terc="${i}" title="${t("cl.tt.toowner")}">${qty(aTerc)}</td>
           <td style="width:104px"><input class="inp num" data-k="precio" data-i="${i}" value="${l.precio}" title="${t("cl.tt.unitcost")}"></td>
-          <td class="r num sub-cell" style="width:110px">${money(ours*l.precio, docCcy)}</td>
+          <td class="r num sub-cell" style="width:110px">${money(ours*l.precio)}</td>
           <td style="width:34px"><button class="btn ghost sm" data-del="${i}" title="${t("md.tt.remove")}">✕</button></td>
         </tr>`;
       }
@@ -164,7 +163,7 @@ function renderLines(){
         </td>
         <td style="width:90px"><input class="inp num" data-k="cantidad" data-i="${i}" value="${l.cantidad}"></td>
         <td style="width:120px"><input class="inp num" data-k="precio" data-i="${i}" value="${l.precio}"></td>
-        <td class="r num sub-cell" style="width:120px">${money(l.cantidad*l.precio, docCcy)}</td>
+        <td class="r num sub-cell" style="width:120px">${money(l.cantidad*l.precio)}</td>
         <td style="width:34px"><button class="btn ghost sm" data-del="${i}" title="${t("md.tt.remove")}">✕</button></td>
       </tr>`;
     }
@@ -181,11 +180,11 @@ function renderLines(){
         ${dispInfo}
       </td>
       <td style="width:58px"><input class="inp num" data-k="cantidad" data-i="${i}" value="${l.cantidad}"></td>
-      <td class="r num" style="width:74px;color:var(--muted)">${p?money(l.costoRef, docCcy):"—"}</td>
+      <td class="r num" style="width:74px;color:var(--muted)">${p?money(l.costoRef):"—"}</td>
       <td style="width:60px"><input class="inp num" data-k="margen" data-i="${i}" value="${l.margen||0}" placeholder="%"></td>
       <td style="width:86px"><input class="inp num" data-k="precio" data-i="${i}" value="${l.precio}"></td>
       <td class="r num" style="width:44px;color:var(--muted)" data-mg="${i}">${p&&l.precio>0?nf0.format((l.precio-l.costoRef)/l.precio*100)+"%":"—"}</td>
-      <td class="r num sub-cell" style="width:88px">${money(l.cantidad*l.precio, docCcy)}</td>
+      <td class="r num sub-cell" style="width:88px">${money(l.cantidad*l.precio)}</td>
       <td style="width:30px"><button class="btn ghost sm" data-del="${i}" title="${t("md.tt.remove")}">✕</button></td>
     </tr>`;
   }).join("");
@@ -271,11 +270,10 @@ function renderLines(){
 }
 function updateSubtotals(){
   const host=document.getElementById("lineHost");
-  const docCcy = storeCcy(draft.tipo==="compra"?draft.store:draft.storeVenta);
   host.querySelectorAll("tbody tr").forEach((tr,i)=>{
     const l=draft.lineas[i]; if(!l) return;
     const cell=tr.querySelector(".sub-cell");
-    if(cell) cell.textContent = money(lineaOurs(l)*l.precio, docCcy);
+    if(cell) cell.textContent = money(lineaOurs(l)*l.precio);
   });
 }
 /* Refresca, sin re-render (para no perder el foco del input), la celda "→ owner",
@@ -289,14 +287,13 @@ function refreshTercLinea(i, host){
   updateSubtotals(); refreshTotal();
 }
 function refreshTotal(){
-  const docCcy = storeCcy(draft.tipo==="compra"?draft.store:draft.storeVenta);
   const foot=document.getElementById("docTotal") || document.querySelector(".modal .mextra .num");
-  if(foot) foot.textContent = money(docTotal(), docCcy);
+  if(foot) foot.textContent = money(docTotal());
   const h=document.getElementById("d_proHint");
   if(h && draft.tipo==="compra"){
     const u=unidadesDoc(), extra=(draft.handling||0)+(draft.flete||0);
     h.textContent = (extra>0 && u>0)
-      ? t("md.pro.split",{total:money(extra, docCcy),u:qty(u),per:money(extra/u, docCcy)})
+      ? t("md.pro.split",{total:money(extra),u:qty(u),per:money(extra/u)})
       : t("md.pro.hint");
   }
 }
@@ -340,7 +337,7 @@ function confirmDoc(){
         (c.numero||"").trim().toLowerCase()===num
       );
       if(dupCompra){
-        const ok = confirm(t("cl.dup.confirm",{supplier:draft.contraparte||"—",date:fmtDate(draft.fecha),invoice:draft.numero||"—",u:dupCompra.lineas.reduce((a,l)=>a+l.cantidad,0),total:money(dupCompra.total, storeCcy(dupCompra.store))}));
+        const ok = confirm(t("cl.dup.confirm",{supplier:draft.contraparte||"—",date:fmtDate(draft.fecha),invoice:draft.numero||"—",u:dupCompra.lineas.reduce((a,l)=>a+l.cantidad,0),total:money(dupCompra.total)}));
         if(!ok) return;
       }
     }
@@ -455,7 +452,7 @@ function confirmDoc(){
     doc.storeVenta = storeVenta;   // depósito del que se despachó (para COGS y revert)
     doc.costosExtra = (draft.costosExtra||[])
       .filter(c=> (parseNum(c.monto)||0) > 0)
-      .map(c=>({ tipo:c.tipo||"otro", nota:(c.nota||"").trim(), monto:round2(parseNum(c.monto)||0), ccy:(c.ccy==="ARS"?"ARS":"USD"),
+      .map(c=>({ tipo:c.tipo||"otro", nota:(c.nota||"").trim(), monto:round2(parseNum(c.monto)||0),
                  ...(c.tipo==="labor" ? { horas:parseNum(c.horas)||0, valorHora:parseNum(c.valorHora)||0 } : {}) }));
     doc.clienteId = draft.clienteId;
     doc.cliente = cli ? { nombre:cli.nombre, contacto:cli.contacto, empresa:cli.empresa, telefono:cli.telefono, email:cli.email, direccion:cli.direccion, ciudad:cli.ciudad, estado:cli.estado, zip:cli.zip, pais:cli.pais||"" } : null;  // snapshot for the invoice + country slicer
@@ -784,7 +781,7 @@ function editDoc(tipo,id){
   draft = {
     tipo, editingId:id, store:d.store||STORE_IDS[0], storeOrig:d.store||STORE_IDS[0],
     storeVenta: (tipo==="venta") ? (d.storeVenta||d.store||STORE_IDS[0]) : undefined,
-    costosExtra: (tipo==="venta") ? (d.costosExtra||[]).map(c=>({ key:uid(), tipo:c.tipo||"otro", nota:c.nota||"", monto:c.monto||0, ccy:c.ccy||"USD", horas:c.horas||0, valorHora:c.valorHora||0 })) : undefined,
+    costosExtra: (tipo==="venta") ? (d.costosExtra||[]).map(c=>({ key:uid(), tipo:c.tipo||"otro", nota:c.nota||"", monto:c.monto||0, horas:c.horas||0, valorHora:c.valorHora||0 })) : undefined,
     cargosCliente: (tipo==="venta") ? (d.cargosCliente||[]).map(c=>({ key:uid(), nota:c.nota||"", monto:c.monto||0 })) : undefined,
     vendedorId: (tipo==="venta") ? (d.vendedorId||"") : "",
     contraparte:d.contraparte||"", fecha:normISO(d.fecha), numero:d.numero||"",
@@ -806,7 +803,7 @@ function copyDoc(tipo,id){
   draft = {
     tipo, editingId:null, store,
     storeVenta: (tipo==="venta") ? storeV : undefined,
-    costosExtra: (tipo==="venta") ? (d.costosExtra||[]).map(c=>({ key:uid(), tipo:c.tipo||"otro", nota:c.nota||"", monto:c.monto||0, ccy:c.ccy||"USD", horas:c.horas||0, valorHora:c.valorHora||0 })) : undefined,
+    costosExtra: (tipo==="venta") ? (d.costosExtra||[]).map(c=>({ key:uid(), tipo:c.tipo||"otro", nota:c.nota||"", monto:c.monto||0, horas:c.horas||0, valorHora:c.valorHora||0 })) : undefined,
     cargosCliente: (tipo==="venta") ? (d.cargosCliente||[]).map(c=>({ key:uid(), nota:c.nota||"", monto:c.monto||0 })) : undefined,
     vendedorId: (tipo==="venta") ? (isSeller() ? (currentVendedorId()||"") : (d.vendedorId||"")) : "",
     contraparte: tipo==="compra"?(d.contraparte||""):"",
@@ -840,17 +837,16 @@ function verDoc(tipo,id){
   const list = tipo==="compra"?db.compras:db.ventas;
   const d=list.find(x=>x.id===id); if(!d) return;
   const isC=tipo==="compra";
-  const dCcy = storeCcy(isC ? (d.store||STORE_IDS[0]) : (d.storeVenta||d.store||STORE_IDS[0]));   // moneda del documento
   const rows=d.lineas.map(l=>`<tr>
     <td><span class="sku">${esc(l.sku||"—")}</span> ${esc(l.nombre)}</td>
     <td class="r num">${qty(l.cantidad)}</td>
-    <td class="r num">${money(l.precio, dCcy)}</td>
-    <td class="r num">${money(l.cantidad*l.precio, dCcy)}</td></tr>`).join("");
+    <td class="r num">${money(l.precio)}</td>
+    <td class="r num">${money(l.cantidad*l.precio)}</td></tr>`).join("");
   const cli = d.cliente || (d.clienteId?clienteById(d.clienteId):null);
   const sub = (d.subtotal!=null) ? d.subtotal : totalLineas(d.lineas);
   const extras = isC
-    ? ((d.handling||d.flete) ? `<div class="totrow"><span style="color:var(--muted)">${t("cl.v.handfreight")}</span><span class="num">${money((d.handling||0)+(d.flete||0), dCcy)}</span></div>` : "")
-    : `<div class="totrow"><span style="color:var(--muted)">${t("cl.v.shipping")}</span><span class="num">${d.envio&&d.envio.tipo==="monto"?money(d.envio.monto, dCcy):t("md.ship.free")}</span></div>`;
+    ? ((d.handling||d.flete) ? `<div class="totrow"><span style="color:var(--muted)">${t("cl.v.handfreight")}</span><span class="num">${money((d.handling||0)+(d.flete||0))}</span></div>` : "")
+    : `<div class="totrow"><span style="color:var(--muted)">${t("cl.v.shipping")}</span><span class="num">${d.envio&&d.envio.tipo==="monto"?money(d.envio.monto):t("md.ship.free")}</span></div>`;
   const cliBlock = (!isC && cli) ? `<p style="margin:0 0 14px;color:var(--muted);font-size:13px">
       <b>${esc(cli.nombre)}</b>${cli.empresa?` · ${esc(cli.empresa)}`:""}<br>
       ${esc(clienteDireccion(cli)||"")}${cli.email?`<br>${esc(cli.email)}`:""}${cli.telefono?` · ${esc(cli.telefono)}`:""}</p>` : "";
@@ -866,26 +862,25 @@ function verDoc(tipo,id){
   const vendBlock = (!isC && isAdmin()) ? `<div class="totrow"><span style="color:var(--muted)">${t("cl.v.soldby")}</span><span class="num">${esc(saleVendedorNombre(d))}</span></div>` : "";
   // Punto 4: comisión (sólo ventas y sólo admin/master) + costos de venta -> margen neto
   const costLines = (!isC && isAdmin()) ? (d.costosExtra||[]).map(c=>{
-    const cc = c.ccy || dCcy;
-    const detalle = c.tipo==="labor" && c.horas ? ` <span style="color:var(--muted)">(${nf0.format(c.horas)}h × ${money(c.valorHora||0, cc)})</span>` : (c.nota?` <span style="color:var(--muted)">· ${esc(c.nota)}</span>`:"");
-    return `<div class="totrow"><span style="color:var(--muted)">− ${esc(costoTipoLabel(c.tipo))}${detalle}</span><span class="num">${money(c.monto, cc)}</span></div>`;
+    const detalle = c.tipo==="labor" && c.horas ? ` <span style="color:var(--muted)">(${nf0.format(c.horas)}h × ${money(c.valorHora||0)})</span>` : (c.nota?` <span style="color:var(--muted)">· ${esc(c.nota)}</span>`:"");
+    return `<div class="totrow"><span style="color:var(--muted)">− ${esc(costoTipoLabel(c.tipo))}${detalle}</span><span class="num">${money(c.monto)}</span></div>`;
   }).join("") : "";
   const commBlock = (!isC && isAdmin()) ? `
-    <div class="totrow"><span style="color:var(--muted)">${t("cl.v.marginfifo")}</span><span class="num">${money(saleMargin(d), dCcy)}</span></div>
-    <div class="totrow"><span style="color:var(--muted)">${t("cl.v.commission",{p:nf0.format(saleCommissionRate(d)*100)})}</span><span class="num">${money(saleCommission(d), dCcy)}</span></div>
+    <div class="totrow"><span style="color:var(--muted)">${t("cl.v.marginfifo")}</span><span class="num">${money(saleMargin(d))}</span></div>
+    <div class="totrow"><span style="color:var(--muted)">${t("cl.v.commission",{p:nf0.format(saleCommissionRate(d)*100)})}</span><span class="num">${money(saleCommission(d))}</span></div>
     ${costLines}
-    ${saleCargosCliente(d)>0?`<div class="totrow"><span style="color:var(--muted)">${t("cl.v.chargesbilled")}</span><span class="num">${money(saleCargosCliente(d), dCcy)}</span></div>`:""}
-    <div class="totrow" style="font-weight:700;border-top:1px solid var(--line);margin-top:2px;padding-top:6px"><span>${t("cl.v.netmargin")}</span><span class="num" style="color:${saleNetMargin(d)<0?'var(--alert)':'var(--up)'}">${money(saleNetMargin(d), dCcy)}</span></div>` : "";
+    ${saleCargosCliente(d)>0?`<div class="totrow"><span style="color:var(--muted)">${t("cl.v.chargesbilled")}</span><span class="num">${money(saleCargosCliente(d))}</span></div>`:""}
+    <div class="totrow" style="font-weight:700;border-top:1px solid var(--line);margin-top:2px;padding-top:6px"><span>${t("cl.v.netmargin")}</span><span class="num" style="color:${saleNetMargin(d)<0?'var(--alert)':'var(--up)'}">${money(saleNetMargin(d))}</span></div>` : "";
   buildModal(`${isC?t("cl.v.purchase"):t("cl.v.invoice")} ${esc(d.numero||"")}`.trim(), `
     <p style="margin:0 0 6px;color:var(--muted);font-size:14px">${esc(d.contraparte||"—")} · ${esc(fmtDate(d.fecha))}</p>
     ${cliBlock}
     <div class="table-scroll"><table>
       <thead><tr><th>${t("common.product")}</th><th class="r">${t("cl.th.qty")}</th><th class="r">${isC?t("cl.th.cost"):t("cl.th.price")}</th><th class="r">${t("pdf.subtotal")}</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
-    <div class="totrow"><span style="color:var(--muted)">${t("pdf.subtotal")}</span><span class="num">${money(sub, dCcy)}</span></div>
+    <div class="totrow"><span style="color:var(--muted)">${t("pdf.subtotal")}</span><span class="num">${money(sub)}</span></div>
     ${extras}
-    ${(!isC ? (d.cargosCliente||[]).map(c=>`<div class="totrow"><span style="color:var(--muted)">+ ${esc(c.nota||t("pdf.charge"))}</span><span class="num">${money(c.monto, dCcy)}</span></div>`).join("") : "")}
-    <div class="totrow" style="font-weight:700"><span>${t("common.total")}</span><span class="num">${money(d.total, dCcy)}</span></div>
+    ${(!isC ? (d.cargosCliente||[]).map(c=>`<div class="totrow"><span style="color:var(--muted)">+ ${esc(c.nota||t("pdf.charge"))}</span><span class="num">${money(c.monto)}</span></div>`).join("") : "")}
+    <div class="totrow" style="font-weight:700"><span>${t("common.total")}</span><span class="num">${money(d.total)}</span></div>
     ${statusBlock}
     ${vendBlock}
     ${commBlock}

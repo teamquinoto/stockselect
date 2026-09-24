@@ -40,34 +40,6 @@ function viewDatos(){
   </div>
 
   <div class="panel">
-    <div class="phead"><h3>${t("dat.grp.money")}</h3></div>
-    <div class="grid-form" style="grid-template-columns:1fr 1fr">
-      <div class="field"><label>${t("dat.set.rate")} <span class="hint" style="font-weight:400">${t("dat.set.rate.hint")}</span></label><input class="inp num" id="cfgTC" value="${esc(String(db.config.tc||1000))}"></div>
-      <div class="field"><label>${t("dat.set.repccy")} <span class="hint" style="font-weight:400">${t("dat.set.repccy.hint")}</span></label>
-        <select class="inp" id="cfgRep">
-          <option value="USD" ${reportCcy()==="USD"?"selected":""}>${t("dat.set.usd")}</option>
-          <option value="ARS" ${reportCcy()==="ARS"?"selected":""}>${t("dat.set.ars")}</option>
-        </select></div>
-      ${saveBtn}
-    </div>
-    ${isAdmin()?`
-    ${sepL}
-    ${subH(t("dat.fx.title"), t("dat.fx.hint"))}
-    <div class="grid-form" style="grid-template-columns:1fr 1fr auto;align-items:end">
-      <div class="field"><label>${t("dat.fx.month")}</label><input class="inp" type="month" id="fxMes"></div>
-      <div class="field"><label>${t("dat.fx.rate")}</label><input class="inp num" id="fxVal" inputmode="decimal" placeholder="0"></div>
-      <button class="btn primary" data-fxadd style="margin-bottom:2px">${ICO.plus}${t("dat.fx.add")}</button>
-    </div>
-    <div style="margin-top:12px">
-      ${(function(){
-        const tm=db.config.tcMensual||{}; const ks=Object.keys(tm).filter(k=>+tm[k]>0).sort();
-        if(!ks.length) return `<p class="hint" style="margin:0;padding:0 18px 14px">${t("dat.fx.empty")}</p>`;
-        return `<div class="table-scroll"><table><thead><tr><th>${t("dat.fx.month")}</th><th class="r">${t("dat.fx.rate")}</th><th></th></tr></thead><tbody>`+ks.map(k=>{ const [y,mo]=k.split("-"); return `<tr><td style="font-weight:600">${t("cal.mon."+((+mo)-1))} ${y}</td><td class="r num">${nf0.format(tm[k])}</td><td class="r"><button class="btn sm danger" data-fxdel="${k}">${t("common.delete")}</button></td></tr>`; }).join("")+`</tbody></table></div>`;
-      })()}
-    </div>`:""}
-  </div>
-
-  <div class="panel">
     <div class="phead"><h3>${t("dat.grp.billing")}</h3><span class="hint">${t("dat.issuer.hint")}</span></div>
     <div class="grid-form" style="grid-template-columns:1fr 1fr">
       <div class="field" style="grid-column:1/3"><label>${t("dat.issuer.name")}</label><input class="inp" id="cfgEmNom" value="${esc((db.config.emisor||{}).nombre||"")}"></div>
@@ -90,15 +62,15 @@ function viewDatos(){
     <p class="hint" style="margin:0;padding:14px 18px 0">${t("dat.bud.hint")}</p>
     <div class="grid-form" style="grid-template-columns:1fr 1fr 1fr auto;align-items:end">
       <div class="field"><label>${t("dat.fx.month")}</label><input class="inp" type="month" id="budMes"></div>
-      <div class="field"><label>${t("dat.bud.net")} <span class="hint" style="font-weight:400">${monedaSym(reportCcy())}</span></label><input class="inp num" id="budNet" inputmode="decimal" placeholder="0"></div>
-      <div class="field"><label>${t("dat.bud.contrib")} <span class="hint" style="font-weight:400">${monedaSym(reportCcy())}</span></label><input class="inp num" id="budContrib" inputmode="decimal" placeholder="0"></div>
+      <div class="field"><label>${t("dat.bud.net")} <span class="hint" style="font-weight:400">${CCY_SYM}</span></label><input class="inp num" id="budNet" inputmode="decimal" placeholder="0"></div>
+      <div class="field"><label>${t("dat.bud.contrib")} <span class="hint" style="font-weight:400">${CCY_SYM}</span></label><input class="inp num" id="budContrib" inputmode="decimal" placeholder="0"></div>
       <button class="btn primary" data-budadd style="margin-bottom:2px">${ICO.plus}${t("dat.bud.add")}</button>
     </div>
     <div style="margin-top:12px">
       ${(function(){
         const bp=db.config.presupuesto||{}; const ks=Object.keys(bp).sort();
         if(!ks.length) return `<p class="hint" style="margin:0;padding:0 18px 14px">${t("dat.bud.empty")}</p>`;
-        return `<div class="table-scroll"><table><thead><tr><th>${t("dat.fx.month")}</th><th class="r">${t("dat.bud.net")}</th><th class="r">${t("dat.bud.contrib")}</th><th></th></tr></thead><tbody>`+ks.map(k=>{ const [y,mo]=k.split("-"); const e=bp[k]||{}; const sym=monedaSym(e.ccy||"USD"); return `<tr><td style="font-weight:600">${t("cal.mon."+((+mo)-1))} ${y}</td><td class="r num">${sym} ${nf0.format(+e.net||0)}</td><td class="r num">${sym} ${nf0.format(+e.contrib||0)}</td><td class="r"><button class="btn sm danger" data-buddel="${k}">${t("common.delete")}</button></td></tr>`; }).join("")+`</tbody></table></div>`;
+        return `<div class="table-scroll"><table><thead><tr><th>${t("dat.fx.month")}</th><th class="r">${t("dat.bud.net")}</th><th class="r">${t("dat.bud.contrib")}</th><th></th></tr></thead><tbody>`+ks.map(k=>{ const [y,mo]=k.split("-"); const e=bp[k]||{}; const sym=CCY_SYM; return `<tr><td style="font-weight:600">${t("cal.mon."+((+mo)-1))} ${y}</td><td class="r num">${sym} ${nf0.format(+e.net||0)}</td><td class="r num">${sym} ${nf0.format(+e.contrib||0)}</td><td class="r"><button class="btn sm danger" data-buddel="${k}">${t("common.delete")}</button></td></tr>`; }).join("")+`</tbody></table></div>`;
       })()}
     </div>
   </div>`:""}
@@ -179,8 +151,6 @@ function wire(){
   const imp=m.querySelector("[data-import-json]"); if(imp) imp.onclick=importJSON;
   const rst=m.querySelector("[data-reset]"); if(rst) rst.onclick=resetAll;
   m.querySelectorAll("[data-savecfg]").forEach(cfg=> cfg.onclick=()=>{
-    const tcEl=document.getElementById("cfgTC"); if(tcEl){ const t=parseNum(tcEl.value); if(t>0) db.config.tc=t; }
-    const repEl=document.getElementById("cfgRep"); if(repEl){ db.config.reportCcy = repEl.value==="ARS"?"ARS":"USD"; }
     const fi=parseInt(document.getElementById("cfgFac").value,10); if(!isNaN(fi)&&fi>0) db.config.facturaInicio=fi;
     const ru=document.getElementById("cfgRemU"); if(ru){ const n=parseInt(ru.value,10); if(!isNaN(n)&&n>0){ db.config.remitoSeq=db.config.remitoSeq||{}; db.config.remitoSeq.U={inicio:n}; } }
     const ra=document.getElementById("cfgRemA"); if(ra){ const n=parseInt(ra.value,10); if(!isNaN(n)&&n>0){ db.config.remitoSeq=db.config.remitoSeq||{}; db.config.remitoSeq.A={inicio:n}; } }
@@ -192,19 +162,6 @@ function wire(){
     };
     save(); toast(t("dat.tt.saved")); render();
   });
-  // Tipo de cambio por mes (fix FX): alta/actualización y baja inmediatas.
-  const fxAdd=m.querySelector("[data-fxadd]");
-  if(fxAdd) fxAdd.onclick=()=>{
-    const mes=(document.getElementById("fxMes").value||"").slice(0,7);
-    const val=parseNum(document.getElementById("fxVal").value);
-    if(!/^\d{4}-\d{2}$/.test(mes)){ toast(t("dat.fx.badmonth"),"warn"); return; }
-    if(!(val>0)){ toast(t("dat.fx.badval"),"warn"); return; }
-    db.config.tcMensual=db.config.tcMensual||{}; db.config.tcMensual[mes]=round2(val);
-    save(); toast(t("dat.fx.saved")); render();
-  };
-  m.querySelectorAll("[data-fxdel]").forEach(b=> b.onclick=()=>{
-    const k=b.dataset.fxdel; if(db.config.tcMensual){ delete db.config.tcMensual[k]; save(); render(); }
-  });
   // Presupuesto por mes (#17): objetivos de ingreso neto y contribución.
   const budAdd=m.querySelector("[data-budadd]");
   if(budAdd) budAdd.onclick=()=>{
@@ -214,7 +171,7 @@ function wire(){
     if(!/^\d{4}-\d{2}$/.test(mes)){ toast(t("dat.fx.badmonth"),"warn"); return; }
     if(!(net>0) && !(con>0)){ toast(t("dat.bud.badval"),"warn"); return; }
     db.config.presupuesto=db.config.presupuesto||{};
-    db.config.presupuesto[mes]={ net:round2(net), contrib:round2(con), ccy:reportCcy() };
+    db.config.presupuesto[mes]={ net:round2(net), contrib:round2(con) };
     save(); toast(t("dat.bud.saved")); render();
   };
   m.querySelectorAll("[data-buddel]").forEach(b=> b.onclick=()=>{
