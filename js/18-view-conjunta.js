@@ -66,6 +66,7 @@ function crearConsignacion(o){
     estado: CONSIGN_ESTADOS.TRANSITO,
     costoUnit: Math.max(0, +o.costoUnit||0),      // reference cost (for the split), NOT COGS
     costoCourierUnit: 0,                           // added when received in AR (cost traceability)
+    costoFinUnit: 0,                               // financial cost per unit (re-billed to the owner)
     obs: o.obs||"",
     historial: [ { estado:CONSIGN_ESTADOS.TRANSITO, fecha:new Date().toISOString(), obs:"intake (US)" } ]
   };
@@ -79,6 +80,7 @@ function avanzarConsignacion(id, opts){
   const cs = consignAll().find(x=>x.id===id); if(!cs) return null;
   const sig = consignSiguiente(cs.estado); if(!sig) return null;
   if(sig===CONSIGN_ESTADOS.AR && opts.costoCourierUnit!=null) cs.costoCourierUnit = Math.max(0, +opts.costoCourierUnit||0);
+  if(sig===CONSIGN_ESTADOS.AR && opts.costoFinUnit!=null)     cs.costoFinUnit     = Math.max(0, +opts.costoFinUnit||0);   // financiero: se refactura al dueño
   cs.estado = sig;
   cs.historial.push({ estado:sig, fecha:new Date().toISOString(), obs:opts.obs||"" });
   save();
@@ -548,6 +550,7 @@ function openRecibirTransito(prodId){
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
       <div class="field"><label>${t("conj.l.unitstorecv")}</label><input class="inp num" id="rt_q" value="${held}"></div>
       ${legCostFieldHTML("rt_c",t("conj.leg.gate3"),t("conj.leg.hint.total"))}
+      ${legCostFieldHTML("rt_fin",t("conj.leg.fin"),t("conj.leg.hint.fin"),{noPreview:true})}
       <div class="field" style="grid-column:1/3"><label>${t("conj.l.notes")}</label><input class="inp" id="rt_obs" placeholder="${t("conj.ph.egship")}"></div>
     </div>`;
   buildModal(t("conj.md.deliverar",{store:esc(storeName(destino))}), body, [
@@ -559,7 +562,9 @@ function openRecibirTransito(prodId){
       const obs=(document.getElementById("rt_obs").value||"").trim();
       if(q<=0){ toast(t("conj.tt.enterqty"),"warn"); return; }
       const done = transferStock(p, TRANSITO_STORE, destino, q, c, obs, "arg");
-      if(done>0){ closeModal(); toast(t("conj.tt.delivered",{n:qty(done),store:storeName(destino),cost:cTot>0?t("conj.frag.landed",{m:money(c)}):""}), "up"); render(); }
+      const finTot = legCostRead("rt_fin");
+      if(done>0 && finTot>0) registrarCostoFinanciero({ monto:finTot, concepto:t("fin.src.gate3",{what:p.nombre}), store:destino, fuente:{ tipo:"transito", id:p.id, codigo:"" }, auto:true });
+      if(done>0){ save(); closeModal(); toast(t("conj.tt.delivered",{n:qty(done),store:storeName(destino),cost:cTot>0?t("conj.frag.landed",{m:money(c)}):""}), "up"); render(); }
     }}
   ], "mini");
   // landed-per-unit preview = total ÷ units to receive (recomputed when either changes)
@@ -572,57 +577,88 @@ function openRecibirTransito(prodId){
    Secondary case (AR ones are born in transit), useful to send Swan (USA) stock to AR. ---- */
 function openEnviarTransito(){
   if(!isAdmin()){ toast(t("conj.tt.adminstock"),"warn"); return; }
-  const prods = db.productos.filter(p=> STORE_IDS.some(s=> stockDe(p,s)>0))
-    .sort((a,b)=> String(a.nombre||"").localeCompare(String(b.nombre||""),"en"));
-  if(!prods.length){ toast(t("conj.tt.nosellable"),"warn"); return; }
-  const prodOpts = prods.map(p=>`<option value="${p.id}">${esc(p.sku?("["+p.sku+"] "):"")}${esc(p.nombre)}</option>`).join("");
+  const conStock = STORE_IDS.filter(sid=> db.productos.some(p=> stockDe(p,sid)>0));
+  if(!conStock.length){ toast(t("conj.tt.nosellable"),"warn"); return; }
+  let st = conStock.includes(STORE_IDS[0]) ? STORE_IDS[0] : conStock[0];   // por defecto sale de Swan (US)
+  let q = "";
+  const qmap = {};   // productoId -> unidades a despachar
   const body = `
     <p class="hint" style="margin:0 0 12px">${t("conj.et.hint")}</p>
-    <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
-      <div class="field" style="grid-column:1/3"><label>${t("common.product")}</label><select class="inp" id="et_prod">${prodOpts}</select></div>
-      <div class="field"><label>${t("conj.l.fromdeposit")}</label><select class="inp" id="et_store"></select></div>
-      <div class="field"><label>${t("common.units")}</label><input class="inp num" id="et_q" value="0"></div>
+    <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0;gap:10px">
+      <div class="field"><label>${t("conj.l.fromdeposit")}</label><select class="inp" id="et_store">${conStock.map(sid=>`<option value="${sid}" ${sid===st?"selected":""}>${esc(storeName(sid))}</option>`).join("")}</select></div>
+      <div class="field"><label>${t("conj.et.search")}</label><input class="inp" id="et_q" placeholder="${t("conj.et.searchph")}"></div>
+    </div>
+    <div class="table-scroll" style="max-height:300px;overflow-y:auto;margin:10px 0 6px" id="et_list"></div>
+    <div class="hint" id="et_sum" style="margin-bottom:12px"></div>
+    <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0;gap:10px">
       ${legCostFieldHTML("et_cost",t("conj.leg.gate2"),t("conj.leg.hint.total"))}
-      <div class="field" style="grid-column:1/3"><label>${t("conj.l.notes")}</label><input class="inp" id="et_obs"></div>
+      ${legCostFieldHTML("et_fin",t("conj.leg.fin"),t("conj.leg.hint.fin"),{noPreview:true})}
+      <div class="field"><label>${t("trk.carrier")}</label><select class="inp" id="et_carrier"><option value="">—</option>${carrierOptionsHTML("")}</select></div>
+      <div class="field"><label>${t("trk.number")} <span class="hint" style="font-weight:400">${t("conj.leg.hint.optional")}</span></label><input class="inp" id="et_trk" placeholder="${t("trk.ph")}"></div>
+      <div class="field" style="grid-column:1/-1"><label>${t("conj.l.notes")}</label><input class="inp" id="et_obs"></div>
     </div>`;
+  const totalU = ()=> Object.values(qmap).reduce((a,x)=> a+(+x||0), 0);
+  const updSum = ()=>{
+    const u = totalU(), n = Object.values(qmap).filter(x=> x>0).length;
+    const el = document.getElementById("et_sum"); if(el) el.innerHTML = t("conj.et.sum",{n:n,u:qty(u)});
+    const pu = document.getElementById("et_cost_pu");
+    if(pu){ const c = legCostRead("et_cost"); pu.textContent = t("conj.leg.preview",{m:money(u>0?round2(c/u):0),n:qty(u)}); }
+  };
+  const renderList = ()=>{
+    const host = document.getElementById("et_list"); if(!host) return;
+    const qq = q.trim().toLowerCase();
+    const prods = db.productos.filter(p=> stockDe(p,st)>0 && (!qq || ((p.nombre||"")+" "+(p.sku||"")).toLowerCase().includes(qq)))
+      .sort((a,b)=> String(a.nombre||"").localeCompare(String(b.nombre||""),"en"));
+    host.innerHTML = prods.length ? `<table class="rm-tbl">
+      <thead><tr><th>${t("common.product")}</th><th class="r">${t("conj.et.avail")}</th><th style="width:96px">${t("conj.et.send")}</th><th style="width:44px"></th></tr></thead>
+      <tbody>${prods.map(p=>`<tr>
+        <td>${esc(p.nombre)}<div class="hint">${esc(p.sku||"—")}</div></td>
+        <td class="r num">${qty(stockDe(p,st))}</td>
+        <td><input class="inp num" data-etq="${p.id}" value="${qmap[p.id]||0}" inputmode="numeric"></td>
+        <td><button type="button" class="btn ghost xs" data-etmax="${p.id}" title="${t("conj.et.all")}">${t("conj.et.all")}</button></td>
+      </tr>`).join("")}</tbody></table>` : `<p class="hint" style="margin:8px 0">${t("conj.et.nostore")}</p>`;
+    host.querySelectorAll("[data-etq]").forEach(inp=> inp.oninput=()=>{
+      const p = prodById(inp.dataset.etq); const v = Math.min(Math.max(0, parseNum(inp.value)||0), stockDe(p,st));
+      if(v>0) qmap[p.id]=v; else delete qmap[p.id]; updSum();
+    });
+    host.querySelectorAll("[data-etmax]").forEach(b=> b.onclick=()=>{
+      const p = prodById(b.dataset.etmax); qmap[p.id]=stockDe(p,st);
+      const inp = host.querySelector(`[data-etq="${p.id}"]`); if(inp) inp.value = qmap[p.id]; updSum();
+    });
+  };
   buildModal(t("conj.md.sendtransit"), body, [
     {label:t("common.cancel"),cls:"btn",act:closeModal},
     {label:t("conj.b.sendtransit"),cls:"btn",act:()=>{
-      const p=prodById(document.getElementById("et_prod").value);
-      const st=document.getElementById("et_store").value;
-      if(!p||!st){ toast(t("conj.tt.pickprodstore"),"warn"); return; }
-      const q=Math.min(Math.max(0,parseNum(document.getElementById("et_q").value)||0), stockDe(p,st));
-      const obs=(document.getElementById("et_obs").value||"").trim();
-      if(q<=0){ toast(t("conj.tt.enterqtyempty"),"warn"); return; }
-      const costTot=legCostRead("et_cost");   // intl freight + wire fees (total), in USD
-      const costPU = q>0 ? round2(costTot/q) : 0;                                          // prorrateo por unidad
-      const done = transferStock(p, st, TRANSITO_STORE, q, costPU, obs, "intl");
-      if(done>0){
-        // Remito U of our own US → AR shipment (automatic numbering)
-        const uRem = crearRemito({ letra:"U", tipo:"salida-us", fuente:{ tipo:"transito", id:p.id },
-          lineas:[{ productoId:p.id, sku:p.sku, nombre:p.nombre, cantidad:done, rol:"ours", owner:"" }],
-          obs:obs || t("conj.obs.ownstock",{from:storeName(st)}) });
-        save();
-        closeModal();
-        toast(t("conj.tt.senttransit",{n:qty(done),code:uRem.codigo,cost:costTot>0?t("conj.frag.landed",{m:money(costPU)}):""}), "up");
-        render();
-        // Remito saved — download it from the Remitos section (no pop-up).
-      }
+      const u = totalU();
+      if(u<=0){ toast(t("conj.tt.enterqtyempty"),"warn"); return; }
+      const obs = (document.getElementById("et_obs").value||"").trim();
+      const courierTot = legCostRead("et_cost");             // flete intl / courier (total) -> se capitaliza
+      const finTot     = legCostRead("et_fin");              // financiero (total) -> P&L, no se capitaliza
+      const perU = round2(courierTot/u);                     // prorrateo del courier por unidad
+      const lineas = [];
+      Object.keys(qmap).forEach(pid=>{
+        const p = prodById(pid), cant = qmap[pid];
+        if(!p || !(cant>0)) return;
+        const done = transferStock(p, st, TRANSITO_STORE, cant, perU, obs, "intl");
+        if(done>0) lineas.push({ productoId:p.id, sku:p.sku, nombre:p.nombre, cantidad:done, rol:"ours", owner:"" });
+      });
+      if(!lineas.length){ toast(t("conj.tt.enterqtyempty"),"warn"); return; }
+      // Un solo remito U para toda la caja (con su tracking)
+      const uRem = crearRemito({ letra:"U", tipo:"salida-us", fuente:{ tipo:"transito", id:null },
+        lineas, obs: obs || t("conj.obs.ownstock",{from:storeName(st)}),
+        carrier: document.getElementById("et_carrier").value||"", tracking: document.getElementById("et_trk").value||"" });
+      if(finTot>0) registrarCostoFinanciero({ monto:finTot, concepto:t("fin.src.gate2",{code:uRem.codigo}), store:st,
+        fuente:{ tipo:"remito", id:uRem.id, codigo:uRem.codigo }, auto:true });
+      save(); closeModal();
+      const sent = lineas.reduce((a,l)=> a+l.cantidad, 0);
+      toast(t("conj.tt.senttransit",{n:qty(sent),code:uRem.codigo,cost:courierTot>0?t("conj.frag.landed",{m:money(perU)}):""}), "up");
+      render();
     }}
-  ], "mini");
-  // deposits holding stock of the chosen product (updates when product changes)
-  const fillStores=()=>{
-    const p=prodById(document.getElementById("et_prod").value);
-    const sel=document.getElementById("et_store");
-    const conStock = STORE_IDS.filter(s=> stockDe(p,s)>0);
-    sel.innerHTML = conStock.map(s=>`<option value="${s}">${esc(storeName(s))} · ${qty(stockDe(p,s))} u</option>`).join("") || `<option value="">${t("conj.et.nostore")}</option>`;
-  };
-  document.getElementById("et_prod").onchange=fillStores;
-  fillStores();
-  // landed-per-unit preview = total ÷ units
-  const etC=document.getElementById("et_cost"), etQ=document.getElementById("et_q"), etPu=document.getElementById("et_cost_pu");
-  const etUpd=()=>{ const usd=legCostRead("et_cost"), u=Math.max(0,parseNum(etQ.value)||0); etPu.textContent = t("conj.leg.preview",{m:money(u>0?round2(usd/u):0),n:qty(u)}); };
-  if(etC&&etQ&&etPu){ etC.oninput=etUpd; etQ.oninput=etUpd; etUpd(); }
+  ], "wide");
+  document.getElementById("et_store").onchange = e=>{ st = e.target.value; Object.keys(qmap).forEach(k=> delete qmap[k]); renderList(); updSum(); };
+  document.getElementById("et_q").oninput = e=>{ q = e.target.value; renderList(); };
+  const etC = document.getElementById("et_cost"); if(etC) etC.oninput = updSum;
+  renderList(); updSum();
 }
 
 /* ---- Write-off of transit: reduces bucket units due to breakage, customs,
@@ -937,6 +973,7 @@ function openDeliverAllOurs(){
     <p class="hint" style="margin:0 0 14px">${t("conj.da.hint",{store:esc(storeName(destino)),items:prods.length,n:qty(totalU)})}</p>
     <div class="grid-form stack" style="padding:0">
       ${legCostFieldHTML("da_cost",t("conj.leg.gate3"),t("conj.leg.hint.batch"))}
+      ${legCostFieldHTML("da_fin",t("conj.leg.fin"),t("conj.leg.hint.fin"),{noPreview:true})}
       <div class="field" style="grid-column:1/-1"><label>${t("conj.l.notes")}</label><input class="inp" id="da_obs" placeholder="${t("conj.ph.egship")}"></div>
     </div>`;
   buildModal(t("conj.md.deliverall",{store:esc(storeName(destino))}), body, [
@@ -947,7 +984,9 @@ function openDeliverAllOurs(){
       const obs=(document.getElementById("da_obs").value||"").trim();
       let done=0, items=0;
       prods.forEach(p=>{ const q=transUnits(p); if(q>0){ const d=transferStock(p, TRANSITO_STORE, destino, q, perU, obs, "arg"); if(d>0){ done+=d; items++; } } });
-      closeModal(); toast(t("conj.tt.deliveredacross",{n:qty(done),items:items,cost:costTot>0?t("conj.frag.landed",{m:money(perU)}):""}),"up"); render();
+      const finTot=legCostRead("da_fin");
+      if(done>0 && finTot>0) registrarCostoFinanciero({ monto:finTot, concepto:t("fin.src.gate3",{what:t("fin.src.batch",{n:qty(done)})}), store:destino, fuente:{ tipo:"transito", id:null, codigo:"" }, auto:true });
+      save(); closeModal(); toast(t("conj.tt.deliveredacross",{n:qty(done),items:items,cost:costTot>0?t("conj.frag.landed",{m:money(perU)}):""}),"up"); render();
     }}
   ], "mini");
   wireLegPreview("da_cost", totalU);
@@ -961,14 +1000,15 @@ function openRecibirConsignacion(id){
     <p class="hint" style="margin:0 0 14px">${t("conj.rc.hint",{name:esc(cs.nombre),owner:esc(terceroNombre(cs)),n:qty(cs.cantidad)})}</p>
     <div class="grid-form stack" style="padding:0">
       ${legCostFieldHTML("csc_c",t("conj.leg.courierpu"),t("conj.leg.hint.optional"),{value:(cs.costoCourierUnit||0),noPreview:true})}
+      ${legCostFieldHTML("csc_f",t("conj.leg.finpu"),t("conj.leg.hint.rebill"),{value:(cs.costoFinUnit||0),noPreview:true})}
       <div class="field"><label>${t("conj.l.notes")}</label><input class="inp" id="csc_obs" placeholder="${t("conj.ph.egarrival")}"></div>
     </div>`;
   buildModal(t("conj.md.recvthird"), body, [
     {label:t("common.cancel"),cls:"btn",act:closeModal},
     {label:t("conj.b.markrecvar"),cls:"btn up",act:()=>{
-      const c=legCostRead("csc_c");
+      const c=legCostRead("csc_c"), f=legCostRead("csc_f");
       const obs=(document.getElementById("csc_obs").value||"").trim();
-      avanzarConsignacion(id, { costoCourierUnit:c, obs });
+      avanzarConsignacion(id, { costoCourierUnit:c, costoFinUnit:f, obs });
       closeModal(); toast(t("conj.tt.recvthirdok"),"up"); render();
     }}
   ], "mini");
@@ -991,6 +1031,27 @@ function removeConsignacion(id){
 /* ============================================================
    RENDER DE UN REMITO (colapsable) — punto 1
    ============================================================ */
+/* ---- Cargar / editar el tracking de un remito U (el envío). El tracking suele
+   aparecer después de despachar, por eso se edita aparte. Lo ve también la
+   tienda en su portal (sólo carrier + número, nunca montos). ---- */
+function openEditarTracking(remitoId){
+  if(!isAdmin()){ toast(t("conj.tt.admintrack"),"warn"); return; }
+  const r = remitoById(remitoId); if(!r){ toast(t("pdf.err.remNotFound"),"warn"); return; }
+  const body = `
+    <p class="hint" style="margin:0 0 12px">${t("trk.hint",{code:esc(r.codigo)})}</p>
+    <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0;gap:10px">
+      <div class="field"><label>${t("trk.carrier")}</label><select class="inp" id="trk_car"><option value="">—</option>${carrierOptionsHTML(r.carrier)}</select></div>
+      <div class="field"><label>${t("trk.number")}</label><input class="inp" id="trk_num" value="${esc(r.tracking||"")}" placeholder="${t("trk.ph")}"></div>
+    </div>`;
+  buildModal(t("trk.md.title",{code:esc(r.codigo)}), body, [
+    {label:t("common.cancel"),cls:"btn",act:closeModal},
+    {label:t("common.save"),cls:"btn primary",act:()=>{
+      r.carrier  = document.getElementById("trk_car").value||"";
+      r.tracking = (document.getElementById("trk_num").value||"").trim();
+      save(); closeModal(); toast(r.tracking?t("trk.tt.saved",{code:r.codigo}):t("trk.tt.cleared",{code:r.codigo}),"up"); render();
+    }}
+  ], "mini");
+}
 function remitoCardHTML(g){
   const open   = !!remitoOpen[g.key];
   const owners = g.ownerNames.length ? g.ownerNames.join(", ") : "\u2014";
@@ -1004,6 +1065,7 @@ function remitoCardHTML(g){
       <div style="flex:1;min-width:0">
         <div class="rl-code">${g.codigo?esc(g.codigo):esc(g.ref||t("conj.noref"))}</div>
         <div class="rl-meta">${g.codigo&&g.ref?esc(g.ref)+" \u00b7 ":""}${esc(fmtDate(g.fecha))} \u00b7 ${g.lineas.length} ${t("conj.products")} \u00b7 ${qty(g.uTotal)} u</div>
+        ${g.remitoId?`<div class="rl-meta" style="margin-top:3px">${trackingHTML(remitoById(g.remitoId))}</div>`:""}
       </div>
       <span class="rl-badge third">${t("conj.badge.third")}${esc(owners)}</span>
     </div>`;
@@ -1027,6 +1089,7 @@ function remitoCardHTML(g){
   const hasAr       = scopeLines.some(l=> l.estado===CONSIGN_ESTADOS.AR);
   const foot = `<div class="rl-foot">
       <span class="rl-next">${selHere.length?`${selHere.length} ${t("conj.selected")}`:t("conj.wholeremito")}${hasAr?` \u00b7 <span class="rl-warn">${t("conj.warnresolve")}</span>`:""}</span>
+      ${g.remitoId?`<button class="btn ghost sm" data-rm-track="${esc(g.remitoId)}" title="${t("trk.edit")}">${ICO.plane||""}${t("trk.btn")}</button>`:""}
       ${g.remitoId?`<button class="btn ghost sm" data-rm-pdf="${esc(g.remitoId)}" title="${t("conj.dlremito")} ${esc(g.codigo||"")}">${ICO.pdf}${esc(g.codigo||"remito")}</button>`:""}
       ${hasTransito?`<button class="btn up sm" data-rm-receive="${esc(g.key)}" title="${t("conj.gate2tip")}">${ICO.receive}${t("conj.recvar")} \u25be</button>`:""}
       ${hasAr?`<button class="btn up sm" data-rm-resolve="${esc(g.key)}" title="${t("conj.resolvetip")}">${ICO.resolve}${t("conj.resolvear")} \u25be</button>`:""}
@@ -1058,6 +1121,7 @@ function openRecibirRemito(key){
       <div class="recv-side">
         <div class="grid-form stack" style="padding:0;gap:16px">
           ${legCostFieldHTML("rr_c",t("conj.leg.courier"),t("conj.leg.hint.batchtot"))}
+          ${legCostFieldHTML("rr_f",t("conj.leg.fin"),t("conj.leg.hint.rebill"),{noPreview:true})}
           <div class="field"><label>${t("conj.l.notes")}</label><input class="inp" id="rr_obs" placeholder="${t("conj.ph.egarrival")}"></div>
         </div>
       </div>
@@ -1065,10 +1129,11 @@ function openRecibirRemito(key){
   buildModal(t("conj.md.recvar"), body, [
     {label:t("common.cancel"),cls:"btn",act:closeModal},
     {label:t("conj.b.recv",{n:qty(totalU)}),cls:"btn up",act:()=>{
-      const tot = legCostRead("rr_c");
-      const perU = totalU>0 ? round2(tot/totalU) : 0;
+      const tot = legCostRead("rr_c"), fTot = legCostRead("rr_f");
+      const perU  = totalU>0 ? round2(tot/totalU) : 0;
+      const finPU = totalU>0 ? round2(fTot/totalU) : 0;
       const obs = (document.getElementById("rr_obs").value||"").trim();
-      lines.forEach(cs=> avanzarConsignacion(cs.id, { costoCourierUnit:perU, obs }));
+      lines.forEach(cs=> avanzarConsignacion(cs.id, { costoCourierUnit:perU, costoFinUnit:finPU, obs }));
       lines.forEach(l=> delete remitoSel[l.id]);
       closeModal(); toast(t("conj.tt.recvlines",{n:lines.length,cost:tot>0?t("conj.frag.courier",{m:money(perU)}):""}),"up"); render();
     }}
@@ -1087,14 +1152,15 @@ function openResolverAR(key){
   if(!lines.length){ toast(t("conj.tt.noarlines"),"warn"); return; }
   const store = STORE_IDS[1] || STORE_IDS[0];
   const rows = lines.map((cs,i)=>{
-    const acc = round2((cs.costoUnit||0)+(cs.costoCourierUnit||0));   // costo acumulado (2 puertas)
+    const acc = round2((cs.costoUnit||0)+(cs.costoCourierUnit||0)+(cs.costoFinUnit||0));   // costo acumulado a refacturar (producto + courier + financiero)
+    const selDef = round2((cs.costoUnit||0)+(cs.costoCourierUnit||0));                       // costo que entra a stock Select (sin financiero: va a P&L)
     return `<tr>
       <td>${esc(cs.nombre)}<div class="hint">${esc(cs.sku||"")} · ${esc(terceroNombre(cs))}</div></td>
       <td class="r num">${qty(cs.cantidad)}</td>
       <td><input class="inp num res-q" id="rq_${i}" value="0" data-max="${cs.cantidad}" inputmode="numeric"></td>
       <td class="r num" id="rt_${i}">${qty(cs.cantidad)}</td>
-      <td class="r num">${money(acc)}</td>
-      <td><input class="inp num" id="rc_${i}" value="${acc}" inputmode="decimal" title="${t('conj.tip.selcost')}"></td>
+      <td class="r num" title="${t("conj.tip.acc",{p:money(cs.costoUnit||0),c:money(cs.costoCourierUnit||0),f:money(cs.costoFinUnit||0)})}">${money(acc)}</td>
+      <td><input class="inp num" id="rc_${i}" value="${selDef}" inputmode="decimal" title="${t('conj.tip.selcost')}"></td>
     </tr>`;
   }).join("");
   const body = `
@@ -1124,12 +1190,12 @@ function openResolverAR(key){
       const extraPU  = totalSelU>0 ? round2(extraTot/totalSelU) : 0;
 
       const selLines=[], terLines=[];
-      let selU=0, terU=0;
+      let selU=0, terU=0, finKept=0;   // finKept: financiero de lo retenido para Select -> P&L
       lines.forEach((cs,i)=>{
         const inAr = cs.cantidad;
         const sel  = Math.min(Math.max(0,parseNum(document.getElementById("rq_"+i).value)||0), inAr);
         const ter  = round4(inAr - sel);
-        const acc  = round2((cs.costoUnit||0)+(cs.costoCourierUnit||0));
+        const acc  = round2((cs.costoUnit||0)+(cs.costoCourierUnit||0)+(cs.costoFinUnit||0));
         // 1) the owner's part: charge = accumulated cost + markup (computed BEFORE mutating)
         if(ter>0){
           const chargeU = round2(acc*(1+mkPct/100));
@@ -1140,6 +1206,7 @@ function openResolverAR(key){
         if(sel>0){
           const cost = round2((parseNum(document.getElementById("rc_"+i).value)||0) + extraPU);
           const kept = quedarseParaSelect(cs.id, sel, cost, obs);
+          if(kept>0) finKept += kept*(cs.costoFinUnit||0);
           if(kept>0){ selLines.push({ productoId:cs.productoId, sku:cs.sku, nombre:cs.nombre, cantidad:kept, rol:"select", owner:terceroNombre(cs), costoUnit:cost }); selU += kept; }
         }
         // 3) deliver to the owner what remains of the consignment (the non-kept part)
@@ -1148,6 +1215,9 @@ function openResolverAR(key){
       });
 
       if(selU<=0 && terU<=0){ toast(t("conj.tt.nothingresolve"),"warn"); return; }
+      // El financiero de las unidades que nos quedamos NO se capitaliza: va a P&L (Select).
+      if(finKept>0) registrarCostoFinanciero({ monto:round2(finKept), concepto:t("fin.src.kept",{code:uCodigo}), store,
+        fuente:{ tipo:"remito", id:remId, codigo:uCodigo }, auto:true });
 
       // Two A remitos ONLY if there was a SPLIT (something to Select AND something to the owner)
       let aSel=null, aTer=null;
@@ -1212,5 +1282,6 @@ function wireConjunta(){
   m.querySelectorAll("[data-rm-receive]").forEach(b=> b.onclick=()=> openRecibirRemito(b.dataset.rmReceive));
   m.querySelectorAll("[data-rm-resolve]").forEach(b=> b.onclick=()=> openResolverAR(b.dataset.rmResolve));
   m.querySelectorAll("[data-rm-pdf]").forEach(b=> b.onclick=(e)=>{ e.stopPropagation(); generarRemitoDocPDF(b.dataset.rmPdf); });
+  m.querySelectorAll("[data-rm-track]").forEach(b=> b.onclick=(e)=>{ e.stopPropagation(); openEditarTracking(b.dataset.rmTrack); });
   if (typeof wireEmergencia === "function") wireEmergencia();
 }

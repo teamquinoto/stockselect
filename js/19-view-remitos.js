@@ -45,7 +45,7 @@ function viewRemitos(){
   });
   const q = remitoQ.trim().toLowerCase();
   const list = q ? all.filter(r=>{
-    const hay = [r.codigo, remitoTipoLabel(r), remitoDetalle(r), r.origenCodigo, r.obs]
+    const hay = [r.codigo, remitoTipoLabel(r), remitoDetalle(r), r.origenCodigo, r.obs, r.tracking, carrierName(r.carrier)]
       .filter(Boolean).join(" ").toLowerCase();
     return hay.includes(q);
   }) : all;
@@ -75,6 +75,7 @@ function viewRemitos(){
         <th>${t("rem.th.type")}</th>
         <th>${t("rem.th.from")}</th>
         <th>${t("rem.th.detail")}</th>
+        <th>${t("trk.col")}</th>
         <th class="r">${t("common.units")}</th>
         <th></th>
       </tr></thead>
@@ -85,6 +86,7 @@ function viewRemitos(){
         <td style="white-space:nowrap">${esc(remitoTipoLabel(r))}</td>
         <td style="white-space:nowrap">${r.origenCodigo?esc(r.origenCodigo):`<span class="hint">—</span>`}</td>
         <td>${esc(remitoDetalle(r))}</td>
+        <td style="white-space:nowrap">${r.letra==="U" ? `${trackingHTML(r)} <button class="btn ghost xs" data-rmtrk="${esc(r.id)}" title="${t("trk.edit")}">${ICO.edit||"✎"}</button>` : `<span class="hint">—</span>`}</td>
         <td class="r num">${qty(remitoUnidades(r))}</td>
         <td class="r" style="white-space:nowrap"><button class="btn ghost sm" data-rmdoc="${esc(r.id)}" title="${t('rem.dl',{code:esc(r.codigo)})}">${ICO.pdf}PDF</button></td>
       </tr>`).join("")}
@@ -100,6 +102,7 @@ function wireRemitos(){
   const m=document.getElementById("main"); if(!m) return;
   const q=m.querySelector("#rmq"); if(q) q.oninput=()=>{ remitoQ=q.value; render(); };
   const cl=m.querySelector("#rmclear"); if(cl) cl.onclick=()=>{ remitoQ=""; render(); };
+  m.querySelectorAll("[data-rmtrk]").forEach(b=> b.onclick=()=> openEditarTracking(b.dataset.rmtrk));
   m.querySelectorAll("[data-rmdoc]").forEach(b=> b.onclick=()=>{
     if(typeof generarRemitoDocPDF==="function") generarRemitoDocPDF(b.dataset.rmdoc);
     else toast(t("rem.tt.nopdf"),"warn");

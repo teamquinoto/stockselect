@@ -154,7 +154,7 @@ function retrocederConsignacion(id, motivo, obs) {
   if ((cs.keptForSelect || 0) > 0) { toast(t("emg.tt.keptblock"), "warn"); return null; }   // ya ingresó a Select
   const prev = consignAnterior(cs.estado); if (!prev) { toast(t("emg.tt.atorigin"), "warn"); return null; }
   // si vuelve de AR al barco, el courier cargado en la recepción ya no aplica
-  if (cs.estado === CONSIGN_ESTADOS.AR && prev === CONSIGN_ESTADOS.TRANSITO) cs.costoCourierUnit = 0;
+  if (cs.estado === CONSIGN_ESTADOS.AR && prev === CONSIGN_ESTADOS.TRANSITO) { cs.costoCourierUnit = 0; cs.costoFinUnit = 0; }
   cs.estado = prev;
   cs.historial.push({ estado: prev, fecha: new Date().toISOString(), obs: "🛟 " + motivo + (obs ? " · " + obs : ""), emergencia: true });
   save();

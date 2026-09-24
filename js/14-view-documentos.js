@@ -10,7 +10,7 @@ function viewDocs(tipo){
   const isC = tipo==="compra";
   const list = docsVisibles(tipo);
   const f = docFiltros[tipo];
-  const showSocCol  = isC && isAdmin() && STORE_IDS.length>1;   // qué sociedad compró
+  const showSocCol  = STORE_IDS.length>1;   // depósito: compra -> quién la recibe; venta -> desde dónde se despacha
   const showVendCol = !isC && isAdmin();                        // quién vendió (punto 6)
   return `
   <div class="head">
@@ -60,8 +60,9 @@ function viewDocs(tipo){
   </div>`;
 }
 /* Documentos visibles según rol/foco:
-   - compras: se filtran por la sociedad en foco (el admin puede mirar una sola).
-   - ventas: un vendedor ve SÓLO las suyas; el admin ve todas. */
+   - compras: se filtran por el depósito en foco (el admin puede mirar uno solo).
+   - ventas: un vendedor ve SÓLO las suyas; el admin ve todas, filtradas por el
+     depósito en foco (Swan / Select). */
 function docsVisibles(tipo){
   if(tipo==="compra"){
     const stores = effectiveStores();
@@ -71,7 +72,8 @@ function docsVisibles(tipo){
     const vid = currentVendedorId();
     return db.ventas.filter(v=> (v.vendedorId||"")===vid);
   }
-  return db.ventas.slice();
+  const stores = effectiveStores();
+  return db.ventas.filter(v=> stores.includes(storeDeVenta(v)));
 }
 /* Encabezado ordenable: muestra ↑ (asc), ↓ (desc) o ↕ (inactivo, "sin flecha") */
 function sortTh(f, key, label, align){
@@ -147,7 +149,7 @@ function filtrarDocs(tipo){
       case "contraparte": return String(d.contraparte||"");
       case "items":       return (d.lineas||[]).reduce((a,l)=>a+(l.cantidad||0),0);
       case "total":       return d.total||0;
-      case "store":       return String(storeName(d.store||"")||"");        // Society (compra)
+      case "store":       return String(storeName(tipo==="venta" ? storeDeVenta(d) : (d.store||""))||"");   // Depósito
       case "status":      return String(d.status||"");                        // Status (compra)
       case "vendedor":    return String(saleVendedorNombre(d)||"");           // Sold by (venta)
       case "commission":  return saleCommission(d);                           // Commission (venta)
@@ -167,7 +169,7 @@ function renderDocRows(tipo){
   const isC = tipo==="compra";
   const all=docsVisibles(tipo);
   const list=filtrarDocs(tipo), total=all.length;
-  const showSocCol  = isC && isAdmin() && STORE_IDS.length>1;
+  const showSocCol  = STORE_IDS.length>1;
   const showVendCol = !isC && isAdmin();
   const showComm = !isC && isAdmin();
   const cols = 6 + (showSocCol?1:0) + (showVendCol?1:0) + (isC?1:0) + (showComm?1:0);
@@ -179,7 +181,7 @@ function renderDocRows(tipo){
     return `<tr>
       <td class="num">${esc(d.numero||"—")}</td>
       <td>${esc(fmtDate(d.fecha))}</td>
-      ${showSocCol?`<td>${esc(storeName(d.store))}</td>`:""}
+      ${showSocCol?`<td>${storeBadge(isC ? (d.store||STORE_IDS[0]) : storeDeVenta(d))}</td>`:""}
       ${showVendCol?`<td>${esc(saleVendedorNombre(d))}</td>`:""}
       <td>${esc(d.contraparte||"—")}</td>
       <td class="c num">${qty(items)}</td>

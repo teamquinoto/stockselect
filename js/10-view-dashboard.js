@@ -337,7 +337,8 @@ function housesHTML(){
     const list = topProdsStore(s,3).map(o=>
       `<div class="li"><span>${esc(o.p.nombre)} <span class="sku">${esc(o.p.sku||"—")}</span></span><span class="q">${qty(o.u)}</span></div>`
     ).join("") || `<div class="li" style="color:var(--muted)">${t("dash.nostock")}</div>`;
-    return `<div class="house">
+    const dim = (activeStore!=="all" && activeStore!==s) ? " dim" : "";   // con foco en un depósito, el otro queda atenuado
+    return `<div class="house st-house st-${s}${dim}">
       <div class="hh"><span class="flag">${flag}</span><span class="nm">${esc(storeName(s))}</span></div>
       <div class="hrow">
         <div class="stat"><div class="l">${t("dash.valuedfifo")}</div><div class="v">${money(val)}</div></div>

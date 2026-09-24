@@ -34,8 +34,8 @@ const SESKEY = "gstock_session";  // { user, token, space, role, store }
    El ORDEN importa: [0] = ORIGEN (EEUU, adonde llega el invoice y nace el
    stock), [1] = DESTINO (AR, adonde viaja el tránsito y se recibe/vende). */
 const STORES = [
-  { id:"swan",   name:"Swan · USA", pais:"US" },
-  { id:"select", name:"Select · AR", pais:"AR" }
+  { id:"swan",   name:"Swan · USA", short:"Swan",   pais:"US" },
+  { id:"select", name:"Select · AR", short:"Select", pais:"AR" }
 ];
 const STORE_IDS = STORES.map(s=>s.id);
 /* Investment vault = a hidden pseudo-store. Stock and FIFO cost layers moved
@@ -53,7 +53,11 @@ function storeName(id){
   if(id===TRANSITO_STORE) return t("core.store.transit");
   const s=STORES.find(x=>x.id===id); return s?s.name:(id||"—");
 }
-function isStore(id){ return STORE_IDS.includes(id); }
+/* ¿Es un depósito real (Swan / Select)? OJO: antes se llamaba isStore(id) y
+   chocaba con isStore() (rol "store", más abajo): en JS gana la última
+   declaración, así que isStore("select") devolvía el ROL y no el depósito.
+   Eso mandaba a Swan las unidades al revertir ventas de Select. */
+function isDeposito(id){ return STORE_IDS.includes(id); }
 /* ¿Es un bucket no-vendible (tránsito / bóveda)? Los buckets no dejan kardex
    propio en las transferencias, para que el saldo corrido del producto siga
    espejando el stock vendible (criterio de auditoría). */
@@ -69,6 +73,86 @@ function isBucket(id){ return id===INV_STORE || id===TRANSITO_STORE; }
    ============================================================ */
 const CCY_SYM = "US$";
 function storePais(store){ const s=STORES.find(x=>x.id===store); return (s && s.pais) || ""; }
+
+/* ============================================================
+   IDENTIDAD VISUAL POR DEPÓSITO
+   Swan (US) y Select (AR) son depósitos FÍSICOS distintos: cada uno tiene
+   un color fijo (CSS .st-badge.st-<id>) que se repite en toda la app
+   (listados, kardex, ficha, venta, P&L), para distinguirlos de un vistazo.
+   ============================================================ */
+function storeShort(store){ const s=STORES.find(x=>x.id===store); return (s && s.short) || storeName(store); }
+function storeDeVenta(v){ return (v && (v.storeVenta || v.store)) || STORE_IDS[0]; }
+function storeBadge(store){
+  if(!store) return `<span class="hint">—</span>`;
+  if(!STORE_IDS.includes(store)) return `<span class="st-badge">${esc(storeName(store))}</span>`;
+  return `<span class="st-badge st-${store}"><b>${storePais(store)}</b>${esc(storeShort(store))}</span>`;
+}
+
+/* ============================================================
+   TRACKING DE ENVÍOS (remito U = envío US → AR)
+   El tracking vive en el REMITO U; las consignaciones apuntan al remito
+   por remitoId, así que no se duplica. Si hay carrier conocido, el número
+   se muestra como link directo a su página de seguimiento.
+   ============================================================ */
+const CARRIERS = [
+  { id:"ups",   name:"UPS",   url:"https://www.ups.com/track?tracknum={n}" },
+  { id:"fedex", name:"FedEx", url:"https://www.fedex.com/fedextrack/?trknbr={n}" },
+  { id:"dhl",   name:"DHL",   url:"https://www.dhl.com/global-en/home/tracking/tracking-express.html?submit=1&tracking-id={n}" },
+  { id:"usps",  name:"USPS",  url:"https://tools.usps.com/go/TrackConfirmAction?tLabels={n}" },
+  { id:"otro",  name:"",      url:"" }
+];
+function carrierName(id){ const c=CARRIERS.find(x=>x.id===id); return c ? (c.name || t("trk.other")) : ""; }
+function trackingURL(r){
+  if(!r || !r.tracking) return "";
+  const c = CARRIERS.find(x=>x.id===r.carrier);
+  return (c && c.url) ? c.url.replace("{n}", encodeURIComponent(String(r.tracking).trim())) : "";
+}
+/* Tracking de un remito como HTML: link si hay carrier conocido, texto si no. */
+function trackingHTML(r, emptyTxt){
+  if(!r || !r.tracking) return emptyTxt!=null ? emptyTxt : `<span class="hint">${t("trk.none")}</span>`;
+  const car = carrierName(r.carrier), url = trackingURL(r);
+  const txt = `${car?esc(car)+" · ":""}<span class="num">${esc(r.tracking)}</span>`;
+  return url ? `<a class="trk-link" href="${esc(url)}" target="_blank" rel="noopener">${ICO.plane||""}${txt}</a>` : `<span class="trk-link">${txt}</span>`;
+}
+function carrierOptionsHTML(sel){
+  return CARRIERS.map(c=>`<option value="${c.id}" ${c.id===(sel||"")?"selected":""}>${esc(c.name||t("trk.other"))}</option>`).join("");
+}
+
+/* ============================================================
+   COSTOS FINANCIEROS (db.costosFinancieros)
+   ------------------------------------------------------------
+   Wire fees, comisiones bancarias, intereses, etc. del stock PROPIO.
+   NO se capitalizan al costo del producto (criterio NIC 2 / NIC 23):
+   van a resultados como línea propia del P&L, debajo de la contribución.
+   Se cargan solos desde cada puerta (enviar a tránsito, entregar en AR,
+   retener para Select) o a mano desde la pestaña P&L.
+   Los de mercadería de TERCEROS no pasan por acá: se suman a lo que se le
+   refactura al dueño (remito A), como el courier.
+   Registro: { id, fecha, monto, concepto, store|null, fuente:{tipo,id,codigo}|null, auto }
+   ============================================================ */
+function costosFinAll(){ return db.costosFinancieros || (db.costosFinancieros=[]); }
+function registrarCostoFinanciero(o){
+  const monto = round2(Math.max(0, +o.monto||0));
+  if(monto<=0) return null;
+  const e = { id:uid(), fecha:(o.fecha||new Date().toISOString().slice(0,10)), monto,
+              concepto:(o.concepto||"").trim(), store:(o.store && STORE_IDS.includes(o.store)) ? o.store : null,
+              fuente:o.fuente||null, auto:!!o.auto };
+  costosFinAll().push(e);
+  return e;
+}
+/* Costos financieros del rango [desde,hasta]. `stores`: si se pasa un foco
+   parcial (un solo depósito), sólo cuentan los asignados a ese depósito; los
+   generales (store null) sólo entran en la vista consolidada. */
+function costosFinEnRango(desde, hasta, stores){
+  const all = !stores || STORE_IDS.every(s=> stores.includes(s));
+  return costosFinAll().filter(e=>{
+    const f = normISO(e.fecha)||e.fecha||"";
+    if(desde && f<desde) return false;
+    if(hasta && f>hasta) return false;
+    if(all) return true;
+    return !!e.store && stores.includes(e.store);
+  });
+}
 
 const ROLES = { ADMIN:"admin", SELLER:"seller", STORE:"store" };
 function currentRole(){ return (session && session.role) || ROLES.ADMIN; }  // Local mode (no session) = full access
@@ -97,13 +181,9 @@ function sociedadColsHead(f){ return showSociedadCols() ? STORE_IDS.map(s=> f ? 
 function sociedadColsCells(p, isT){ return showSociedadCols() ? STORE_IDS.map(s=>`<td class="r num">${stockDisplay(p, isT?transitoDe(p,s):stockDe(p,s))}</td>`).join("") : ""; }
 /* The store currently in focus. 'all' = consolidated (admin only). */
 let activeStore = "all";
-/* Vistas donde el SWITCHER de sociedad (foco de procedencia) aporta:
-   - prod / compras: procedencia del stock (quién lo compró) y foco de conteo.
-   Analysis NO usa el switcher: la venta no está atada a una sociedad (pool único),
-   así que los chips no filtrarían nada. En su lugar mostramos una tabla real de
-   costo/margen POR SOCIEDAD (procedencia del stock consumido). En dashboard, ventas
-   y movimientos el stock es un pool único -> consolidado, sin chips. */
-const SOCIETY_VIEWS = ["prod", "compras"];
+/* Swan y Select son depósitos FÍSICOS (no un pool): el foco por depósito
+   aplica a stock, compras, ventas, kardex, análisis y P&L. */
+const SOCIETY_VIEWS = ["dash", "prod", "compras", "ventas", "mov", "analisis", "pnl"];
 function viewUsesSociety(){ return SOCIETY_VIEWS.includes(view); }
 function effectiveStores(){
   const allow = allowedStores();
@@ -275,12 +355,14 @@ function migrate(d){
     if(cs.keptFull==null)      cs.keptFull = false;               // se retuvo TODA la línea para Select
     if(cs.remitoId==null)      cs.remitoId = null;                // remito U del que salió
     if(cs.remitoCodigo==null)  cs.remitoCodigo = "";
+    if(cs.costoFinUnit==null)  cs.costoFinUnit = 0;               // costo financiero por unidad (se refactura al dueño)
   });
   // REMITOS: documento interno numerado del movimiento US → AR. Serie por letra:
   //  · U = salida de USA (nace al arrancar el tránsito). Uno por envío.
   //  · A = Argentina, se emite SÓLO si el remito U se PARTE (parte a Select, parte a
   //    terceros). Referencia al U de origen para la trazabilidad. Correlativo automático.
   d.remitos = d.remitos || [];
+  d.costosFinancieros = Array.isArray(d.costosFinancieros) ? d.costosFinancieros : [];   // costos financieros (P&L, no capitalizados)
   if(!d.config.remitoSeq || typeof d.config.remitoSeq!=="object"){
     d.config.remitoSeq = { U:{ inicio:1 }, A:{ inicio:1 } };
   }
@@ -865,6 +947,8 @@ function crearRemito(o){
     origenRemitoId: (o.origen && o.origen.id) || null,
     origenCodigo:   (o.origen && o.origen.codigo) || "",
     lineas: (o.lineas||[]).map(l=>({ productoId:l.productoId||null, sku:l.sku||"", nombre:l.nombre||"", cantidad:Math.max(0,+l.cantidad||0), rol:l.rol||"", owner:l.owner||"", costoUnit:(+l.costoUnit||0), charge:(l.charge!=null?+l.charge:null) })),
+    tracking: String(o.tracking||"").trim(),      // número de seguimiento del envío (se puede cargar/editar después)
+    carrier:  o.carrier || "",                     // ups | fedex | dhl | usps | otro
     obs: o.obs || ""
   };
   (db.remitos || (db.remitos=[])).push(r);

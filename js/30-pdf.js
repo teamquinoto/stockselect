@@ -294,6 +294,12 @@ function generarRemitoDocPDF(remitoId){
     doc.text(t("pdf.remdoc.splitfrom",{code:r.origenCodigo}), M, y);
     setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(9); y+=16;
   }
+  if(r.tracking){   // envío con tracking cargado
+    setInk(INK); doc.setFont("helvetica","bold"); doc.setFontSize(10);
+    const car = carrierName(r.carrier);
+    doc.text(t("pdf.remdoc.tracking",{t:(car?car+" · ":"")+r.tracking}), M, y);
+    y+=16;
+  }
   setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(9);
   doc.text(esTercero ? t("pdf.remdoc.capTercero")
          : esSelect  ? t("pdf.remdoc.capSelect")

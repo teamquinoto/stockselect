@@ -56,6 +56,7 @@ function pnlSellerSales(vid, from, to){
   const out=[];
   (db.ventas||[]).forEach(v=>{
     if((v.vendedorId||"")!==vid) return;
+    if(!effectiveStores().includes(storeDeVenta(v))) return;   // foco por depósito
     const f=normISO(v.fecha)||v.fecha, fd=new Date(f+"T12:00:00");
     if(d0&&fd<d0) return; if(d1&&fd>d1) return;
     (v.lineas||[]).forEach(l=>{
@@ -69,9 +70,9 @@ function pnlSellerSales(vid, from, to){
 
 function viewPnL(){
   const r  = pnlRange(pnlPeriodo);
-  const P  = pnlAggregate(r.from, r.to);
+  const P  = pnlAggregate(r.from, r.to, effectiveStores());
   const pr = pnlPriorRange(r);
-  const Pp = pr ? pnlAggregate(pr.from, pr.to) : null;
+  const Pp = pr ? pnlAggregate(pr.from, pr.to, effectiveStores()) : null;
   const B  = pnlBudget(r.from, r.to);
   const neg = P.contrib<0;
   const pctNet = P.net>0 ? nf0.format(P.contribPct*100)+"%" : "—";
@@ -184,7 +185,7 @@ function viewPnL(){
 
   const notes = `<p class="csub" style="margin-top:14px;line-height:1.6">${t("pnl.notes")}</p>`;
 
-  return head + kpis + waterfall + variance + grid + notes;
+  return head + kpis + waterfall + variance + grid + finPanelHTML(P, r.from, r.to) + notes;
 }
 
 function wirePnL(){
@@ -194,4 +195,5 @@ function wirePnL(){
   m.querySelectorAll("[data-pnldrill]").forEach(tr=> tr.onclick=()=>{ const v=tr.dataset.pnldrill; pnlDrill=(pnlDrill===v)?null:v; render(); });
   const ex = document.getElementById("pnl_export");
   if(ex) ex.onclick=()=>{ const r=pnlRange(pnlPeriodo); exportPnL(r.from||"", r.to||""); };
+  wireFinPanel();   // resultado + costos financieros
 }

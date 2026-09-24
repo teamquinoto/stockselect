@@ -493,7 +493,7 @@ function confirmDoc(){
       const res = fifoConsumir(r.prod, storeVenta, r.cantidad);
       doc.lineas[idx].costo = res.unit;                              // costo FIFO unitario (mezcla real del depósito)
       doc.lineas[idx].cogs = res.cogs;                               // COGS total
-      doc.lineas[idx].consumed = res.consumed;                       // capas consumidas -> revert exacto (usa doc.storeVenta)
+      doc.lineas[idx].consumed = res.consumed.map(c=>({ ...c, sociedad:storeVenta }));   // capas consumidas (+ depósito de origen) -> revert exacto y margen por depósito
       moverStock(r.prod, -r.cantidad, res.unit, "venta", doc.id, refTxt, { store:storeVenta });
       r.prod.precioVenta = r.precio;                                 // último precio de venta (mirror)
       if(r.prod.precioVentaPorTienda) r.prod.precioVentaPorTienda[storeVenta] = r.precio;   // precio de lista del depósito

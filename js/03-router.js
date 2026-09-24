@@ -77,14 +77,13 @@ function stockViewSwitchHTML(){
 }
 function storeBarHTML(){
   const sw = stockViewSwitchHTML();
-  // El desglose por sociedad (procedencia) es sólo para el admin, con 2+ sociedades,
-  // y SÓLO en las vistas donde aporta (analisis, prod, compras). En dashboard, ventas
-  // y movimientos el stock es un pool único -> sin chips. Sin chips ni toggle -> sin barra.
+  // Foco por depósito (Swan / Select): admin, 2+ depósitos, en las vistas de
+  // SOCIETY_VIEWS (stock, compras, ventas, kardex, análisis, P&L).
   const showChips = isAdmin() && STORE_IDS.length>1 && viewUsesSociety();
   const chips = [];
   if(showChips){
     chips.push(`<button class="chip-btn ${activeStore==="all"?"on":""}" data-store="all">${t("bar.all")}</button>`);
-    STORE_IDS.forEach(s=> chips.push(`<button class="chip-btn ${activeStore===s?"on":""}" data-store="${s}">${esc(storeName(s))}</button>`));
+    STORE_IDS.forEach(s=> chips.push(`<button class="chip-btn st-chip st-${s} ${activeStore===s?"on":""}" data-store="${s}"><b>${storePais(s)}</b> ${esc(storeShort(s))}</button>`));
   }
   const left = chips.length ? `<span class="sb-label" title="${esc(t("bar.society.tip"))}">${t("bar.society")}</span>${chips.join("")}` : "";
   if(!left && !sw) return "";

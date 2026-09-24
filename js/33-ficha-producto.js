@@ -33,7 +33,7 @@ function openFicha(id){
                : `<span class="pill ${up?'in':'out'}">${up?t("mov.in"):t("mov.out")}</span>`;
     return `<tr>
       <td class="num">${fecha}</td>
-      <td>${pill}${m.store?` <span class="pill" style="opacity:.7">${esc(storeName(m.store))}</span>`:""}</td>
+      <td>${pill}${m.store?` ${isDeposito(m.store)?storeBadge(m.store):`<span class="pill" style="opacity:.7">${esc(storeName(m.store))}</span>`}`:""}</td>
       <td class="r delta ${isAdj?'flat':(up?'up':'down')}">${up?'+':'−'}${qty(Math.abs(signed))}</td>
       <td class="r num">${money(m.valorUnit)}</td>
       <td class="r num" style="font-weight:600">${qty(bal)}</td>
@@ -48,7 +48,7 @@ function openFicha(id){
   const totalStock = stockTotalP(p);
   const held = invUnits(p);
   const inTr = (typeof transUnits==="function") ? transUnits(p) : 0;
-  const perStore = STORE_IDS.map(s=>`${storeName(s)}: <b>${qty(stockDe(p,s))}</b>`).join(" · ")
+  const perStore = STORE_IDS.map(s=>`${storeBadge(s)} <b>${qty(stockDe(p,s))}</b>`).join(" · ")
     + (inTr>0 ? ` · <span style="color:var(--muted)">⋯ ${t("fi.transit")}: <b>${qty(inTr)}</b></span>` : "")
     + (held>0 ? ` · <span style="color:var(--accent-ink)">◈ ${t("fi.vault")}: <b>${qty(held)}</b></span>` : "");
   const badge = esInversion(p)?' <span class="pill inv">'+t("inv.pill")+'</span>':(esBloqueado(p)?' <span class="pill blocked">'+t("fi.badge.blocked")+'</span>':'');

@@ -111,7 +111,7 @@ function renderMovRows(){
       <div class="ftime">${fecha}</div>
       <div class="fmain">
         <div class="fname">${pill} ${esc(m.nombre)}</div>
-        <div class="fref"><span class="sku">${esc(m.sku||"—")}</span> · ${esc(m.ref||"—")}${showStore?` · ${esc(storeName(m.store))}`:""}</div>
+        <div class="fref"><span class="sku">${esc(m.sku||"—")}</span> · ${esc(m.ref||"—")}${showStore?` · ${isDeposito(m.store)?storeBadge(m.store):esc(storeName(m.store))}`:""}</div>
       </div>
       <div class="fright">
         <div class="fdelta ${deltaCls}">${up?'+':'−'}${qty(Math.abs(signed))}</div>

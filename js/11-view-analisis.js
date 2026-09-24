@@ -140,6 +140,7 @@ function ventasFiltradas(){
   db.ventas.forEach(v=>{
     // Análisis es admin-only: se ven todas las ventas. Todo está en USD.
     if(anFiltros.vend && (v.vendedorId||"")!==anFiltros.vend) return;
+    if(!effectiveStores().includes(storeDeVenta(v))) return;   // foco por depósito (Swan / Select)
     if(anFiltros.pais && ((v.cliente&&v.cliente.pais)||"")!==anFiltros.pais) return;
     const f=new Date(v.fecha+"T12:00:00");
     if(desde && f<desde) return;
@@ -153,6 +154,7 @@ function ventasFiltradas(){
         cantidad:l.cantidad, revenue:round2((l.precio||0)*l.cantidad), cogs:round2(cogs),
         consumed: (Array.isArray(l.consumed) && l.consumed.length) ? l.consumed : null,
         store: l.store || null,
+        storeVenta: storeDeVenta(v),
         pais:(v.cliente&&v.cliente.pais)||"", saga:p?sagaDe(p):"", idioma:p?(p.idioma||""):"" });
     });
   });
@@ -186,7 +188,7 @@ function viewAnalisis(){
      diferencia de margen entre sociedades es, en esencia, diferencia de costo. */
   const bySoc = {};
   const addSoc = (soc, units, cogsv, rev)=>{
-    const k = isStore(soc) ? soc : "—";
+    const k = isDeposito(soc) ? soc : "—";
     const e = bySoc[k] = bySoc[k] || { units:0, cogs:0, revenue:0 };
     e.units += units; e.cogs = round2(e.cogs + cogsv); e.revenue = round2(e.revenue + rev);
   };
@@ -196,14 +198,14 @@ function viewAnalisis(){
       r.consumed.forEach(c=>{
         const cCogs = round2((c.costoUnit||0)*(c.cantidad||0));
         const cRev  = lineUnits>0 ? round2(r.revenue*((c.cantidad||0)/lineUnits)) : 0;
-        addSoc(c.sociedad, c.cantidad||0, cCogs, cRev);
+        addSoc(c.sociedad || r.storeVenta, c.cantidad||0, cCogs, cRev);   // ventas previas al fix: el depósito de la venta
       });
     } else {
       // Ventas legacy sin desglose: caen a la sociedad de la línea si existe, o a "—".
-      addSoc(r.store || "—", r.cantidad, r.cogs, r.revenue);
+      addSoc(r.store || r.storeVenta || "—", r.cantidad, r.cogs, r.revenue);
     }
   });
-  const socOrder = STORE_IDS.concat(Object.keys(bySoc).filter(k=>!isStore(k)));
+  const socOrder = STORE_IDS.concat(Object.keys(bySoc).filter(k=>!isDeposito(k)));
   const socRows = socOrder.filter(k=>bySoc[k]).map(k=>{
     const e = bySoc[k];
     const mg = round2(e.revenue - e.cogs);
@@ -294,7 +296,7 @@ function viewAnalisis(){
       <p class="csub">${t("an.soc.sub")}</p>
       ${socRows.length ? `<div class="table-scroll"><table>
         <thead><tr><th>${t("an.soc.society")}</th><th class="r">${t("an.soc.unitssold")}</th><th class="r">${t("an.soc.cogs")}</th><th class="r">${t("an.soc.avgcost")}</th><th class="r">${t("an.soc.revenue")}</th><th class="r">${t("an.soc.margin")}</th><th class="r">${t("an.soc.marginpct")}</th></tr></thead>
-        <tbody>${socRows.map(r=>`<tr><td>${esc(r.nombre)}</td><td class="r num">${qty(r.units)}</td><td class="r num">${money(r.cogs)}</td><td class="r num">${money(r.avg)}</td><td class="r num">${money(r.revenue)}</td><td class="r num">${money(r.margin)}</td><td class="r num">${r.revenue>0?nf0.format(r.marginPct)+"%":"—"}</td></tr>`).join("")}</tbody>
+        <tbody>${socRows.map(r=>`<tr><td>${isDeposito(r.soc)?storeBadge(r.soc):esc(r.nombre)}</td><td class="r num">${qty(r.units)}</td><td class="r num">${money(r.cogs)}</td><td class="r num">${money(r.avg)}</td><td class="r num">${money(r.revenue)}</td><td class="r num">${money(r.margin)}</td><td class="r num">${r.revenue>0?nf0.format(r.marginPct)+"%":"—"}</td></tr>`).join("")}</tbody>
         <tfoot><tr><td><b>${t("an.soc.total")}</b></td><td class="r num"><b>${qty(units)}</b></td><td class="r num"><b>${money(cogs)}</b></td><td class="r num">—</td><td class="r num"><b>${money(revenue)}</b></td><td class="r num"><b>${money(margin)}</b></td><td class="r num"><b>${revenue>0?nf0.format(marginPct)+"%":"—"}</b></td></tr></tfoot>
       </table></div><p class="csub" style="margin-top:8px">${t("an.soc.foot")}</p>` : `<div class="cempty">${t("an.nosales")}</div>`}
     </div>` : ""}
@@ -309,7 +311,8 @@ function viewAnalisis(){
   </div>
   ${slicers}
   ${kpis}
-  ${charts}`;
+  ${charts}
+  ${isAdmin()?finPanelHTML(pnlAggregate(anFiltros.desde||"", anFiltros.hasta||"", effectiveStores()), anFiltros.desde||"", anFiltros.hasta||""):""}`;
 }
 function wireAnalisis(){
   const s=document.getElementById("an_saga"); if(!s) return;
@@ -331,6 +334,7 @@ function wireAnalisis(){
   });
   // Punto 5: donuts interactivos (revenue/units por local, país, idioma)
   wireDonuts();
+  wireFinPanel();   // resultado + costos financieros
 }
 /* saga (línea/juego) a partir del nombre de producto mostrado en un gráfico */
 function sagaOfName(nombre){
@@ -346,24 +350,30 @@ function sagaOfName(nombre){
    resultados. Dos fixes vs. la versión vieja:
      · cargosCliente (on-top facturado al cliente) SUMA al ingreso;
      · todo en USD (moneda única), sin conversiones.
-   Devuelve importes en USD + desgloses.
+   `stores` (opcional): foco por depósito; si se omite, consolidado.
+   Además de la contribución, resta los COSTOS FINANCIEROS del período
+   (db.costosFinancieros, no capitalizados) -> A.resultado.
+   Devuelve importes en USD + desgloses (por vendedor, por mes, por depósito).
    ============================================================ */
 let _pnlCache = { rev:-1, map:{} };   // cache de rollups; se limpia cuando cambian los datos (_pnlRev)
-function pnlAggregate(desde, hasta){
+function pnlAggregate(desde, hasta, stores){
+  stores = (Array.isArray(stores) && stores.length) ? stores : STORE_IDS.slice();
   // #16: si los datos no cambiaron, reusamos el rollup ya calculado (evita recorrer todas las ventas en cada render).
   const _rev = (typeof _pnlRev!=="undefined") ? _pnlRev : 0;
   if(_pnlCache.rev!==_rev) _pnlCache = { rev:_rev, map:{} };
-  const _key = (desde||"")+"|"+(hasta||"");
+  const _key = (desde||"")+"|"+(hasta||"")+"|"+stores.join(",");
   if(_pnlCache.map[_key]) return _pnlCache.map[_key];
   const d0 = desde ? new Date(desde+"T00:00:00") : null;
   const d1 = hasta ? new Date(hasta+"T23:59:59") : null;
-  const inRange = v=>{ const f=new Date((normISO(v.fecha)||v.fecha)+"T12:00:00"); if(d0&&f<d0) return false; if(d1&&f>d1) return false; return true; };
+  const inRange = v=>{ if(!stores.includes(storeDeVenta(v))) return false; const f=new Date((normISO(v.fecha)||v.fecha)+"T12:00:00"); if(d0&&f<d0) return false; if(d1&&f>d1) return false; return true; };
   const A = { sales:0, shipping:0, cargos:0, cogs:0, commission:0,
               costos:{envio:0,labor:0,comision:0,otro:0}, units:0,
-              detail:{}, perVend:{}, byMonth:{} };
+              detail:{}, perVend:{}, byMonth:{}, perStore:{} };
   (db.ventas||[]).filter(inRange).forEach(v=>{
     const fecha = normISO(v.fecha)||v.fecha;
     const vid   = v.vendedorId || "";
+    const st    = storeDeVenta(v);
+    const ps = A.perStore[st] = A.perStore[st] || { sales:0, shipping:0, cargos:0, cogs:0, commission:0, costos:0, units:0, financieros:0 };
     const pv = A.perVend[vid] = A.perVend[vid] || { nombre:saleVendedorNombre(v), units:0, sales:0, cogs:0, commission:0, cargos:0, shipping:0, costos:0 };
     let sSales=0, sCogs=0, sCostos=0;
     (v.lineas||[]).forEach(l=>{
@@ -379,8 +389,10 @@ function pnlAggregate(desde, hasta){
     const carg = saleCargosCliente(v);      // FIX #1: on-top que paga el cliente
     const comm = saleCommission(v);
     A.shipping+=ship; A.cargos+=carg; A.commission+=comm;
+    ps.sales+=sSales; ps.cogs+=sCogs; ps.shipping+=ship; ps.cargos+=carg; ps.commission+=comm;
+    ps.units+=(v.lineas||[]).reduce((a,l)=>a+(l.cantidad||0),0);
     pv.shipping+=ship; pv.cargos+=carg; pv.commission+=comm;
-    (v.costosExtra||[]).forEach(c=>{ const k=(c.tipo in A.costos)?c.tipo:"otro"; const m=round2(+c.monto||0); A.costos[k]+=m; pv.costos+=m; sCostos+=m; });
+    (v.costosExtra||[]).forEach(c=>{ const k=(c.tipo in A.costos)?c.tipo:"otro"; const m=round2(+c.monto||0); A.costos[k]+=m; pv.costos+=m; sCostos+=m; ps.costos+=m; });
     const mk = fecha.slice(0,7);
     const mm = A.byMonth[mk] = A.byMonth[mk] || { net:0, gp:0, contrib:0, sales:0, cogs:0 };
     mm.sales+=sSales; mm.cogs+=sCogs;
@@ -397,8 +409,108 @@ function pnlAggregate(desde, hasta){
   A.contrib = round2(A.gp - A.sellingTotal);
   A.gpPct       = A.net>0 ? A.gp/A.net : 0;
   A.contribPct  = A.net>0 ? A.contrib/A.net : 0;
+  // --- Costos financieros del período (no capitalizados) ---
+  const fins = costosFinEnRango(desde||"", hasta||"", stores);
+  A.finList      = fins;
+  A.financieros  = round2(fins.reduce((a,e)=>a+(+e.monto||0),0));
+  A.finSinAsignar= round2(fins.filter(e=>!e.store).reduce((a,e)=>a+(+e.monto||0),0));
+  fins.forEach(e=>{ if(e.store){ const ps=A.perStore[e.store]=A.perStore[e.store]||{ sales:0, shipping:0, cargos:0, cogs:0, commission:0, costos:0, units:0, financieros:0 }; ps.financieros+=(+e.monto||0); } });
+  A.resultado    = round2(A.contrib - A.financieros);
+  A.resultadoPct = A.net>0 ? A.resultado/A.net : 0;
+  // --- Cierre por depósito (Swan vs Select) ---
+  Object.keys(A.perStore).forEach(k=>{
+    const e=A.perStore[k];
+    ["sales","shipping","cargos","cogs","commission","costos","financieros"].forEach(f=> e[f]=round2(e[f]));
+    e.net=round2(e.sales+e.shipping+e.cargos); e.gp=round2(e.net-e.cogs);
+    e.contrib=round2(e.gp-e.commission-e.costos); e.resultado=round2(e.contrib-e.financieros);
+  });
   _pnlCache.map[_key] = A;   // #16: guardamos para reusar mientras los datos no cambien
   return A;
+}
+
+/* ============================================================
+   PANEL: RESULTADO + COSTOS FINANCIEROS (+ cierre por depósito)
+   ------------------------------------------------------------
+   Lo usan Análisis y P&L. Muestra contribución − costos financieros =
+   resultado, la apertura Swan vs Select (sólo en consolidado) y el libro
+   de costos financieros del período, con alta manual y baja.
+   `P` = pnlAggregate(desde, hasta, stores). Admin-only.
+   ============================================================ */
+function finPanelHTML(P, desde, hasta){
+  if(!isAdmin()) return "";
+  const consolidado = STORE_IDS.every(s=> effectiveStores().includes(s));
+  const cell = (v, strong)=> `<td class="r num" style="${v<0?"color:var(--alert);":""}${strong?"font-weight:800":""}">${money(v)}</td>`;
+  // --- cierre por depósito ---
+  let porDep = "";
+  if(consolidado && STORE_IDS.length>1){
+    const rows = STORE_IDS.map(sid=>{
+      const e = P.perStore[sid] || { net:0, cogs:0, gp:0, commission:0, costos:0, contrib:0, financieros:0, resultado:0 };
+      return `<tr><td>${storeBadge(sid)}</td>${cell(e.net)}${cell(-e.cogs)}${cell(e.gp)}${cell(-(e.commission+e.costos))}${cell(e.contrib,true)}${cell(-e.financieros)}${cell(e.resultado,true)}</tr>`;
+    }).join("");
+    const sinAsig = P.finSinAsignar>0 ? `<tr><td><span class="hint">${t("fin.unassigned")}</span></td><td></td><td></td><td></td><td></td><td></td>${cell(-P.finSinAsignar)}${cell(-P.finSinAsignar,true)}</tr>` : "";
+    porDep = `<p class="ctitle" style="margin-top:6px">${t("fin.bydep.title")}</p>
+      <p class="csub">${t("fin.bydep.sub")}</p>
+      <div class="table-scroll"><table>
+        <thead><tr><th>${t("fin.th.dep")}</th><th class="r">${t("pnl.kpi.net")}</th><th class="r">${t("fin.th.cogs")}</th><th class="r">${t("pnl.kpi.gross")}</th><th class="r">${t("fin.th.selling")}</th><th class="r">${t("pnl.kpi.contrib")}</th><th class="r">${t("fin.th.fin")}</th><th class="r">${t("fin.th.result")}</th></tr></thead>
+        <tbody>${rows}${sinAsig}</tbody>
+        <tfoot><tr style="border-top:2px solid var(--line-strong);font-weight:800"><td>${t("an.soc.total")}</td>${cell(P.net)}${cell(-P.cogs)}${cell(P.gp)}${cell(-(P.sellingTotal))}${cell(P.contrib,true)}${cell(-P.financieros)}${cell(P.resultado,true)}</tr></tfoot>
+      </table></div>`;
+  }
+  // --- libro de costos financieros del período ---
+  const list = (P.finList||[]).slice().sort((a,b)=> String(b.fecha).localeCompare(String(a.fecha)));
+  const finRows = list.length ? list.map(e=>`<tr>
+      <td class="num" style="white-space:nowrap">${esc(fmtDate(e.fecha))}</td>
+      <td>${esc(e.concepto||"—")}${e.auto?` <span class="rl-pill">${t("fin.auto")}</span>`:""}</td>
+      <td>${e.store?storeBadge(e.store):`<span class="hint">${t("fin.general")}</span>`}</td>
+      <td class="r num">${money(e.monto)}</td>
+      <td class="r"><button class="btn ghost xs" data-findel="${esc(e.id)}" title="${t("common.delete")}" style="color:var(--alert)">\u2715</button></td>
+    </tr>`).join("") : `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:14px">${t("fin.empty")}</td></tr>`;
+  const today = new Date().toISOString().slice(0,10);
+  const depOpts = `<option value="">${t("fin.general")}</option>` + STORE_IDS.map(sid=>`<option value="${sid}" ${(!consolidado && effectiveStores()[0]===sid)?"selected":""}>${esc(storeName(sid))}</option>`).join("");
+  return `<div class="panel chart" style="grid-column:1/-1;margin-top:16px">
+    <p class="ctitle">${t("fin.title")}</p>
+    <p class="csub">${t("fin.sub")}${(desde||hasta)?` · ${desde?fmtDate(desde):"…"} \u2192 ${hasta?fmtDate(hasta):"…"}`:""}</p>
+    <div class="kpis" style="margin:10px 0 14px">
+      <div class="kpi"><div class="lbl">${t("pnl.kpi.contrib")}</div><div class="val">${money(P.contrib)}</div></div>
+      <div class="kpi"><div class="lbl">${t("fin.kpi.fin")}</div><div class="val" style="color:${P.financieros>0?"var(--alert)":"var(--text)"}">\u2212 ${money(P.financieros)}</div><div class="sub">${t("fin.kpi.finsub")}</div></div>
+      <div class="kpi"><div class="lbl">${t("fin.kpi.result")}</div><div class="val" style="color:${P.resultado<0?"var(--alert)":"var(--up)"}">${money(P.resultado)}</div><div class="sub">${P.net>0?nf0.format(P.resultadoPct*100)+"% "+t("fin.kpi.ofnet"):"—"}</div></div>
+    </div>
+    ${porDep}
+    <p class="ctitle" style="margin-top:14px">${t("fin.list.title")}</p>
+    <p class="csub">${t("fin.list.sub")}</p>
+    <div class="grid-form" style="grid-template-columns:130px 1fr 170px 120px auto;align-items:end;padding:0;gap:8px;margin-bottom:10px">
+      <div class="field"><label>${t("common.date")}</label><input class="inp" type="date" id="fin_fecha" value="${today}"></div>
+      <div class="field"><label>${t("fin.l.concept")}</label><input class="inp" id="fin_conc" placeholder="${t("fin.ph.concept")}"></div>
+      <div class="field"><label>${t("fin.th.dep")}</label><select class="inp" id="fin_store">${depOpts}</select></div>
+      <div class="field"><label>${t("fin.l.amount")} <span class="hint" style="font-weight:400">${CCY_SYM}</span></label><input class="inp num" id="fin_monto" inputmode="decimal" placeholder="0"></div>
+      <button class="btn primary" data-finadd style="margin-bottom:2px">${ICO.plus||""}${t("fin.add")}</button>
+    </div>
+    <div class="table-scroll"><table>
+      <thead><tr><th>${t("common.date")}</th><th>${t("fin.l.concept")}</th><th>${t("fin.th.dep")}</th><th class="r">${t("fin.l.amount")}</th><th></th></tr></thead>
+      <tbody>${finRows}</tbody>
+    </table></div>
+  </div>`;
+}
+/* Cableado del panel financiero (alta manual y baja). Lo llaman wireAnalisis/wirePnL. */
+function wireFinPanel(){
+  const m=document.getElementById("main"); if(!m) return;
+  const add=m.querySelector("[data-finadd]");
+  if(add) add.onclick=()=>{
+    const fecha=(document.getElementById("fin_fecha").value||"").slice(0,10);
+    const conc=(document.getElementById("fin_conc").value||"").trim();
+    const store=document.getElementById("fin_store").value||null;
+    const monto=parseNum(document.getElementById("fin_monto").value)||0;
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(fecha)){ toast(t("fin.tt.baddate"),"warn"); return; }
+    if(!(monto>0)){ toast(t("fin.tt.badamount"),"warn"); return; }
+    registrarCostoFinanciero({ fecha, concepto:conc||t("fin.manual"), store, monto, auto:false });
+    save(); toast(t("fin.tt.added")); render();
+  };
+  m.querySelectorAll("[data-findel]").forEach(b=> b.onclick=()=>{
+    const id=b.dataset.findel; const e=costosFinAll().find(x=>x.id===id); if(!e) return;
+    if(!confirm(t("fin.cf.del",{c:e.concepto||"—",m:money(e.monto)}))) return;
+    withUndo(t("fin.tt.deleted"), ()=>{ db.costosFinancieros = costosFinAll().filter(x=>x.id!==id); save(); });
+    render();
+  });
 }
 
 /* --- Formateo compacto para etiquetas de gráficos (USD) --- */
@@ -422,8 +534,13 @@ function pnlWaterfallSVG(P){
     {k:t("pnl.wf.gross"),       v:P.gp,          type:"sub"},
     {k:t("pnl.wf.commissions"), v:-P.commission, type:"minus"},
     {k:t("pnl.wf.selling"),     v:-(P.costos.envio+P.costos.labor+P.costos.comision+P.costos.otro), type:"minus"},
-    {k:t("pnl.wf.contrib"),     v:P.contrib,     type:"total"},
+    {k:t("pnl.wf.contrib"),     v:P.contrib,     type:(P.financieros>0?"sub":"total")},
   ];
+  // Costos financieros (no capitalizados): se restan debajo de la contribución.
+  if(P.financieros>0){
+    steps.push({k:t("pnl.wf.financial"), v:-P.financieros, type:"minus"});
+    steps.push({k:t("pnl.wf.result"),    v:P.resultado,    type:"total"});
+  }
   let run=0, maxV=0, minV=0;
   const geom=steps.map(s=>{ let lo,hi;
     if(s.type==="start"||s.type==="sub"||s.type==="total"){ lo=Math.min(0,s.v); hi=Math.max(0,s.v); run=s.v; }

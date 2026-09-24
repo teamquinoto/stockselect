@@ -18,7 +18,7 @@ function storeShipments(){
   const map = {};
   mine.forEach(cs=>{
     const key = cs.remitoId || cs.remitoCodigo || cs.envioRef || cs.id;
-    if(!map[key]) map[key] = { key, codigo: cs.remitoCodigo||cs.envioRef||"", fecha: cs.fecha||"", lineas:[] };
+    if(!map[key]) map[key] = { key, remitoId: cs.remitoId||null, codigo: cs.remitoCodigo||cs.envioRef||"", fecha: cs.fecha||"", lineas:[] };
     map[key].lineas.push(cs);
   });
   return Object.keys(map).map(k=>map[k]).sort((a,b)=> String(b.fecha||"").localeCompare(String(a.fecha||"")));
@@ -48,6 +48,8 @@ function storeShipmentCard(g){
       <span class="rl-code">${g.codigo?esc(g.codigo):t("store.shipment")}</span>
       <span class="rl-meta">${esc(fmtDate(g.fecha))} \u00b7 ${g.lineas.length} ${t("store.products")} \u00b7 ${qty(u)} ${t("store.units")}</span>
     </div>
+    ${(()=>{ const r = g.remitoId ? remitoById(g.remitoId) : null;   // tracking del envío (el Worker sólo manda carrier + número)
+      return r && r.tracking ? `<div class="rl-meta" style="margin:2px 0 8px">${t("store.tracking")}: ${trackingHTML(r)}</div>` : ""; })()}
     ${rielHTML(nodes, cur)}
     <div class="table-scroll" style="margin-top:6px"><table>
       <thead><tr><th>SKU</th><th>${t("common.product")}</th><th class="r">${t("common.units")}</th></tr></thead>

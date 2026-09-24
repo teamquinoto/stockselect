@@ -158,7 +158,7 @@ function fifoDevolverGlobal(prod, consumed, fallbackSoc){
   for(let i=consumed.length-1;i>=0;i--){
     const c = consumed[i];
     if(c.synthetic) continue;   // el faltante sintético no era stock real
-    const soc = isStore(c.sociedad) ? c.sociedad : (isStore(fallbackSoc)?fallbackSoc:STORE_IDS[0]);
+    const soc = isDeposito(c.sociedad) ? c.sociedad : (isDeposito(fallbackSoc)?fallbackSoc:STORE_IDS[0]);
     const L = { id:uid(), fecha:new Date().toISOString(), cantidad:c.cantidad, costoUnit:c.costoUnit, ref:"revert" };
     if(c.d) L.d = { us:c.d.us||0, intl:c.d.intl||0, arg:c.d.arg||0 };   // conserva el desglose por puerta
     fifoLayers(prod, soc).unshift(L);
