@@ -17,11 +17,11 @@ Antes de los módulos propios se cargan 3 libs de CDN: **pdf.js**, **jsPDF** y *
 |---|---|---|
 | 00b | `js/00b-i18n.js` | **Primero de todo.** Diccionarios EN/ES + `t(key,vars)`, `lang()`/`setLang()`, `applyStaticI18n()`. Cada vista suma sus claves acá. |
 | 00c | `js/00c-icons.js` | Biblioteca de iconos SVG (`ICO.<clave>`, estilo Feather). Se carga antes de las vistas. |
-| 01 | `js/01-core.js` | Config, estado, sesión, sync con el Worker, login, formatos, toast, **`withUndo`/`doUndo`**, **roles** (`admin`/`seller`/`store`), **depósitos Swan/Select + buckets `__transito`/`__inv`**, **moneda única USD** (`money(n)`, sin TC ni conversiones), helpers de stock, helpers de venta (margen, comisión, `saleCargosCliente`/`saleNetMargin`), **remitos numerados** (`nextRemitoNum`/`crearRemito`, series U/A) |
+| 01 | `js/01-core.js` | Config, estado, sesión, sync con el Worker, login, formatos, toast, **`withUndo`/`doUndo`**, **roles** (`admin`/`seller`/`store`), **depósitos Swan/Select + buckets `__transito`/`__inv`**, **moneda única USD** (`money(n)`, sin TC ni conversiones), **identidad por depósito** (`storeBadge`, `isDeposito`), **tracking** (`CARRIERS`, `trackingHTML`), **costos financieros** (`registrarCostoFinanciero`, `costosFinEnRango`), helpers de stock, helpers de venta (margen, comisión, `saleCargosCliente`/`saleNetMargin`), **remitos numerados** (`nextRemitoNum`/`crearRemito`, series U/A) |
 | 02 | `js/02-engine.js` | Motor: `moverStock`, **FIFO por depósito** y **FIFO global** (venta), bóveda (`sendToInvestment`/`returnFromInvestment`), **`transferStock`** (arrastra el desglose `d:{us,intl,arg}` y capitaliza el costo del tramo) |
 | 03 | `js/03-router.js` | Router de vistas + wireo del nav |
 | 10 | `js/10-view-dashboard.js` | Panel / KPIs + tarjetas "Necesita tu atención" (reorder / tránsito / terceros) |
-| 11 | `js/11-view-analisis.js` | Gráficos (donut, barras) + agregadores del P&L (`pnlAggregate`, `pnlWaterfallSVG`, `trendChartSVG`) que reusa 11b |
+| 11 | `js/11-view-analisis.js` | Gráficos (donut, barras) + agregadores del P&L (`pnlAggregate` con foco por depósito, costos financieros y cierre por depósito; `pnlWaterfallSVG`, `trendChartSVG`) + panel **Resultado y costos financieros** (`finPanelHTML`/`wireFinPanel`) que reusa 11b |
 | 11b | `js/11b-view-pnl.js` | **Pestaña P&L (admin).** Waterfall, tendencia, KPIs con delta vs período previo, tabla por vendedor con drill-down y panel **Real vs Presupuesto**. Presets `mtd/qtd/ytd/all` |
 | 12 | `js/12-view-investments.js` | Bóveda de inversión (stock apartado, admin-only) |
 | 13 | `js/13-view-productos.js` | Catálogo de productos |

@@ -12,7 +12,7 @@
    ACTUALIZACIÓN CONTROLADA: no auto-activamos con skipWaiting; cuando hay
    versión nueva el SW queda "waiting" y la app muestra el botón "Update".
    ============================================================ */
-const CACHE = "mayor-stock-v65";   // v65: moneda única USD (se saca bimoneda, TC y conversiones)
+const CACHE = "mayor-stock-v66";   // v66: USD único + depósitos diferenciados + tracking + costos financieros
 
 const ASSETS = [
   "./",

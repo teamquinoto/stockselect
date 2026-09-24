@@ -13,6 +13,8 @@ Dos **depósitos reales** (vendibles):
 | **Swan** | USA (Miami) |
 | **Select** | Argentina |
 
+> **Identidad por depósito.** Swan (US, azul) y Select (AR, verde) tienen color y badge fijos en toda la app. El foco por depósito (chips *Todos / Swan / Select*, admin) aplica a Dashboard, Productos, Compras, Ventas, Movimientos, Análisis y P&L. Cada venta guarda de qué depósito salió cada unidad (`consumed[].sociedad`).
+
 > **Moneda única: USD.** Todo el sistema opera en dólares (compras, ventas, costos por puerta, FIFO, valuación, P&L, remitos). No hay tipo de cambio ni conversiones: si algo se paga en pesos, se pasa a USD **a mano** antes de cargarlo.
 
 Dos **buckets** (NO vendibles, no cuentan como stock ni inflan valuación):
@@ -28,8 +30,17 @@ El **operador** (la empresa dueña de la app) **paga la importación y compra en
 | Puerta | Tramo | Costo que se suma |
 |---|---|---|
 | 1 | Invoice → Swan (Miami) | Product Cost + **US Freight** (neto + handling + flete de la compra) |
-| 2 | Swan → Tránsito (Buenos Aires) | **Intl Freight + Wire Fees** (en *Send to transit*, total prorrateado) |
-| 3 | Tránsito → **Entregado** (Select/AR) | **Arg Freight + local costs** (en *Deliver in AR*, total prorrateado) |
+| 2 | Swan → Tránsito (Buenos Aires) | **Intl freight / courier** (en *Send to transit*, total prorrateado) |
+| 3 | Tránsito → **Entregado** (Select/AR) | **Arg freight + local costs** (en *Deliver in AR*, total prorrateado) |
+
+### Costos financieros (no se capitalizan)
+En cada puerta el courier/flete y el **financiero** (giros, comisiones bancarias, intereses) se cargan por separado:
+- **Courier/flete** → se capitaliza al costo landed (como siempre).
+- **Financiero de stock propio** → NO engrosa el costo (criterio NIC 2 / NIC 23): va a `db.costosFinancieros` y se resta **debajo de la contribución** → *Resultado*. Se genera solo desde *Send to transit*, *Deliver in AR* y *Resolve in AR* (lo retenido para Select), y se puede cargar a mano (giros a proveedores, etc.) desde **Análisis → Resultado y costos financieros**, que también muestra el **cierre por depósito** (Swan vs Select).
+- **Financiero de terceros** → se guarda por unidad en la consignación (`costoFinUnit`) y se **refactura al dueño** junto con el courier en el remito A.
+
+### Envíos y tracking
+*Send to transit* es **multi-producto**: una caja = un envío = **un remito U** con su **tracking** (carrier UPS/FedEx/DHL/USPS/otro + número, con link al seguimiento). El tracking se puede cargar o editar después desde la card del remito (Terceros) o desde **Remitos**; sale en el PDF del remito y la tienda lo ve en su portal.
 
 - La **compra nace "in transit"** y **recién impacta stock/FIFO al marcarla "received"**. Por eso se puede vender desde Swan y desde Select, pero **no** mientras está en el bucket de tránsito.
 - `transferStock(origen, destino, cantidad, costoExtraUnit)` arrastra el **costo FIFO exacto** de cada capa y **suma el costo del tramo por unidad**, capitalizándolo (la misma carta "vale más" al avanzar). El operador carga el total del tramo y la app lo prorratea.
@@ -102,15 +113,15 @@ Worker independiente con su propia base D1 y secrets. Endpoints:
 | POST | `/login` | user/pass → **token firmado (HMAC)**, role, vendedorId, store |
 | GET/POST/DELETE | `/users` | ABM de usuarios (**admin**). Hash de contraseñas PBKDF2 |
 | POST | `/parse-invoice` | PDF → Gemini OCR → líneas (**admin**, Bearer) |
-| GET/PUT | `/state?space=…` | Lee/guarda estado con control de `rev`; el GET **proyecta por rol** (store ve solo lo suyo). En cada PUT deriva el fact table (fail-safe) |
-| GET | `/rollup?desde=&hasta=` | Agregaciones server-side en USD (P&L, por mes/vendedor/producto) (**admin**) |
+| GET/PUT | `/state?space=…` | Lee/guarda estado con control de `rev`; el GET **proyecta por rol**: store recibe una **lista cerrada de campos** (su mercadería, estado y el tracking de sus remitos U; nunca costos ni notas internas). En cada PUT deriva el fact table (fail-safe) |
+| GET | `/rollup?desde=&hasta=` | Agregaciones server-side en USD: P&L con costos financieros y resultado, por depósito, por mes/vendedor/producto (**admin**) |
 | POST | `/reindex?space=…` | Backfill: re-deriva el fact table desde el blob ya guardado (**admin**) |
 
 **Auth:** token firmado con **HMAC-SHA256** (TTL 30 días), contraseñas con **PBKDF2** (salt por usuario).
 
 **Secrets/vars:** `AUTH_SECRET` (firma el token), `USERS` (JSON) **o** `ADMIN_USER`/`ADMIN_PASS`, `GEMINI_KEY`, `ALLOWED_ORIGINS` (opc). **Binding:** `DB` (D1).
 
-**Tablas D1:** `estado` (el blob + `rev`), `usuarios`, y el **fact table** derivado `sales_header` / `sales_line`.
+**Tablas D1:** `estado` (el blob + `rev`), `usuarios`, y el **fact table** derivado `sales_header` / `sales_line` / `fin_cost`.
 
 ### Fact table (derivado, aditivo y fail-safe)
 En cada `PUT /state`, después de guardar el blob (que sigue siendo **la fuente de verdad**), el Worker **deriva** `sales_header`/`sales_line` para ese space (borra e inserta). Lee el **COGS FIFO ya congelado por línea** (`doc.lineas[].cogs`), así reconcilia EXACTO con la pantalla. Si algo del fact table falla, el guardado del blob **no** se rompe. Migración cero-downtime: se despliega + se corre `/reindex` una vez; el front sigue calculando local y se valida que `/rollup` dé los mismos números.

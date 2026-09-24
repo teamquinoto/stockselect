@@ -11,7 +11,8 @@
         inserta). Lee el COGS FIFO ya congelado por línea
         (doc.lineas[].cogs), así reconcilia EXACTO con la pantalla.
      2) GET  /rollup?desde=&hasta=  (admin) -> agregaciones server-side
-        (P&L, por mes, por vendedor, por producto).
+        (P&L con costos financieros y resultado, por depósito, por mes,
+        por vendedor, por producto).
      3) POST /reindex?space=main  (admin) -> backfill: re-deriva desde
         el blob ya guardado.
 
@@ -139,6 +140,8 @@ async function ensureFacts(env) {
     env.DB.prepare("CREATE TABLE IF NOT EXISTS sales_header (space TEXT NOT NULL, venta_id TEXT NOT NULL, fecha TEXT NOT NULL, mes TEXT NOT NULL, store TEXT, ccy TEXT, vendedor_id TEXT, pais TEXT, shipping_nat REAL DEFAULT 0, cargos_nat REAL DEFAULT 0, commission_nat REAL DEFAULT 0, costos_nat REAL DEFAULT 0, PRIMARY KEY (space, venta_id))"),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS sales_line (space TEXT NOT NULL, venta_id TEXT NOT NULL, linea_idx INTEGER NOT NULL, mes TEXT NOT NULL, ccy TEXT, vendedor_id TEXT, producto_id TEXT, sku TEXT, nombre TEXT, cantidad REAL DEFAULT 0, revenue_nat REAL DEFAULT 0, cogs_nat REAL DEFAULT 0, PRIMARY KEY (space, venta_id, linea_idx))"),
     env.DB.prepare("DROP TABLE IF EXISTS fx_month"),   // resto de la etapa bimoneda (derivada, se puede borrar)
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS fin_cost (space TEXT NOT NULL, id TEXT NOT NULL, fecha TEXT NOT NULL, mes TEXT NOT NULL, store TEXT, concepto TEXT, monto REAL DEFAULT 0, auto INTEGER DEFAULT 0, PRIMARY KEY (space, id))"),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_fc_mes ON fin_cost(space, mes)"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_sl_mes ON sales_line(space, mes)"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_sl_vend ON sales_line(space, vendedor_id)"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_sh_mes ON sales_header(space, mes)")
@@ -163,6 +166,7 @@ async function deriveFacts(env, space, data) {
   const stmts = [];
   stmts.push(env.DB.prepare("DELETE FROM sales_line   WHERE space=?").bind(space));
   stmts.push(env.DB.prepare("DELETE FROM sales_header WHERE space=?").bind(space));
+  stmts.push(env.DB.prepare("DELETE FROM fin_cost     WHERE space=?").bind(space));
 
   let meses = new Set();
 
@@ -199,8 +203,20 @@ async function deriveFacts(env, space, data) {
     });
   }
 
+  // Costos financieros (no capitalizados: van a resultados debajo de la contribución)
+  const fins = Array.isArray(data && data.costosFinancieros) ? data.costosFinancieros : [];
+  let nFin = 0;
+  for (const e of fins) {
+    const id = String((e && e.id) || ""); const fecha = normDate(e && e.fecha);
+    if (!id || !fecha) continue;
+    nFin++;
+    stmts.push(env.DB.prepare(
+      "INSERT INTO fin_cost (space,id,fecha,mes,store,concepto,monto,auto) VALUES (?,?,?,?,?,?,?,?)"
+    ).bind(space, id, fecha, fecha.slice(0, 7), String((e && e.store) || ""), String((e && e.concepto) || ""), r2(num(e && e.monto)), (e && e.auto) ? 1 : 0));
+  }
+
   await runBatched(env, stmts, 40);
-  return { ventas: ventas.length, meses: meses.size };
+  return { ventas: ventas.length, meses: meses.size, costosFinancieros: nFin };
 }
 
 async function rollup(env, space, desde, hasta) {
@@ -221,15 +237,45 @@ async function rollup(env, space, desde, hasta) {
     "FROM sales_header h WHERE h.space=? AND h.fecha BETWEEN ? AND ?"
   ).bind(space, D0, D1).first();
 
+  // ---- Costos financieros del período ----
+  const tf = await env.DB.prepare(
+    "SELECT COALESCE(SUM(monto),0) fin FROM fin_cost WHERE space=? AND fecha BETWEEN ? AND ?"
+  ).bind(space, D0, D1).first();
+
   const sales = num(tl.sales), cogs = num(tl.cogs), units = num(tl.units);
   const shipping = num(th.shipping), cargos = num(th.cargos), commission = num(th.commission), costos = num(th.costos);
+  const financieros = r2(num(tf && tf.fin));
   const net = r2(sales + shipping + cargos), gp = r2(net - cogs), contrib = r2(gp - commission - costos);
+  const resultado = r2(contrib - financieros);
   const totals = {
     sales: r2(sales), shipping: r2(shipping), cargos: r2(cargos), cogs: r2(cogs),
     commission: r2(commission), costos: r2(costos), units,
-    net, gp, contrib,
-    gpPct: net > 0 ? gp / net : 0, contribPct: net > 0 ? contrib / net : 0
+    net, gp, contrib, financieros, resultado,
+    gpPct: net > 0 ? gp / net : 0, contribPct: net > 0 ? contrib / net : 0, resultadoPct: net > 0 ? resultado / net : 0
   };
+
+  // ---- Por depósito (Swan vs Select) ----
+  const dl = await env.DB.prepare(
+    "SELECT h.store store, SUM(l.revenue_nat) sales, SUM(l.cogs_nat) cogs, SUM(l.cantidad) units " +
+    "FROM sales_line l JOIN sales_header h ON h.space=l.space AND h.venta_id=l.venta_id " +
+    "WHERE l.space=? AND h.fecha BETWEEN ? AND ? GROUP BY h.store"
+  ).bind(space, D0, D1).all();
+  const dh = await env.DB.prepare(
+    "SELECT h.store store, SUM(h.shipping_nat+h.cargos_nat) addrev, SUM(h.commission_nat+h.costos_nat) costs " +
+    "FROM sales_header h WHERE h.space=? AND h.fecha BETWEEN ? AND ? GROUP BY h.store"
+  ).bind(space, D0, D1).all();
+  const df = await env.DB.prepare(
+    "SELECT store, SUM(monto) fin FROM fin_cost WHERE space=? AND fecha BETWEEN ? AND ? GROUP BY store"
+  ).bind(space, D0, D1).all();
+  const bs = {};
+  const bsGet = k => (bs[k] = bs[k] || { store: k, sales: 0, cogs: 0, units: 0, addrev: 0, costs: 0, financieros: 0 });
+  (dl.results || []).forEach(r => { const e = bsGet(r.store || ""); e.sales = num(r.sales); e.cogs = num(r.cogs); e.units = num(r.units); });
+  (dh.results || []).forEach(r => { const e = bsGet(r.store || ""); e.addrev = num(r.addrev); e.costs = num(r.costs); });
+  (df.results || []).forEach(r => { const e = bsGet(r.store || ""); e.financieros = num(r.fin); });   // store "" = financieros generales
+  const byStore = Object.values(bs).map(e => {
+    const n = r2(e.sales + e.addrev), g = r2(n - e.cogs), c = r2(g - e.costs);
+    return { store: e.store, units: e.units, net: n, cogs: r2(e.cogs), gp: g, contrib: c, financieros: r2(e.financieros), resultado: r2(c - e.financieros) };
+  });
 
   // ---- Por mes (tendencia) ----
   const ml = await env.DB.prepare(
@@ -276,17 +322,33 @@ async function rollup(env, space, desde, hasta) {
     revenue: r2(num(r.revenue)), cogs: r2(num(r.cogs)), gm: r2(num(r.revenue) - num(r.cogs))
   })).sort((a, b) => b.gm - a.gm);
 
-  return { ok: true, ccy: "USD", desde: D0, hasta: D1, totals, byMonth, bySeller, byProduct };
+  return { ok: true, ccy: "USD", desde: D0, hasta: D1, totals, byStore, byMonth, bySeller, byProduct };
 }
 
 /* ============================================================
    PROYECCIÓN — CLIENTE (store): sólo sus consignaciones.
    ============================================================ */
+/* LISTA CERRADA de campos: la tienda ve SU mercadería, en qué puerta está y el
+   tracking del envío. NUNCA costos (costoUnit, courier, financiero), notas
+   internas, ni líneas de otros dueños: con el costo acumulado podría deducir
+   el markup. Cualquier campo nuevo queda afuera salvo que se agregue acá. */
 function projectStore(data, identity) {
   const cid = String(identity.store || "").trim();
   const consigs = Array.isArray(data && data.consignaciones) ? data.consignaciones : [];
   const mias = cid ? consigs.filter(cs => String(cs.terceroId || "") === cid) : [];
-  return { config: {}, consignaciones: mias };
+  const safeCs = mias.map(cs => ({
+    id: cs.id, fecha: cs.fecha || "", terceroId: cs.terceroId || "",
+    remitoId: cs.remitoId || null, remitoCodigo: cs.remitoCodigo || "", envioRef: cs.envioRef || "",
+    productoId: cs.productoId || null, sku: cs.sku || "", nombre: cs.nombre || "",
+    cantidad: num(cs.cantidad), estado: cs.estado || "",
+    historial: (Array.isArray(cs.historial) ? cs.historial : []).map(h => ({ estado: h.estado || "", fecha: h.fecha || "" }))
+  }));
+  // Remitos U de sus envíos: sólo identificación + tracking (sin líneas ni montos).
+  const ids = new Set(safeCs.map(cs => cs.remitoId).filter(Boolean));
+  const remitos = (Array.isArray(data && data.remitos) ? data.remitos : [])
+    .filter(r => ids.has(r.id))
+    .map(r => ({ id: r.id, letra: r.letra || "U", numero: r.numero, codigo: r.codigo || "", fecha: r.fecha || "", tracking: r.tracking || "", carrier: r.carrier || "", lineas: [] }));
+  return { config: {}, consignaciones: safeCs, remitos };
 }
 
 /* ---------------- Resolución de identidad en /login ---------------- */
