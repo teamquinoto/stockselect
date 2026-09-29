@@ -17,6 +17,22 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script>try{var _t=localStorage.getItem("gstock_theme");if(_t==="dark"||(!_t&&window.matchMedia&&matchMedia("(prefers-color-scheme:dark)").matches)){document.documentElement.setAttribute("data-theme","dark");}else if(_t==="light"){document.documentElement.setAttribute("data-theme","light");}}catch(e){}</script>
   <link rel="stylesheet" href="styles.css">
+<!-- v68 · Estilo mínimo de la pantalla de carga EN LÍNEA: GitHub Pages deja los archivos
+     ~10 min en la caché del navegador, y justo después de subir una versión puede llegar el
+     index.html nuevo con el styles.css / 01-core.js viejos. Con esto la carga se ve bien y se
+     va sola aunque pase eso (antes quedaba el logo gigante arriba de todo). -->
+<style>
+  .boot-splash{position:fixed;inset:0;z-index:300;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:var(--login-bg,#14100a);transition:opacity .25s ease}
+  .boot-splash.is-out{opacity:0;pointer-events:none}
+  .boot-logo{width:84px;height:84px;border-radius:20px;display:block}
+</style>
+<script>
+  window.addEventListener("load",function(){ setTimeout(function(){
+    var s=document.getElementById("bootSplash"); if(!s||s.dataset.out) return;
+    s.dataset.out="1"; s.classList.add("is-out");
+    setTimeout(function(){ if(s.parentNode) s.parentNode.removeChild(s); },300);
+  },1500); });
+</script>
 </head>
 <body>
 <!-- v67 · Pantalla de carga: tapa todo mientras bajan los scripts, así no se ve la app
@@ -45,7 +61,7 @@
     </div>
     <div id="loginErr" class="login-err" role="alert" aria-live="assertive"></div>
     <button class="btn primary login-btn" id="loginBtn" data-i18n="core.login.signin">Sign in</button>
-    <p class="login-build">build v67</p>
+    <p class="login-build">build v68</p>
   </div>
 </div>
 
