@@ -118,9 +118,17 @@ function mostrarBotonUpdate(sw){
 }
 if ("serviceWorker" in navigator) {
   let recargando = false;
-  // cuando el SW nuevo toma control (tras SKIP_WAITING), recargar la página una vez
+  /* v68: sólo recargamos si YA había un SW controlando la página (= se aplicó una
+     versión nueva con "Update"). En la PRIMERA visita no hay controlador: el SW se
+     instala y toma control con clients.claim(), y eso recargaba la página sola
+     (se veía el login medio segundo, recargaba y aparecía de nuevo). */
+  let habiaControlador = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener("controllerchange", ()=>{
-    if(recargando) return; recargando = true; window.location.reload();
+    if(recargando) return;
+    // primera visita: es el SW inicial tomando control -> no recargamos, pero desde
+    // ahora cualquier cambio (un "Update" en esta misma sesión) sí recarga
+    if(!habiaControlador){ habiaControlador = true; return; }
+    recargando = true; window.location.reload();
   });
   window.addEventListener("load", () => {
     // updateViaCache:'none' -> el chequeo de sw.js NUNCA sale del cache HTTP,
