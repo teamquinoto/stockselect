@@ -81,18 +81,12 @@ function viewDatos(){
       <p class="hint" style="margin:0">${t("dat.backup.sub")}</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn" data-export>${ICO.export}${t("dat.exportjson")}</button>
-        <button class="btn" data-import-json>${ICO.upload}${t("dat.importjson")}</button>
       </div>
     </div>
-  </div>
-
-  ${isAdmin()?`<div class="panel" style="border-color:color-mix(in srgb,var(--alert) 40%,var(--line))">
-    <div class="phead" style="background:var(--alert-bg)"><h3 style="color:var(--alert-ink)">${t("dat.grp.danger")}</h3></div>
-    <div class="grid-form">
-      <p class="hint" style="margin:0">${t("dat.grp.danger.hint")}</p>
-      <div><button class="btn danger" data-reset>${ICO.reset}${t("dat.deleteall")}</button></div>
-    </div>
-  </div>`:""}`;
+  </div>`;
+  /* v69 · Se quitaron "Importar JSON" y la "Zona de peligro" (Borrar todo): en el día a
+     día no tienen uso y un clic de más reemplazaba o vaciaba toda la base. Exportar JSON
+     queda como copia extra. */
 }
 
 /* ---------- utilidades UI ---------- */
@@ -148,8 +142,6 @@ function wire(){
     const [t,id]=b.dataset.deldoc.split(":"); deleteDoc(t,id);
   });
   const exp=m.querySelector("[data-export]"); if(exp) exp.onclick=exportJSON;
-  const imp=m.querySelector("[data-import-json]"); if(imp) imp.onclick=importJSON;
-  const rst=m.querySelector("[data-reset]"); if(rst) rst.onclick=resetAll;
   m.querySelectorAll("[data-savecfg]").forEach(cfg=> cfg.onclick=()=>{
     const fi=parseInt(document.getElementById("cfgFac").value,10); if(!isNaN(fi)&&fi>0) db.config.facturaInicio=fi;
     const ru=document.getElementById("cfgRemU"); if(ru){ const n=parseInt(ru.value,10); if(!isNaN(n)&&n>0){ db.config.remitoSeq=db.config.remitoSeq||{}; db.config.remitoSeq.U={inicio:n}; } }

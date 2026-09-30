@@ -4,7 +4,10 @@
    Todo vive en scope global (sin módulos), igual que antes.
    ============================================================ */
 /* ============================================================
-   Datos: export / import / reset
+   Datos: export
+   v69 · Se quitaron importJSON() y resetAll(): importar un JSON reemplazaba toda la
+   base y "Borrar todo" la vaciaba; un error ahí no tenía vuelta atrás completa.
+   Queda sólo el export.
    ============================================================ */
 function exportJSON(){
   const blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"});
@@ -14,41 +17,3 @@ function exportJSON(){
   a.click(); URL.revokeObjectURL(a.href);
   toast(t("io.tt.backup"));
 }
-function importJSON(){
-  const inp=document.createElement("input"); inp.type="file"; inp.accept="application/json";
-  inp.onchange=()=>{
-    const f=inp.files[0]; if(!f) return;
-    const r=new FileReader();
-    r.onload=()=>{
-      try{
-        const data=JSON.parse(r.result);
-        if(!data.productos) throw new Error("estructura inválida");
-        if(!confirm(t("io.cf.import"))) return;
-        db=migrate(Object.assign({config:{moneda:"$"},productos:[],compras:[],ventas:[],movimientos:[],clientes:[]}, data));
-        save(); toast(t("io.tt.imported")); render();
-      }catch(e){ toast(t("io.tt.invalidjson"),"warn"); }
-    };
-    r.readAsText(f);
-  };
-  inp.click();
-}
-function resetAll(){
-  const word = t("io.wipe.word");
-  const doWipe=()=>{
-    db=migrate({ config:db.config, productos:[], compras:[], ventas:[], movimientos:[], clientes:[] });
-    save(); closeModal(); toast(t("io.tt.wiped"),"warn"); render();
-  };
-  buildModal(t("io.wipe.title"), `
-    <p class="hint" style="margin:0 0 12px">${t("dat.grp.danger.hint")}</p>
-    <div class="field"><label>${t("io.wipe.prompt",{word:`<b>${esc(word)}</b>`})}</label>
-      <input class="inp" id="wipeConfirm" autocomplete="off" placeholder="${esc(word)}"></div>
-  `, [
-    { cls:"btn danger", label:t("dat.deleteall"), act:doWipe },
-    { cls:"btn", label:t("common.cancel"), act:closeModal }
-  ]);
-  const inp=document.getElementById("wipeConfirm");
-  const btn=document.querySelector(".mfoot .danger");
-  if(btn) btn.disabled=true;
-  if(inp) inp.oninput=()=>{ if(btn) btn.disabled = (inp.value.trim().toUpperCase()!==String(word).toUpperCase()); };
-}
-
