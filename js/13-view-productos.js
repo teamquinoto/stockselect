@@ -13,7 +13,7 @@ function viewProd(){
     <div class="title"><h2>${t("pr.title")}</h2><p>${t("pr.sub")}</p></div>
     <div class="actions">
       ${total?`<button class="btn" id="btnExpPrecios">${ICO.price}${t("pr.btn.pricelist")}</button>`:""}
-      ${(total&&isAdmin())?`<button class="btn" id="btnLanded" title="${t('pr.btn.landed.tip')}">${ICO.landed}${t("pr.btn.landed")}</button>`:""}
+      ${(total&&isAdmin())?`<button class="btn" id="btnExpPdf" title="${t('pr.btn.exppdf.tip')}">${ICO.landed}${t("pr.btn.exppdf")}</button>`:""}
       ${(total&&isAdmin())?`<button class="btn" id="btnSel">${selMode?ICO.x+t("common.cancel"):ICO.select+t("pr.btn.select")}</button>`:""}
       ${puedeEditarProductos()?`<button class="btn primary" data-newp>${ICO.plus}${t("pr.btn.newprod")}</button>`:""}
     </div>
@@ -93,8 +93,13 @@ function refreshSelbar(){
   if(all){ const vis=filtrarProds(prodFiltros); all.checked = vis.length>0 && vis.every(p=>selProd.has(p.id)); }
 }
 function wireProd(){
-  const lc=document.getElementById("btnLanded");
-  if(lc) lc.onclick=()=> generarLandedCostPDF();
+  /* v71 · "Exportar PDF": elegís qué columnas (cantidad / costo / precio). Toma los
+     productos visibles con los filtros, o sólo los tildados si estás seleccionando. */
+  const xp=document.getElementById("btnExpPdf");
+  if(xp) xp.onclick=()=>{
+    const base = (selMode && selProd.size) ? db.productos.filter(p=>selProd.has(p.id)) : filtrarProds(prodFiltros);
+    openExportProdPDF(base);
+  };
   const exp=document.getElementById("btnExpPrecios");
   if(exp) exp.onclick=()=>{
     const base = (selMode && selProd.size) ? db.productos.filter(p=>selProd.has(p.id)) : filtrarProds(prodFiltros);

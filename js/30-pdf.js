@@ -406,7 +406,18 @@ function exportListaPrecios(prods){
 
 
 /* ============================================================
-   LANDED COST BUILDUP (PDF) — desglose por producto, puerta por puerta
+   EXPORTAR PDF DE PRODUCTOS (antes "Costo en destino")
+   v71 · El botón abre un modal para elegir QUÉ columnas van: Cantidad, Costo
+   (opcional con desglose US / +Intl / +Arg) y Precio, en cualquier combinación.
+   Respeta el depósito en foco (Todas / Swan / Select), los filtros de la lista y,
+   si estás en modo selección, sólo los productos tildados.
+   Qué productos entran:
+     - con Cantidad o Costo tildado -> sólo los que tienen stock (> 0) en el foco;
+     - sólo Precio -> los que tienen precio cargado en algún depósito del foco.
+   Cantidad = stock vendible (igual que la columna Stock de la lista, sin tránsito).
+   Costo = promedio ponderado de las capas FIFO de ese stock (costo en destino).
+
+   Historia (v70) — armado del costo en destino, desglose por producto, puerta por puerta
    US cost (compra) → +Intl (Miami→BA) → +Arg (BA→tienda) = Landed.
    Promedio ponderado sobre el stock EN MANO (vendible + tránsito).
    Sólo referencia de costos (no es factura). Montos en USD.
@@ -434,56 +445,140 @@ function pdfTxt(v){
   const extra = "€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ";
   return s.split("").filter(ch=>{ const c=ch.charCodeAt(0); return (c>=32&&c<=126)||(c>=160&&c<=255)||extra.indexOf(ch)>=0; }).join("").replace(/\s+/g," ").trim();
 }
-function generarLandedCostPDF(){
-  if(!pdfReady()){ toast(t("pdf.err.gen"),"warn"); return; }
-  const prods = db.productos
-    .map(p=>({ p, b:landedBuildup(p) }))
-    .filter(x=> x.b.units>0)
+/* Desglose del costo por unidad sobre las capas FIFO de los depósitos pedidos.
+   Misma lógica que landedBuildup() (01-core.js) pero limitada a `stores`, para que
+   el PDF respete el foco Swan / Select. Capas viejas sin desglose = 100% "US". */
+function buildupEnStores(p, stores){
+  let u=0, us=0, intl=0, arg=0;
+  stores.forEach(s=> (p.lotes && Array.isArray(p.lotes[s]) ? p.lotes[s] : []).forEach(L=>{
+    const q=L.cantidad||0; if(q<=0) return;
+    const d = L.d || { us:(L.costoUnit||0), intl:0, arg:0 };
+    u+=q; us+=q*(d.us||0); intl+=q*(d.intl||0); arg+=q*(d.arg||0);
+  }));
+  const per = u>0 ? { us:round2(us/u), intl:round2(intl/u), arg:round2(arg/u) } : { us:0, intl:0, arg:0 };
+  per.total = round2(per.us + per.intl + per.arg);
+  return per;
+}
+function precioEnStore(p, s){ return (p.precioVentaPorTienda && +p.precioVentaPorTienda[s]) || 0; }
+
+/* Modal: qué columnas exportar. `base` = productos visibles (filtros) o seleccionados. */
+function openExportProdPDF(base){
+  const stores = effectiveStores();
+  const focoTxt = stores.length===1 ? storeName(stores[0]) : t("pdfx.scope.all");
+  const g = id=> document.getElementById(id);
+  const opt = (id, label, hint, checked)=>`
+    <label style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer">
+      <input type="checkbox" id="${id}" ${checked?"checked":""} style="margin-top:3px">
+      <span><b>${label}</b><br><span class="hint" style="font-size:12px">${hint}</span></span>
+    </label>`;
+  buildModal(t("pdfx.title"), `
+    <p class="hint" style="margin:0 0 12px">${t("pdfx.intro")}</p>
+    <div style="display:grid;gap:8px">
+      ${opt("px_qty",   t("pdfx.col.qty"),   t("pdfx.col.qty.h"),   true)}
+      ${opt("px_cost",  t("pdfx.col.cost"),  t("pdfx.col.cost.h"),  true)}
+      <label id="px_brk_row" style="display:flex;gap:8px;align-items:center;margin:-2px 0 2px 34px;font-size:12.5px;color:var(--muted);cursor:pointer">
+        <input type="checkbox" id="px_brk"> ${t("pdfx.col.breakdown")}
+      </label>
+      ${opt("px_price", t("pdfx.col.price"), t("pdfx.col.price.h"), true)}
+    </div>
+    <p class="hint" style="margin:14px 0 0" id="px_info"></p>`,
+    [
+      { cls:"btn", label:t("common.cancel"), act:closeModal },
+      { cls:"btn primary", label:t("pdfx.btn"), act:()=>{
+          const o = { qty:g("px_qty").checked, cost:g("px_cost").checked, brk:g("px_brk").checked, price:g("px_price").checked };
+          if(!o.qty && !o.cost && !o.price){ toast(t("pdfx.err.none"),"warn"); return; }
+          if(generarProdPDF(base, stores, o)) closeModal();
+        } }
+    ]);
+  const info=()=>{
+    const o = { qty:g("px_qty").checked, cost:g("px_cost").checked, price:g("px_price").checked };
+    const brkRow=g("px_brk_row"); if(brkRow){ brkRow.style.opacity=o.cost?"1":".45"; g("px_brk").disabled=!o.cost; }
+    const n = (o.qty||o.cost||o.price) ? filasProdPDF(base, stores, o).length : 0;
+    const el=g("px_info"); if(el) el.innerHTML = t("pdfx.info",{store:esc(focoTxt), n});
+  };
+  ["px_qty","px_cost","px_price"].forEach(id=> g(id).onchange=info);
+  info();
+}
+/* Qué productos entran (ver regla arriba). */
+function filasProdPDF(base, stores, o){
+  const unidades = p=> stores.reduce((a,s)=> a + stockDe(p,s), 0);
+  return base
+    .filter(p=> !soloEnVault(p))
+    .filter(p=> (o.qty||o.cost) ? unidades(p)>0 : stores.some(s=> precioEnStore(p,s)>0))
+    .map(p=> ({ p, u:unidades(p) }))
     .sort((a,b)=> pdfTxt(a.p.nombre).localeCompare(pdfTxt(b.p.nombre),"en",{sensitivity:"base"}));
-  if(!prods.length){ toast(t("pdf.lc.nostock"),"warn"); return; }
+}
+function generarProdPDF(base, stores, o){
+  if(!pdfReady()){ toast(t("pdf.err.gen"),"warn"); return false; }
+  const filas = filasProdPDF(base, stores, o);
+  if(!filas.length){ toast(t("pdfx.err.empty"),"warn"); return false; }
+
+  /* Columnas numéricas elegidas, de izquierda a derecha */
+  const cols=[];
+  if(o.qty) cols.push({ k:"qty", h:t("pdf.lc.units"), w:64 });
+  if(o.cost){
+    if(o.brk){
+      cols.push({ k:"us",   h:t("pdf.lc.uscost"), w:78 });
+      cols.push({ k:"intl", h:t("pdf.lc.intl"),   w:66 });
+      cols.push({ k:"arg",  h:t("pdf.lc.arg"),    w:66 });
+      cols.push({ k:"tot",  h:t("pdf.lc.landed"), w:88, bold:true });
+    } else cols.push({ k:"tot", h:t("pdfx.h.cost"), w:88, bold:true });
+  }
+  if(o.price){
+    if(stores.length===1) cols.push({ k:"pr_"+stores[0], s:stores[0], h:t("pdfx.h.price"), w:88, bold:true });
+    else stores.forEach(s=> cols.push({ k:"pr_"+s, s, h:t("pdfx.h.priceat",{store:String((STORES.find(x=>x.id===s)||{}).short||s).toUpperCase()}), w:96, bold:true }));
+  }
 
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit:"pt", format:"letter", orientation:"landscape" });
+  /* Tamaño de hoja según cuántas columnas: el nombre del producto necesita lugar.
+     1-2 columnas: carta vertical · 3-5: carta horizontal · 6 o más: oficio (legal) horizontal. */
+  const land = cols.length>=3;
+  const doc = new jsPDF({ unit:"pt", format: cols.length>=6 ? "legal" : "letter", orientation: land?"landscape":"portrait" });
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 36;
   const em = db.config.emisor||{};
   const INK=[26,26,26], MUT=[120,120,120], LINE=[228,225,220], ACC=[217,119,6], ZEBRA=[248,247,245], ALERT=[185,28,28];
   const setInk=c=>doc.setTextColor(c[0],c[1],c[2]);
   const hoy = fmtDate(new Date().toISOString());
+  const focoTxt = stores.length===1 ? storeName(stores[0]) : t("pdfx.scope.all");
+  const queTxt = [o.qty&&t("pdfx.col.qty"), o.cost&&(t("pdfx.col.cost")+(o.brk?" ("+t("pdfx.brk.short")+")":"")), o.price&&t("pdfx.col.price")].filter(Boolean).join(" · ");
 
-  /* Encabezado (sólo primera hoja) */
+  /* Encabezado */
   doc.setFillColor(ACC[0],ACC[1],ACC[2]); doc.rect(0,0,W,84,"F");
   doc.setTextColor(255,255,255);
   doc.setFont("helvetica","bold"); doc.setFontSize(18);
   doc.text(pdfTxt(em.nombre || t("pdf.lc.brand")), M, 38);
   doc.setFont("helvetica","normal"); doc.setFontSize(9);
-  doc.text(pdfTxt(t("pdf.lc.sub")), M, 56);
+  doc.text(pdfTxt(queTxt+"  ·  "+t("pdfx.h.store")+": "+focoTxt), M, 56);
   doc.setFont("helvetica","bold"); doc.setFontSize(15);
-  doc.text(pdfTxt(t("pdf.lc.title")), W-M, 38, {align:"right"});
+  doc.text(pdfTxt(t("pdfx.doctitle")), W-M, 38, {align:"right"});
   doc.setFont("helvetica","normal"); doc.setFontSize(9);
   doc.text(hoy, W-M, 56, {align:"right"});
 
   let y=106;
   setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
-  doc.text(pdfTxt(t("pdf.lc.caption")), M, y);
-  y+=20;
+  const notas=[];
+  if(o.qty) notas.push(t("pdfx.note.qty"));
+  if(o.cost) notas.push(t("pdfx.note.cost"));
+  if(o.price) notas.push(t("pdfx.note.price"));
+  notas.push(t("pdfx.note.ref"));
+  const notaLs = doc.splitTextToSize(pdfTxt(notas.join(" ")), W-2*M);
+  doc.text(notaLs, M, y);
+  y += 11*notaLs.length + 12;
 
-  /* Columnas: números a la derecha con ancho fijo; el producto se queda con el resto. */
-  const cTot=W-M-6, cAr=cTot-86, cIn=cAr-74, cUs=cIn-74, cUn=cUs-94;
-  const cSku=M+6, skuW=82;
-  const cItem=cSku+skuW+8;
-  const itemW=(cUn-50)-cItem;              // margen de aire antes de UNIDADES
-  const FS=8.5, LH=11, PADV=5;             // tamaño, alto de renglón y aire arriba/abajo
+  /* Posiciones: números alineados a la derecha, desde el margen hacia adentro */
+  let x=W-M-6;
+  for(let k=cols.length-1;k>=0;k--){ cols[k].x=x; x-=cols[k].w; }
+  const numStart = cols.length ? cols[0].x-cols[0].w : W-M;
+  const cSku=M+6, skuW=78, cItem=cSku+skuW+8;
+  const itemW=(numStart+10)-cItem;
+  const FS=8.5, LH=11, PADV=5;
 
   const drawHead=(yy)=>{
     doc.setFillColor(ACC[0],ACC[1],ACC[2]); doc.rect(M, yy-13, W-2*M, 22, "F");
     doc.setTextColor(255,255,255); doc.setFont("helvetica","bold"); doc.setFontSize(8.5);
     doc.text(pdfTxt(t("pdf.lc.sku")), cSku, yy+2);
     doc.text(pdfTxt(t("pdf.lc.product")), cItem, yy+2);
-    doc.text(pdfTxt(t("pdf.lc.units")), cUn, yy+2, {align:"right"});
-    doc.text(pdfTxt(t("pdf.lc.uscost")), cUs, yy+2, {align:"right"});
-    doc.text(pdfTxt(t("pdf.lc.intl")), cIn, yy+2, {align:"right"});
-    doc.text(pdfTxt(t("pdf.lc.arg")), cAr, yy+2, {align:"right"});
-    doc.text(pdfTxt(t("pdf.lc.landed")), cTot, yy+2, {align:"right"});
+    cols.forEach(c=> doc.text(pdfTxt(c.h), c.x, yy+2, {align:"right"}));
     return yy+24;
   };
   /* Hasta 2 renglones; si sobra, el 2º termina en "…" medido con el ancho real. */
@@ -502,45 +597,57 @@ function generarLandedCostPDF(){
 
   y = drawHead(y);
   const LIM = H-50;   // deja lugar al pie
-  let zebra=false, tU=0, sUs=0, sIn=0, sAr=0, sTot=0, sinCosto=0;
-  prods.forEach(({p,b})=>{
+  let zebra=false, sinCosto=0;
+  const tot = {}; cols.forEach(c=> tot[c.k]=0);
+  filas.forEach(({p,u})=>{
+    const b = o.cost ? buildupEnStores(p, stores) : null;
     const lineas = partir(pdfTxt(p.nombre||"—"), itemW, 2);
     const rowH = lineas.length*LH + PADV*2;
     if(y - 9 + rowH > LIM){ doc.addPage(); y=48; y=drawHead(y); zebra=false; }
-    const top = y - 9;                      // borde superior de la fila
+    const top = y - 9;
     if(zebra){ doc.setFillColor(ZEBRA[0],ZEBRA[1],ZEBRA[2]); doc.rect(M, top, W-2*M, rowH, "F"); }
     zebra=!zebra;
-    const base = top + PADV + 8;            // línea base del 1er renglón
-    const baseNum = top + rowH/2 + 3;       // números centrados en la fila
+    const base1 = top + PADV + 8, mid = top + rowH/2 + 3;
 
     doc.setFont("helvetica","normal"); doc.setFontSize(7.5); setInk(MUT);
-    doc.text(cortar(pdfTxt(p.sku||"—"), skuW), cSku, baseNum);
+    doc.text(cortar(pdfTxt(p.sku||"—"), skuW), cSku, mid);
     doc.setFontSize(FS); setInk(INK);
-    doc.text(lineas, cItem, base, { lineHeightFactor: LH/FS });
-    doc.text(String(b.units), cUn, baseNum, {align:"right"});
-    setInk(MUT);
-    doc.text(pdfMoney(b.us), cUs, baseNum, {align:"right"});
-    doc.text(b.intl>0?pdfMoney(b.intl):"—", cIn, baseNum, {align:"right"});
-    doc.text(b.arg>0?pdfMoney(b.arg):"—", cAr, baseNum, {align:"right"});
-    doc.setFont("helvetica","bold");
-    if(b.total>0){ setInk(INK); doc.text(pdfMoney(b.total), cTot, baseNum, {align:"right"}); }
-    else { setInk(ALERT); doc.text(pdfTxt(t("pdf.lc.nocost")), cTot, baseNum, {align:"right"}); sinCosto++; }
+    doc.text(lineas, cItem, base1, { lineHeightFactor: LH/FS });
+
+    cols.forEach(c=>{
+      doc.setFont("helvetica", c.bold?"bold":"normal"); setInk(c.bold?INK:MUT);
+      let txt="—";
+      if(c.k==="qty"){ txt=String(u); setInk(INK); tot.qty+=u; }
+      else if(c.k==="us"){ txt=pdfMoney(b.us); tot.us+=b.us*u; }
+      else if(c.k==="intl"){ txt=b.intl>0?pdfMoney(b.intl):"—"; tot.intl+=b.intl*u; }
+      else if(c.k==="arg"){ txt=b.arg>0?pdfMoney(b.arg):"—"; tot.arg+=b.arg*u; }
+      else if(c.k==="tot"){
+        if(b.total>0){ txt=pdfMoney(b.total); tot.tot+=b.total*u; }
+        else { txt=pdfTxt(t("pdf.lc.nocost")); setInk(ALERT); sinCosto++; }
+      }
+      else if(c.s){
+        const pr=precioEnStore(p,c.s);
+        if(pr>0) txt=pdfMoney(pr); else setInk(MUT);
+        tot[c.k] += pr * stockDe(p,c.s);   // valor a precio = stock de ESE depósito × su precio
+      }
+      doc.text(txt, c.x, mid, {align:"right"});
+    });
     y += rowH;
-    tU+=b.units; sUs+=b.us*b.units; sIn+=b.intl*b.units; sAr+=b.arg*b.units; sTot+=b.total*b.units;
   });
 
-  /* Totales: valor total del inventario en mano, por puerta (unidades × costo) */
-  if(y + 40 > LIM){ doc.addPage(); y=48; }
-  y+=8; doc.setDrawColor(ACC[0],ACC[1],ACC[2]); doc.setLineWidth(1.1); doc.line(M, y-8, W-M, y-8); doc.setLineWidth(1);
-  setInk(INK); doc.setFont("helvetica","bold"); doc.setFontSize(8.5);
-  doc.text(pdfTxt(t("pdf.lc.onhand")), cItem, y+6);
-  doc.text(String(round2(tU)), cUn, y+6, {align:"right"});
-  doc.text(pdfMoney(round2(sUs)), cUs, y+6, {align:"right"});
-  doc.text(pdfMoney(round2(sIn)), cIn, y+6, {align:"right"});
-  doc.text(pdfMoney(round2(sAr)), cAr, y+6, {align:"right"});
-  doc.text(pdfMoney(round2(sTot)), cTot, y+6, {align:"right"});
-  y+=22;
+  /* Totales: sólo con Cantidad (sin unidades, sumar precios/costos unitarios no dice nada) */
+  y+=8;
+  if(o.qty){
+    if(y + 40 > LIM){ doc.addPage(); y=48; }
+    doc.setDrawColor(ACC[0],ACC[1],ACC[2]); doc.setLineWidth(1.1); doc.line(M, y-8, W-M, y-8); doc.setLineWidth(1);
+    setInk(INK); doc.setFont("helvetica","bold"); doc.setFontSize(8.5);
+    doc.text(pdfTxt(t("pdfx.tot")), cItem, y+6);
+    cols.forEach(c=> doc.text(c.k==="qty"?String(round2(tot.qty)):pdfMoney(round2(tot[c.k])), c.x, y+6, {align:"right"}));
+    y+=20;
+    if(cols.length>1){ doc.setFont("helvetica","normal"); doc.setFontSize(7.5); setInk(MUT); doc.text(pdfTxt(t("pdfx.tot.h")), cItem, y); y+=12; }
+  }
   if(sinCosto>0){
+    if(y + 14 > LIM){ doc.addPage(); y=48; }
     doc.setFont("helvetica","normal"); doc.setFontSize(8.5); setInk(ALERT);
     doc.text(pdfTxt(t("pdf.lc.nocostnote",{n:sinCosto})), cItem, y);
   }
@@ -551,10 +658,11 @@ function generarLandedCostPDF(){
     doc.setPage(i);
     doc.setDrawColor(LINE[0],LINE[1],LINE[2]); doc.setLineWidth(0.6); doc.line(M, H-30, W-M, H-30);
     doc.setFont("helvetica","normal"); doc.setFontSize(7.5); setInk(MUT);
-    doc.text(pdfTxt((em.nombre||t("pdf.lc.brand"))+" · "+t("pdf.lc.title")+" · "+hoy), M, H-18);
+    doc.text(pdfTxt((em.nombre||t("pdf.lc.brand"))+" · "+t("pdfx.doctitle")+" · "+focoTxt+" · "+hoy), M, H-18);
     doc.text(pdfTxt(t("pdf.lc.page",{p:i,n:n})), W-M, H-18, {align:"right"});
   }
 
-  doc.save("landed-cost-"+new Date().toISOString().slice(0,10)+".pdf");
-  toast(t("pdf.lc.downloaded"));
+  doc.save("productos-"+new Date().toISOString().slice(0,10)+".pdf");
+  toast(t("pdfx.done",{n:filas.length}));
+  return true;
 }
