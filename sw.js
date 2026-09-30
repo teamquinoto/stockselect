@@ -12,7 +12,7 @@
    ACTUALIZACIÓN CONTROLADA: no auto-activamos con skipWaiting; cuando hay
    versión nueva el SW queda "waiting" y la app muestra el botón "Update".
    ============================================================ */
-const CACHE = "mayor-stock-v68";   // v68: sin recarga doble en la primera visita + estilo de la carga en línea. v67: pantalla de carga al abrir (ya no se ve el menú vacío antes del login). v66: USD único + depósitos diferenciados + tracking + costos financieros
+const CACHE = "mayor-stock-v69";   // v69: se quitan "Importar JSON" y "Borrar todo" de Datos (queda Exportar JSON). v68: sin recarga doble en la primera visita + estilo de la carga en línea. v67: pantalla de carga al abrir (ya no se ve el menú vacío antes del login). v66: USD único + depósitos diferenciados + tracking + costos financieros
 
 const ASSETS = [
   "./",
