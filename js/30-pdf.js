@@ -410,84 +410,150 @@ function exportListaPrecios(prods){
    US cost (compra) → +Intl (Miami→BA) → +Arg (BA→tienda) = Landed.
    Promedio ponderado sobre el stock EN MANO (vendible + tránsito).
    Sólo referencia de costos (no es factura). Montos en USD.
+
+   v70 · Rehecho el armado:
+   - Hoja HORIZONTAL: la columna de producto pasa a tener ~2,5x más ancho.
+   - SKU en su propia columna y el nombre se PARTE en hasta 2 renglones (medido con
+     el ancho real de la letra, no por cantidad de caracteres): ya no se pisa con
+     las unidades. Si aun así no entra, se corta con "…".
+   - Texto saneado para la fuente del PDF: "→" salía como "!’" y "&amp;" aparecía
+     literal. pdfTxt() decodifica entidades HTML y cambia lo que Helvetica no tiene.
+   - Productos sin costo cargado: "sin costo" en rojo + nota al pie con la cantidad,
+     así un total en 0 no pasa desapercibido.
+   - Pie en cada hoja: fecha y "Página X de Y". El encabezado de columnas se repite.
    ============================================================ */
+/* Helvetica estándar de jsPDF sólo tiene Latin-1 + los extras de WinAnsi. Todo lo
+   demás sale como basura, así que lo traducimos o lo sacamos. */
+function pdfTxt(v){
+  let s = String(v==null?"":v);
+  s = s.replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/&#0?39;|&apos;/g,"'")
+       .replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&nbsp;/g," ")
+       .replace(/&#(\d+);/g,(m,n)=>String.fromCharCode(+n));
+  s = s.replace(/[→⟶➔➜]/g,"›").replace(/[←]/g,"‹").replace(/[\u00A0\u2007\u202F]/g," ")
+       .replace(/[\u2010\u2011\u2012]/g,"-").replace(/[⋯]/g,"…");
+  const extra = "€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ";
+  return s.split("").filter(ch=>{ const c=ch.charCodeAt(0); return (c>=32&&c<=126)||(c>=160&&c<=255)||extra.indexOf(ch)>=0; }).join("").replace(/\s+/g," ").trim();
+}
 function generarLandedCostPDF(){
   if(!pdfReady()){ toast(t("pdf.err.gen"),"warn"); return; }
   const prods = db.productos
     .map(p=>({ p, b:landedBuildup(p) }))
     .filter(x=> x.b.units>0)
-    .sort((a,b)=> String(a.p.nombre||"").localeCompare(String(b.p.nombre||""),"en"));
+    .sort((a,b)=> pdfTxt(a.p.nombre).localeCompare(pdfTxt(b.p.nombre),"en",{sensitivity:"base"}));
   if(!prods.length){ toast(t("pdf.lc.nostock"),"warn"); return; }
 
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit:"pt", format:"letter" });
-  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 40;
+  const doc = new jsPDF({ unit:"pt", format:"letter", orientation:"landscape" });
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 36;
   const em = db.config.emisor||{};
-  const INK=[26,26,26], MUT=[120,120,120], LINE=[228,225,220], ACC=[217,119,6], ZEBRA=[248,247,245];
+  const INK=[26,26,26], MUT=[120,120,120], LINE=[228,225,220], ACC=[217,119,6], ZEBRA=[248,247,245], ALERT=[185,28,28];
   const setInk=c=>doc.setTextColor(c[0],c[1],c[2]);
+  const hoy = fmtDate(new Date().toISOString());
 
-  /* Header band */
-  doc.setFillColor(ACC[0],ACC[1],ACC[2]); doc.rect(0,0,W,92,"F");
+  /* Encabezado (sólo primera hoja) */
+  doc.setFillColor(ACC[0],ACC[1],ACC[2]); doc.rect(0,0,W,84,"F");
   doc.setTextColor(255,255,255);
   doc.setFont("helvetica","bold"); doc.setFontSize(18);
-  doc.text(em.nombre || t("pdf.lc.brand"), M, 40);
-  doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
-  doc.text(t("pdf.lc.sub"), M, 58);
-  doc.setFont("helvetica","bold"); doc.setFontSize(15);
-  doc.text(t("pdf.lc.title"), W-M, 38, {align:"right"});
+  doc.text(pdfTxt(em.nombre || t("pdf.lc.brand")), M, 38);
   doc.setFont("helvetica","normal"); doc.setFontSize(9);
-  doc.text(fmtDate(new Date().toISOString()), W-M, 56, {align:"right"});
+  doc.text(pdfTxt(t("pdf.lc.sub")), M, 56);
+  doc.setFont("helvetica","bold"); doc.setFontSize(15);
+  doc.text(pdfTxt(t("pdf.lc.title")), W-M, 38, {align:"right"});
+  doc.setFont("helvetica","normal"); doc.setFontSize(9);
+  doc.text(hoy, W-M, 56, {align:"right"});
 
-  let y=118;
+  let y=106;
   setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
-  doc.text(t("pdf.lc.caption"), M, y);
+  doc.text(pdfTxt(t("pdf.lc.caption")), M, y);
   y+=20;
 
-  /* Columnas */
-  const cItem=M;
-  const cUn  = W-M-330, cUs=W-M-250, cIn=W-M-180, cAr=W-M-110, cTot=W-M;
+  /* Columnas: números a la derecha con ancho fijo; el producto se queda con el resto. */
+  const cTot=W-M-6, cAr=cTot-86, cIn=cAr-74, cUs=cIn-74, cUn=cUs-94;
+  const cSku=M+6, skuW=82;
+  const cItem=cSku+skuW+8;
+  const itemW=(cUn-50)-cItem;              // margen de aire antes de UNIDADES
+  const FS=8.5, LH=11, PADV=5;             // tamaño, alto de renglón y aire arriba/abajo
+
   const drawHead=(yy)=>{
     doc.setFillColor(ACC[0],ACC[1],ACC[2]); doc.rect(M, yy-13, W-2*M, 22, "F");
     doc.setTextColor(255,255,255); doc.setFont("helvetica","bold"); doc.setFontSize(8.5);
-    doc.text(t("pdf.lc.product"), cItem+6, yy+2);
-    doc.text(t("pdf.lc.units"), cUn, yy+2, {align:"right"});
-    doc.text(t("pdf.lc.uscost"), cUs, yy+2, {align:"right"});
-    doc.text(t("pdf.lc.intl"), cIn, yy+2, {align:"right"});
-    doc.text(t("pdf.lc.arg"), cAr, yy+2, {align:"right"});
-    doc.text(t("pdf.lc.landed"), cTot, yy+2, {align:"right"});
-    return yy+22;
+    doc.text(pdfTxt(t("pdf.lc.sku")), cSku, yy+2);
+    doc.text(pdfTxt(t("pdf.lc.product")), cItem, yy+2);
+    doc.text(pdfTxt(t("pdf.lc.units")), cUn, yy+2, {align:"right"});
+    doc.text(pdfTxt(t("pdf.lc.uscost")), cUs, yy+2, {align:"right"});
+    doc.text(pdfTxt(t("pdf.lc.intl")), cIn, yy+2, {align:"right"});
+    doc.text(pdfTxt(t("pdf.lc.arg")), cAr, yy+2, {align:"right"});
+    doc.text(pdfTxt(t("pdf.lc.landed")), cTot, yy+2, {align:"right"});
+    return yy+24;
   };
-  y = drawHead(y);
+  /* Hasta 2 renglones; si sobra, el 2º termina en "…" medido con el ancho real. */
+  const partir=(txt, w, maxL)=>{
+    doc.setFont("helvetica","normal"); doc.setFontSize(FS);
+    let ls = doc.splitTextToSize(txt, w);
+    if(ls.length>maxL){
+      ls = ls.slice(0,maxL);
+      let last = ls[maxL-1];
+      while(last.length && doc.getTextWidth(last+"…")>w) last=last.slice(0,-1);
+      ls[maxL-1] = last.replace(/\s+$/,"")+"…";
+    }
+    return ls;
+  };
+  const cortar=(txt, w)=>{ let s=txt; if(doc.getTextWidth(s)<=w) return s; while(s.length && doc.getTextWidth(s+"…")>w) s=s.slice(0,-1); return s+"…"; };
 
-  let zebra=false, tU=0, sUs=0, sIn=0, sAr=0, sTot=0;
+  y = drawHead(y);
+  const LIM = H-50;   // deja lugar al pie
+  let zebra=false, tU=0, sUs=0, sIn=0, sAr=0, sTot=0, sinCosto=0;
   prods.forEach(({p,b})=>{
-    if(y > H-70){ doc.addPage(); y=60; y=drawHead(y); zebra=false; }
-    if(zebra){ doc.setFillColor(ZEBRA[0],ZEBRA[1],ZEBRA[2]); doc.rect(M, y-11, W-2*M, 18, "F"); }
+    const lineas = partir(pdfTxt(p.nombre||"—"), itemW, 2);
+    const rowH = lineas.length*LH + PADV*2;
+    if(y - 9 + rowH > LIM){ doc.addPage(); y=48; y=drawHead(y); zebra=false; }
+    const top = y - 9;                      // borde superior de la fila
+    if(zebra){ doc.setFillColor(ZEBRA[0],ZEBRA[1],ZEBRA[2]); doc.rect(M, top, W-2*M, rowH, "F"); }
     zebra=!zebra;
-    const nom = (p.sku?`[${p.sku}] `:"")+(p.nombre||"");
-    const nomTrim = nom.length>52 ? nom.slice(0,51)+"…" : nom;
-    setInk(INK); doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
-    doc.text(nomTrim, cItem+6, y+1);
-    doc.text(String(b.units), cUn, y+1, {align:"right"});
+    const base = top + PADV + 8;            // línea base del 1er renglón
+    const baseNum = top + rowH/2 + 3;       // números centrados en la fila
+
+    doc.setFont("helvetica","normal"); doc.setFontSize(7.5); setInk(MUT);
+    doc.text(cortar(pdfTxt(p.sku||"—"), skuW), cSku, baseNum);
+    doc.setFontSize(FS); setInk(INK);
+    doc.text(lineas, cItem, base, { lineHeightFactor: LH/FS });
+    doc.text(String(b.units), cUn, baseNum, {align:"right"});
     setInk(MUT);
-    doc.text(pdfMoney(b.us), cUs, y+1, {align:"right"});
-    doc.text(b.intl>0?pdfMoney(b.intl):"—", cIn, y+1, {align:"right"});
-    doc.text(b.arg>0?pdfMoney(b.arg):"—", cAr, y+1, {align:"right"});
-    setInk(INK); doc.setFont("helvetica","bold");
-    doc.text(pdfMoney(b.total), cTot, y+1, {align:"right"});
-    y+=18;
+    doc.text(pdfMoney(b.us), cUs, baseNum, {align:"right"});
+    doc.text(b.intl>0?pdfMoney(b.intl):"—", cIn, baseNum, {align:"right"});
+    doc.text(b.arg>0?pdfMoney(b.arg):"—", cAr, baseNum, {align:"right"});
+    doc.setFont("helvetica","bold");
+    if(b.total>0){ setInk(INK); doc.text(pdfMoney(b.total), cTot, baseNum, {align:"right"}); }
+    else { setInk(ALERT); doc.text(pdfTxt(t("pdf.lc.nocost")), cTot, baseNum, {align:"right"}); sinCosto++; }
+    y += rowH;
     tU+=b.units; sUs+=b.us*b.units; sIn+=b.intl*b.units; sAr+=b.arg*b.units; sTot+=b.total*b.units;
   });
 
-  /* Totales (valor total del inventario por puerta) */
-  y+=6; doc.setDrawColor(ACC[0],ACC[1],ACC[2]); doc.setLineWidth(1.1); doc.line(M, y-8, W-M, y-8); doc.setLineWidth(1);
-  setInk(INK); doc.setFont("helvetica","bold"); doc.setFontSize(9);
-  doc.text(t("pdf.lc.onhand"), cItem+6, y+6);
+  /* Totales: valor total del inventario en mano, por puerta (unidades × costo) */
+  if(y + 40 > LIM){ doc.addPage(); y=48; }
+  y+=8; doc.setDrawColor(ACC[0],ACC[1],ACC[2]); doc.setLineWidth(1.1); doc.line(M, y-8, W-M, y-8); doc.setLineWidth(1);
+  setInk(INK); doc.setFont("helvetica","bold"); doc.setFontSize(8.5);
+  doc.text(pdfTxt(t("pdf.lc.onhand")), cItem, y+6);
   doc.text(String(round2(tU)), cUn, y+6, {align:"right"});
   doc.text(pdfMoney(round2(sUs)), cUs, y+6, {align:"right"});
   doc.text(pdfMoney(round2(sIn)), cIn, y+6, {align:"right"});
   doc.text(pdfMoney(round2(sAr)), cAr, y+6, {align:"right"});
   doc.text(pdfMoney(round2(sTot)), cTot, y+6, {align:"right"});
+  y+=22;
+  if(sinCosto>0){
+    doc.setFont("helvetica","normal"); doc.setFontSize(8.5); setInk(ALERT);
+    doc.text(pdfTxt(t("pdf.lc.nocostnote",{n:sinCosto})), cItem, y);
+  }
+
+  /* Pie en todas las hojas */
+  const n = doc.getNumberOfPages();
+  for(let i=1;i<=n;i++){
+    doc.setPage(i);
+    doc.setDrawColor(LINE[0],LINE[1],LINE[2]); doc.setLineWidth(0.6); doc.line(M, H-30, W-M, H-30);
+    doc.setFont("helvetica","normal"); doc.setFontSize(7.5); setInk(MUT);
+    doc.text(pdfTxt((em.nombre||t("pdf.lc.brand"))+" · "+t("pdf.lc.title")+" · "+hoy), M, H-18);
+    doc.text(pdfTxt(t("pdf.lc.page",{p:i,n:n})), W-M, H-18, {align:"right"});
+  }
 
   doc.save("landed-cost-"+new Date().toISOString().slice(0,10)+".pdf");
   toast(t("pdf.lc.downloaded"));
