@@ -42,6 +42,12 @@ En cada puerta el courier/flete y el **financiero** (giros, comisiones bancarias
 ### Envíos y tracking
 *Send to transit* es **multi-producto**: una caja = un envío = **un remito U** con su **tracking** (carrier UPS/FedEx/DHL/USPS/otro + número, con link al seguimiento). El tracking se puede cargar o editar después desde la card del remito (Terceros) o desde **Remitos**; sale en el PDF del remito y la tienda lo ve en su portal.
 
+**Envíos propios con seguimiento (Swan → En camino → Select).** Cada *Send to transit* emite un remito U **propio** con **fecha de salida** y **etiqueta las capas FIFO** que entran al tránsito con su `remitoId`. Así el tránsito sabe qué unidades viajan en qué caja y el envío tiene **estado derivado** (no se guarda, no se desincroniza): **En camino → Parcial → Recibido** (o *Cerrado* si se vació sin recepción, ej. puerta de emergencia).
+- **Recepción por envío** (card del envío en *Third-party* o botón *Receive* en *Remitos*): fecha de recepción, recibido y **baja por línea** (con motivo), costo de puerta 3 prorrateado **sólo sobre lo recibido de esa caja** y financiero aparte. Lo que no se recibe ni se da de baja **queda en camino** (parcial) y se recibe después. Se consumen **sólo las capas de esa caja**: dos cajas del mismo SKU con courier distinto no se mezclan.
+- Cada recepción queda en `remito.recepciones[]` y el kardex (`transfer-in` / `merma`) lleva el código del remito y la fecha real.
+- En *Remitos* hay filtro por estado y un **recorrido** por envío (salió → recepciones/bajas → estado actual con días de viaje).
+- Lo que está en tránsito **sin remito** (cargas anteriores, compras conjuntas) es **suelto**: se sigue entregando/dando de baja **por producto**, como antes. Las acciones por producto y *Deliver all* sólo tocan lo suelto.
+
 - La **compra nace "in transit"** y **recién impacta stock/FIFO al marcarla "received"**. Por eso se puede vender desde Swan y desde Select, pero **no** mientras está en el bucket de tránsito.
 - `transferStock(origen, destino, cantidad, costoExtraUnit)` arrastra el **costo FIFO exacto** de cada capa y **suma el costo del tramo por unidad**, capitalizándolo (la misma carta "vale más" al avanzar). El operador carga el total del tramo y la app lo prorratea.
 - Además del costo capitalizado, en la **venta** se pueden agregar **cargos on-top** que el cliente paga aparte (ver más abajo). Son cosas distintas: el costo engrosa el COGS; el cargo on-top es lo que el operador refactura.
