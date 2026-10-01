@@ -542,11 +542,11 @@ function confirmConjunta(){
 function openRecibirTransito(prodId){
   if(!isAdmin()){ toast(t("conj.tt.adminrecv"),"warn"); return; }
   const p = prodById(prodId); if(!p) return;
-  const held = transUnits(p);
+  const held = transUnitsSueltas(p);   // sólo lo SUELTO: lo que viaja en un envío con remito se recibe desde el envío
   if(held<=0){ toast(t("conj.tt.notransitprod"),"warn"); return; }
   const destino = STORE_IDS[1] || STORE_IDS[0];   // AR deposit (transit destination)
   const body = `
-    <p class="hint" style="margin:0 0 12px">${t("conj.rt.hint",{n:qty(held),val:money(transValor(p)),store:esc(storeName(destino))})}</p>
+    <p class="hint" style="margin:0 0 12px">${t("conj.rt.hint",{n:qty(held),val:money(transValorSuelto(p)),store:esc(storeName(destino))})}</p>
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
       <div class="field"><label>${t("conj.l.unitstorecv")}</label><input class="inp num" id="rt_q" value="${held}"></div>
       ${legCostFieldHTML("rt_c",t("conj.leg.gate3"),t("conj.leg.hint.total"))}
@@ -556,12 +556,12 @@ function openRecibirTransito(prodId){
   buildModal(t("conj.md.deliverar",{store:esc(storeName(destino))}), body, [
     {label:t("common.cancel"),cls:"btn",act:closeModal},
     {label:t("conj.b.markdeliv",{store:storeName(destino)}),cls:"btn up",act:()=>{
-      const q=Math.min(Math.max(0,parseNum(document.getElementById("rt_q").value)||0), transUnits(p));
+      const q=Math.min(Math.max(0,parseNum(document.getElementById("rt_q").value)||0), transUnitsSueltas(p));
       const cTot=legCostRead("rt_c");   // arg freight + local costs (total), in USD
       const c = q>0 ? round2(cTot/q) : 0;                                           // prorrateo por unidad
       const obs=(document.getElementById("rt_obs").value||"").trim();
       if(q<=0){ toast(t("conj.tt.enterqty"),"warn"); return; }
-      const done = transferStock(p, TRANSITO_STORE, destino, q, c, obs, "arg");
+      const done = transferStock(p, TRANSITO_STORE, destino, q, c, obs, "arg", { filtro:esCapaSuelta, disponible:transUnitsSueltas(p) });
       const finTot = legCostRead("rt_fin");
       if(done>0 && finTot>0) registrarCostoFinanciero({ monto:finTot, concepto:t("fin.src.gate3",{what:p.nombre}), store:destino, fuente:{ tipo:"transito", id:p.id, codigo:"" }, auto:true });
       if(done>0){ save(); closeModal(); toast(t("conj.tt.delivered",{n:qty(done),store:storeName(destino),cost:cTot>0?t("conj.frag.landed",{m:money(c)}):""}), "up"); render(); }
@@ -593,6 +593,7 @@ function openEnviarTransito(){
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0;gap:10px">
       ${legCostFieldHTML("et_cost",t("conj.leg.gate2"),t("conj.leg.hint.total"))}
       ${legCostFieldHTML("et_fin",t("conj.leg.fin"),t("conj.leg.hint.fin"),{noPreview:true})}
+      <div class="field" style="grid-column:1/-1"><label>${t("env.l.shipdate")}</label><input class="inp" type="date" id="et_fecha" value="${hoyISO()}" max="${hoyISO()}"></div>
       <div class="field"><label>${t("trk.carrier")}</label><select class="inp" id="et_carrier"><option value="">—</option>${carrierOptionsHTML("")}</select></div>
       <div class="field"><label>${t("trk.number")} <span class="hint" style="font-weight:400">${t("conj.leg.hint.optional")}</span></label><input class="inp" id="et_trk" placeholder="${t("trk.ph")}"></div>
       <div class="field" style="grid-column:1/-1"><label>${t("conj.l.notes")}</label><input class="inp" id="et_obs"></div>
@@ -634,20 +635,29 @@ function openEnviarTransito(){
       const obs = (document.getElementById("et_obs").value||"").trim();
       const courierTot = legCostRead("et_cost");             // flete intl / courier (total) -> se capitaliza
       const finTot     = legCostRead("et_fin");              // financiero (total) -> P&L, no se capitaliza
+      const fecha      = envioFechaLeer("et_fecha");
+      if(!fecha){ toast(t("env.tt.baddate"),"warn"); return; }
       const perU = round2(courierTot/u);                     // prorrateo del courier por unidad
+      // Un solo remito U para toda la caja (con su tracking). Se crea ANTES de mover
+      // el stock para etiquetar las capas que entran al tránsito con su id: así la
+      // caja se sigue y se recibe en AR como un envío (con estado).
+      const uRem = crearRemito({ letra:"U", tipo:"salida-us", fecha, fuente:{ tipo:"transito", id:null },
+        propio:true, origenStore:st, lineas:[], obs: obs || t("conj.obs.ownstock",{from:storeName(st)}),
+        carrier: document.getElementById("et_carrier").value||"", tracking: document.getElementById("et_trk").value||"" });
       const lineas = [];
       Object.keys(qmap).forEach(pid=>{
         const p = prodById(pid), cant = qmap[pid];
         if(!p || !(cant>0)) return;
-        const done = transferStock(p, st, TRANSITO_STORE, cant, perU, obs, "intl");
-        if(done>0) lineas.push({ productoId:p.id, sku:p.sku, nombre:p.nombre, cantidad:done, rol:"ours", owner:"" });
+        const done = transferStock(p, st, TRANSITO_STORE, cant, perU, obs, "intl",
+          { remitoId:uRem.id, refId:uRem.id, refTxt:uRem.codigo, fecha:envioFechaMov(fecha) });
+        if(done>0) lineas.push({ productoId:p.id, sku:p.sku, nombre:p.nombre, cantidad:done, rol:"ours", owner:"", costoUnit:0, charge:null });
       });
-      if(!lineas.length){ toast(t("conj.tt.enterqtyempty"),"warn"); return; }
-      // Un solo remito U para toda la caja (con su tracking)
-      const uRem = crearRemito({ letra:"U", tipo:"salida-us", fuente:{ tipo:"transito", id:null },
-        lineas, obs: obs || t("conj.obs.ownstock",{from:storeName(st)}),
-        carrier: document.getElementById("et_carrier").value||"", tracking: document.getElementById("et_trk").value||"" });
-      if(finTot>0) registrarCostoFinanciero({ monto:finTot, concepto:t("fin.src.gate2",{code:uRem.codigo}), store:st,
+      if(!lineas.length){
+        db.remitos = (db.remitos||[]).filter(r=> r.id!==uRem.id);   // no salió nada: el remito no existe
+        toast(t("conj.tt.enterqtyempty"),"warn"); return;
+      }
+      uRem.lineas = lineas;
+      if(finTot>0) registrarCostoFinanciero({ monto:finTot, fecha, concepto:t("fin.src.gate2",{code:uRem.codigo}), store:st,
         fuente:{ tipo:"remito", id:uRem.id, codigo:uRem.codigo }, auto:true });
       save(); closeModal();
       const sent = lineas.reduce((a,l)=> a+l.cantidad, 0);
@@ -667,7 +677,7 @@ function openEnviarTransito(){
 function openMermaTransito(prodId){
   if(!isAdmin()){ toast(t("conj.tt.adminwo"),"warn"); return; }
   const p = prodById(prodId); if(!p) return;
-  const held = transUnits(p);
+  const held = transUnitsSueltas(p);   // lo que viaja en un envío con remito se da de baja al recibir el envío
   if(held<=0){ toast(t("conj.tt.notransitprod"),"warn"); return; }
   const body = `
     <p class="hint" style="margin:0 0 12px">${t("conj.mm.hint",{n:qty(held)})}</p>
@@ -685,15 +695,16 @@ function openMermaTransito(prodId){
   buildModal(t("conj.md.writeoff"), body, [
     {label:t("common.cancel"),cls:"btn",act:closeModal},
     {label:t("conj.b.writeoff"),cls:"btn danger",act:()=>{
-      const q=Math.min(Math.max(0,parseNum(document.getElementById("mm_q").value)||0), transUnits(p));
+      const q=Math.min(Math.max(0,parseNum(document.getElementById("mm_q").value)||0), transUnitsSueltas(p));
       if(q<=0){ toast(t("conj.tt.enterqty"),"warn"); return; }
       const motivo=document.getElementById("mm_motivo").value;
       const obs=(document.getElementById("mm_obs").value||"").trim();
       withUndo(t("conj.tt.woundo",{n:qty(q)}), ()=>{
-        const { unit } = fifoConsumir(p, TRANSITO_STORE, q);            // consume transit FIFO
-        p.stockPorTienda[TRANSITO_STORE] = round4(Math.max(0, transUnits(p) - q));
-        // write-off movement in the bucket (the product card shows it but doesn't add it to the sellable balance)
+        const { unit } = fifoConsumir(p, TRANSITO_STORE, q, esCapaSuelta);   // consume transit FIFO (sólo lo suelto)
+        // write-off movement in the bucket (the product card shows it but doesn't add it to the sellable balance).
+        // OJO: moverStock YA descuenta stockPorTienda[TRANSITO]; antes se descontaba también a mano (doble baja).
         moverStock(p, -q, unit, "merma", null, t("conj.obs.woreason",{reason:motivo}), { store:TRANSITO_STORE, tipo:"merma", obs });
+        if(p.stockPorTienda[TRANSITO_STORE]<0) p.stockPorTienda[TRANSITO_STORE]=0;
         save();
       });
       closeModal(); render();
@@ -807,7 +818,7 @@ function rielHTML(nodes, cur){
 }
 /* Track card for OUR OWN merchandise in transit (per product: that's how it's stored today). */
 function ourTransitCardHTML(p){
-  const u = transUnits(p), val = transValor(p);
+  const u = transUnitsSueltas(p), val = transValorSuelto(p);
   return `<div class="rl-card">
     <div class="rl-head">
       <span class="rl-code">${esc(p.nombre)}</span>
@@ -824,12 +835,16 @@ function ourTransitCardHTML(p){
 }
 function viewConjunta(){
   ensureRielCSS();
-  // --- Ours lane: products in transit (per product) ---
-  const enTransito = db.productos.filter(p=> transUnits(p)>0)
+  // --- Ours lane: shipments with remito (tracked per box) + loose units (per product, legacy) ---
+  const envios = enviosAbiertos().sort((a,b)=> String(a.fecha||"").localeCompare(String(b.fecha||"")) || ((parseInt(a.numero,10)||0)-(parseInt(b.numero,10)||0)));
+  const enTransito = db.productos.filter(p=> transUnitsSueltas(p)>0)
     .sort((a,b)=> String(a.nombre||"").localeCompare(String(b.nombre||""),"en"));
-  const uNuestraTransito = enTransito.reduce((a,p)=> a + transUnits(p), 0);
-  const ourCards = enTransito.map(ourTransitCardHTML).join("")
-    || `<div class="rl-empty">${t("conj.ours.empty")}</div>`;
+  const uNuestraTransito = db.productos.reduce((a,p)=> a + transUnits(p), 0);
+  const envioCards = envios.map(envioPropioCardHTML).join("");
+  const sueltoCards = enTransito.map(ourTransitCardHTML).join("");
+  const ourCards = (envioCards || sueltoCards)
+    ? envioCards + (sueltoCards ? `${envios.length?`<div class="hint" style="margin:6px 2px -4px;font-weight:600">${t("env.loose.title")}</div>`:""}${sueltoCards}` : "")
+    : `<div class="rl-empty">${t("conj.ours.empty")}</div>`;
 
   // --- Third-party lane: consignments grouped by remito ---
   const remitos = remitosActivos();
@@ -842,7 +857,7 @@ function viewConjunta(){
   const chips = `
     <p class="hint" style="margin:0 0 6px">${t("conj.needs")}</p>
     <div class="rl-chips">
-      <div class="rl-chip${enTransito.length?" hot":""}" data-scroll="rl-nuestra"><span class="n">${qty(uNuestraTransito)}</span><span class="l">${t("conj.chip.ours")}</span></div>
+      <div class="rl-chip${(enTransito.length||envios.length)?" hot":""}" data-scroll="rl-nuestra"><span class="n">${qty(uNuestraTransito)}</span><span class="l">${t("conj.chip.ours")}</span></div>
       <div class="rl-chip${remTransito?" hot":""}" data-scroll="rl-terceros"><span class="n">${remTransito}</span><span class="l">${t("conj.chip.recv")}</span></div>
       <div class="rl-chip${remAr?" hot":""}" data-scroll="rl-terceros"><span class="n">${remAr}</span><span class="l">${t("conj.chip.resolve")}</span></div>
     </div>`;
@@ -965,8 +980,8 @@ function entregarTodasConsign(){
    prorated over the total units (capitalized, "arg" leg). */
 function openDeliverAllOurs(){
   if(!isAdmin()){ toast(t("conj.tt.adminrecv"),"warn"); return; }
-  const prods = db.productos.filter(p=> transUnits(p)>0);
-  const totalU = prods.reduce((a,p)=> a+transUnits(p), 0);
+  const prods = db.productos.filter(p=> transUnitsSueltas(p)>0);   // sólo lo SUELTO (los envíos con remito se reciben por envío)
+  const totalU = prods.reduce((a,p)=> a+transUnitsSueltas(p), 0);
   if(!prods.length || totalU<=0){ toast(t("conj.tt.nothingours"),"warn"); return; }
   const destino = STORE_IDS[1] || STORE_IDS[0];
   const body = `
@@ -983,7 +998,7 @@ function openDeliverAllOurs(){
       const perU = totalU>0 ? round2(costTot/totalU) : 0;
       const obs=(document.getElementById("da_obs").value||"").trim();
       let done=0, items=0;
-      prods.forEach(p=>{ const q=transUnits(p); if(q>0){ const d=transferStock(p, TRANSITO_STORE, destino, q, perU, obs, "arg"); if(d>0){ done+=d; items++; } } });
+      prods.forEach(p=>{ const q=transUnitsSueltas(p); if(q>0){ const d=transferStock(p, TRANSITO_STORE, destino, q, perU, obs, "arg", { filtro:esCapaSuelta, disponible:q }); if(d>0){ done+=d; items++; } } });
       const finTot=legCostRead("da_fin");
       if(done>0 && finTot>0) registrarCostoFinanciero({ monto:finTot, concepto:t("fin.src.gate3",{what:t("fin.src.batch",{n:qty(done)})}), store:destino, fuente:{ tipo:"transito", id:null, codigo:"" }, auto:true });
       save(); closeModal(); toast(t("conj.tt.deliveredacross",{n:qty(done),items:items,cost:costTot>0?t("conj.frag.landed",{m:money(perU)}):""}),"up"); render();
@@ -1254,6 +1269,179 @@ function openResolverAR(key){
   recalc();
 }
 
+/* ============================================================
+   ENVÍOS PROPIOS CON SEGUIMIENTO (Swan → tránsito → Select)
+   ------------------------------------------------------------
+   Cada "Despachar a tránsito" es UN envío = UN remito U con estado:
+     Salió de Swan (fecha) → En camino (días, tracking) → Entró a Select (fecha)
+   La recepción en AR se hace POR ENVÍO: se consumen SÓLO las capas FIFO de esa
+   caja (no se mezclan costos de courier de dos cajas distintas), se carga lo
+   recibido y las bajas por línea, y lo que no llegó queda "en camino" (parcial).
+   El estado se deriva (ver envioResumen en 01-core.js).
+   ============================================================ */
+/* Lee un <input type=date>: devuelve YYYY-MM-DD válido y no futuro, o null. */
+function envioFechaLeer(id, minISO){
+  const el = document.getElementById(id); const v = el ? String(el.value||"").trim() : "";
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+  if(v > hoyISO()) return null;
+  if(minISO && v < String(minISO).slice(0,10)) return null;
+  return v;
+}
+/* Fecha para kardex/capas: si es hoy, el instante real; si no, mediodía de ese día. */
+function envioFechaMov(f){ return (!f || f===hoyISO()) ? new Date().toISOString() : (f+"T12:00:00.000Z"); }
+
+/* Card de un envío propio abierto (carril "Nuestra"). */
+function envioPropioCardHTML(r){
+  const R = envioResumen(r);
+  const key = "env:"+r.id, open = !!remitoOpen[key];
+  const dest = STORE_IDS[1] || STORE_IDS[0];
+  const origen = r.origenStore || STORE_IDS[0];
+  const cur = R.estado===ENVIO_ESTADOS.TRANSITO || R.estado===ENVIO_ESTADOS.PARCIAL ? 1 : 2;
+  const nodes = [
+    { icon:"usa",   label:t("env.gate.out",{store:esc(storeName(origen)),date:esc(fmtDate(r.fecha))}) },
+    { icon:"plane", label:t("env.gate.way",{d:R.dias}) },
+    { icon:"store", label: R.ultimaRecepcion ? t("env.gate.in",{store:esc(storeName(dest)),date:esc(fmtDate(R.ultimaRecepcion))}) : t("env.gate.inpending",{store:esc(storeName(dest))}) }
+  ];
+  const pills = [
+    R.tot.pendiente>0 ? `<span class="rl-pill">${qty(R.tot.pendiente)} ${t("env.pill.way")}</span>` : "",
+    R.tot.recibido>0  ? `<span class="rl-pill ar">${qty(R.tot.recibido)} ${t("env.pill.recv")}</span>` : "",
+    R.tot.baja>0      ? `<span class="rl-pill" style="border-color:var(--alert);color:var(--alert)">${qty(R.tot.baja)} ${t("env.pill.wo")}</span>` : "",
+    R.tot.otros>0     ? `<span class="rl-pill" title="${t("env.otros.tip")}">${qty(R.tot.otros)} ${t("env.pill.other")}</span>` : ""
+  ].filter(Boolean).join(" ");
+  const head = `<div class="rl-rhead" data-remito-toggle="${esc(key)}" role="button" tabindex="0" aria-expanded="${open?'true':'false'}">
+      <span class="rl-caret ${open?'open':''}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+      <div style="flex:1;min-width:0">
+        <div class="rl-code">${esc(r.codigo)}</div>
+        <div class="rl-meta">${t("env.meta",{date:esc(fmtDate(r.fecha)),n:R.lineas.length,u:qty(R.tot.enviado),d:R.dias})}</div>
+        <div class="rl-meta" style="margin-top:3px">${trackingHTML(r)}</div>
+      </div>
+      <span class="rl-badge ours">${t("conj.badge.ours")}</span>
+      ${envioEstadoPill(R.estado)}
+    </div>`;
+  const rows = R.lineas.map(e=>`<tr>
+      <td><span class="sku">${esc(e.sku||"\u2014")}</span></td>
+      <td>${esc(e.nombre)}</td>
+      <td class="r num">${qty(e.enviado)}</td>
+      <td class="r num">${e.recibido?qty(e.recibido):"\u2014"}</td>
+      <td class="r num"${e.baja?' style="color:var(--alert)"':""}>${e.baja?qty(e.baja):"\u2014"}</td>
+      <td class="r num"><b>${e.pendiente?qty(e.pendiente):"\u2014"}</b></td>
+    </tr>`).join("");
+  const tabla = open ? `<div class="table-scroll" style="margin-bottom:10px"><table class="rm-tbl">
+      <thead><tr><th>SKU</th><th>${t("common.product")}</th><th class="r">${t("env.h.sent")}</th><th class="r">${t("env.h.recv")}</th><th class="r">${t("env.h.wo")}</th><th class="r">${t("env.h.way")}</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>` : "";
+  const foot = `<div class="rl-foot">
+      <span class="rl-next">${R.estado===ENVIO_ESTADOS.PARCIAL ? t("env.next.partial",{n:qty(R.tot.pendiente)}) : t("env.next.way",{store:esc(storeName(dest))})}</span>
+      <button class="btn ghost sm" data-rm-track="${esc(r.id)}" title="${t("trk.edit")}">${ICO.plane||""}${t("trk.btn")}</button>
+      <button class="btn ghost sm" data-rm-pdf="${esc(r.id)}" title="${t("conj.dlremito")} ${esc(r.codigo)}">${ICO.pdf}${esc(r.codigo)}</button>
+      ${isAdmin()?`<button class="btn up sm" data-env-recv="${esc(r.id)}">${ICO.receive}${t("env.b.receive")} \u25be</button>`:""}
+    </div>`;
+  return `<div class="rl-card">
+    ${head}
+    ${rielHTML(nodes, cur)}
+    ${pills?`<div style="margin:0 2px 10px;display:flex;gap:6px;flex-wrap:wrap">${pills}</div>`:""}
+    ${tabla}
+    ${foot}
+  </div>`;
+}
+
+/* ---- Recibir en AR un envío propio (total o parcial, con bajas por línea) ---- */
+function openRecibirEnvio(remitoId){
+  if(!isAdmin()){ toast(t("conj.tt.adminrecv"),"warn"); return; }
+  const r = remitoById(remitoId);
+  if(!esEnvioPropio(r)){ toast(t("pdf.err.remNotFound"),"warn"); return; }
+  const R = envioResumen(r);
+  const lines = R.lineas.filter(e=> e.pendiente>0);
+  if(!lines.length){ toast(t("env.tt.nothingpending",{code:r.codigo}),"warn"); return; }
+  const destino = STORE_IDS[1] || STORE_IDS[0];
+  const motivos = ["broken","customs","lost","other"];
+  const rows = lines.map((e,i)=>`<tr>
+      <td>${esc(e.nombre)}<div class="hint">${esc(e.sku||"\u2014")}</div></td>
+      <td class="r num">${qty(e.enviado)}</td>
+      <td class="r num"><b>${qty(e.pendiente)}</b></td>
+      <td><input class="inp num" id="ev_r_${i}" value="${e.pendiente}" inputmode="decimal" style="width:84px"></td>
+      <td><input class="inp num" id="ev_b_${i}" value="0" inputmode="decimal" style="width:72px"></td>
+      <td class="r num" id="ev_q_${i}">0</td>
+    </tr>`).join("");
+  const body = `
+    <p class="hint" style="margin:0 0 12px">${t("env.rc.hint",{code:esc(r.codigo),store:esc(storeName(destino)),date:esc(fmtDate(r.fecha))})}</p>
+    <div class="table-scroll" style="max-height:300px;overflow-y:auto;margin:0 0 6px"><table class="rm-tbl">
+      <thead><tr><th>${t("common.product")}</th><th class="r">${t("env.h.sent")}</th><th class="r">${t("env.h.way")}</th><th>${t("env.h.recvnow")}</th><th>${t("env.h.wo")}</th><th class="r">${t("env.h.stays")}</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    <div class="hint" id="ev_sum" style="margin-bottom:12px"></div>
+    <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0;gap:10px">
+      <div class="field"><label>${t("env.l.recvdate")}</label><input class="inp" type="date" id="ev_fecha" value="${hoyISO()}" min="${esc(String(r.fecha||"").slice(0,10))}" max="${hoyISO()}"></div>
+      <div class="field"><label>${t("env.l.woreason")}</label><select class="inp" id="ev_mot">${motivos.map(m=>`<option value="${m}">${t("conj.mm."+m)}</option>`).join("")}</select></div>
+      ${legCostFieldHTML("ev_c",t("conj.leg.gate3"),t("env.leg.hint"))}
+      ${legCostFieldHTML("ev_fin",t("conj.leg.fin"),t("conj.leg.hint.fin"),{noPreview:true})}
+      <div class="field" style="grid-column:1/-1"><label>${t("conj.l.notes")}</label><input class="inp" id="ev_obs" placeholder="${t("conj.ph.egship")}"></div>
+    </div>`;
+  const leer = ()=> lines.map((e,i)=>{
+    const rec = Math.min(Math.max(0, parseNum(document.getElementById("ev_r_"+i).value)||0), e.pendiente);
+    const baj = Math.min(Math.max(0, parseNum(document.getElementById("ev_b_"+i).value)||0), round4(e.pendiente-rec));
+    return { e, rec:round4(rec), baj:round4(baj), queda:round4(e.pendiente-rec-baj) };
+  });
+  buildModal(t("env.md.receive",{code:esc(r.codigo)}), body, [
+    {label:t("common.cancel"),cls:"btn",act:closeModal},
+    {label:t("env.b.confirm"),cls:"btn up",act:()=>{
+      const fecha = envioFechaLeer("ev_fecha", r.fecha);
+      if(!fecha){ toast(t("env.tt.baddaterecv",{date:fmtDate(r.fecha)}),"warn"); return; }
+      const L = leer();
+      const totRec = round4(L.reduce((a,x)=> a+x.rec, 0)), totBaja = round4(L.reduce((a,x)=> a+x.baj, 0));
+      if(totRec<=0 && totBaja<=0){ toast(t("conj.tt.enterqty"),"warn"); return; }
+      const cTot = legCostRead("ev_c"), finTot = legCostRead("ev_fin");
+      if(cTot>0 && totRec<=0){ toast(t("env.tt.costnorecv"),"warn"); return; }
+      const perU = totRec>0 ? round2(cTot/totRec) : 0;
+      const motivo = document.getElementById("ev_mot").value;
+      const obs = (document.getElementById("ev_obs").value||"").trim();
+      const fmov = envioFechaMov(fecha);
+      const deEsteEnvio = Lyr=> Lyr.remitoId===r.id;
+      let recOk=0, bajaOk=0;
+      withUndo(t("env.tt.undo",{code:r.codigo}), ()=>{
+        const recLineas = [];
+        L.forEach(x=>{
+          const p = prodById(x.e.productoId); if(!p) return;
+          let done = 0, bajaDone = 0;
+          if(x.rec>0) done = transferStock(p, TRANSITO_STORE, destino, x.rec, perU, obs, "arg",
+            { filtro:deEsteEnvio, disponible:transUnitsRemito(p, r.id), refId:r.id, refTxt:r.codigo, fecha:fmov });
+          const b = Math.min(x.baj, transUnitsRemito(p, r.id));
+          if(b>0){
+            const { unit } = fifoConsumir(p, TRANSITO_STORE, b, deEsteEnvio);
+            // baja en el bucket de tránsito: moverStock descuenta stockPorTienda[TRANSITO] y deja la traza
+            moverStock(p, -b, unit, "merma", r.id, t("conj.obs.woreason",{reason:t("conj.mm."+motivo)})+" \u00b7 "+r.codigo, { store:TRANSITO_STORE, tipo:"merma", obs, fecha:fmov });
+            if(p.stockPorTienda[TRANSITO_STORE]<0) p.stockPorTienda[TRANSITO_STORE]=0;
+            bajaDone = b;
+          }
+          if(done>0 || bajaDone>0) recLineas.push({ productoId:p.id, sku:p.sku, nombre:p.nombre, recibido:round4(done), baja:round4(bajaDone) });
+          recOk += done; bajaOk += bajaDone;
+        });
+        if(recLineas.length){
+          (r.recepciones || (r.recepciones=[])).push({ id:uid(), fecha, destino, lineas:recLineas,
+            costoArg:round2(cTot), costoFin:round2(finTot), motivoBaja: bajaOk>0 ? motivo : "", obs });
+          if(finTot>0) registrarCostoFinanciero({ monto:finTot, fecha, concepto:t("fin.src.gate3",{what:r.codigo}), store:destino,
+            fuente:{ tipo:"remito", id:r.id, codigo:r.codigo }, auto:true });
+        }
+        save();
+      });
+      closeModal();
+      const st = envioResumen(r).estado;
+      toast(t("env.tt.received",{code:r.codigo,n:qty(recOk),store:storeName(destino),
+        wo: bajaOk>0 ? t("env.frag.wo",{n:qty(bajaOk)}) : "",
+        st: envioEstadoLabel(st)}), "up");
+      render();
+    }}
+  ], "wide");
+  const upd = ()=>{
+    const L = leer();
+    L.forEach((x,i)=>{ const c=document.getElementById("ev_q_"+i); if(c){ c.textContent = qty(x.queda); c.style.color = x.queda>0 ? "var(--accent-ink)" : ""; } });
+    const totRec = L.reduce((a,x)=> a+x.rec, 0), totBaja = L.reduce((a,x)=> a+x.baj, 0), queda = L.reduce((a,x)=> a+x.queda, 0);
+    const sum = document.getElementById("ev_sum"); if(sum) sum.innerHTML = t("env.rc.sum",{r:qty(totRec),b:qty(totBaja),q:qty(queda)});
+    const pu = document.getElementById("ev_c_pu"); if(pu) pu.textContent = t("conj.leg.preview",{m:money(totRec>0?round2(legCostRead("ev_c")/totRec):0),n:qty(totRec)});
+  };
+  lines.forEach((e,i)=>{ ["ev_r_","ev_b_"].forEach(pre=>{ const el=document.getElementById(pre+i); if(el) el.addEventListener("input", upd); }); });
+  const evc = document.getElementById("ev_c"); if(evc) evc.addEventListener("input", upd);
+  upd();
+}
+
 /* View wiring (called by wire() in 16-view-datos.js). */
 function wireConjunta(){
   const m = document.getElementById("main"); if(!m) return;
@@ -1264,6 +1452,8 @@ function wireConjunta(){
   const daa = m.querySelector("[data-deliver-all-ours]"); if(daa) daa.onclick=()=> openDeliverAllOurs();
   m.querySelectorAll("[data-recib]").forEach(b=> b.onclick=()=> openRecibirTransito(b.dataset.recib));
   m.querySelectorAll("[data-merma]").forEach(b=> b.onclick=()=> openMermaTransito(b.dataset.merma));
+  // --- envíos propios (remito U con estado) ---
+  m.querySelectorAll("[data-env-recv]").forEach(b=> b.onclick=(e)=>{ e.stopPropagation(); openRecibirEnvio(b.dataset.envRecv); });
   m.querySelectorAll("[data-cjdel-doc]").forEach(b=> b.onclick=()=> deleteConjunta(b.dataset.cjdelDoc));
   m.querySelectorAll("[data-remito-doc]").forEach(b=> b.onclick=()=> generarRemitoPDF(b.dataset.remitoDoc));
   m.querySelectorAll("[data-cs-recib]").forEach(b=> b.onclick=()=> openRecibirConsignacion(b.dataset.csRecib));

@@ -39,18 +39,34 @@ function fifoCostoPeek(prod, store, cantidad){
   return { cogs:round2(cogs), unit: cantidad>0 ? round2(cogs/cantidad) : 0, short: need>0 };
 }
 /* Consume layers FIFO, MUTATING them. Returns {cogs, unit, consumed:[{costoUnit,cantidad}]}
-   so a later revert can put the exact units back into the right layers. */
-function fifoConsumir(prod, store, cantidad){
+   so a later revert can put the exact units back into the right layers.
+   `pred` (opcional): sólo consume las capas que cumplen la condición, respetando
+   el orden FIFO entre ellas. Se usa en TRÁNSITO para separar lo que viaja dentro
+   de un envío con remito (capas etiquetadas con `remitoId`) de lo "suelto". */
+function fifoConsumir(prod, store, cantidad, pred){
   const layers = fifoLayers(prod, store);
   let need = cantidad, cogs = 0; const consumed = [];
-  while(need>0 && layers.length){
-    const L = layers[0];
-    const take = Math.min(L.cantidad, need);
-    cogs += take * L.costoUnit;
-    consumed.push({ costoUnit:L.costoUnit, cantidad:take, d:L.d });
-    L.cantidad = round4(L.cantidad - take);
-    need -= take;
-    if(L.cantidad<=0.00001) layers.shift();
+  if(typeof pred === "function"){
+    for(const L of layers){
+      if(need<=0) break;
+      if(!pred(L) || !(L.cantidad>0)) continue;
+      const take = Math.min(L.cantidad, need);
+      cogs += take * L.costoUnit;
+      consumed.push({ costoUnit:L.costoUnit, cantidad:take, d:L.d, rid:L.remitoId||null });
+      L.cantidad = round4(L.cantidad - take);
+      need -= take;
+    }
+    prod.lotes[store] = layers.filter(L=> L.cantidad>0.00001);
+  } else {
+    while(need>0 && layers.length){
+      const L = layers[0];
+      const take = Math.min(L.cantidad, need);
+      cogs += take * L.costoUnit;
+      consumed.push({ costoUnit:L.costoUnit, cantidad:take, d:L.d, rid:L.remitoId||null });
+      L.cantidad = round4(L.cantidad - take);
+      need -= take;
+      if(L.cantidad<=0.00001) layers.shift();
+    }
   }
   if(need>0){ // shortfall: value at last cost, record synthetic layer to allow revert
     const c = prod.ultimoCosto||0;
@@ -226,22 +242,34 @@ function returnFromInvestment(prod, store, q, obs){
      · BUCKETS (__transito/__inv): NO dejan kardex propio (igual que la bóveda),
        para que el saldo corrido del producto siga espejando el stock vendible.
        Su contenido se ve en las columnas/fichas de Transit y Vault.
+   `opts` (opcional) — ENVÍOS CON REMITO:
+     · filtro(L)   → sólo consume del origen las capas que cumplen (ej. las de un remito).
+     · disponible  → tope de unidades (cuando el filtro deja menos que stockDe).
+     · remitoId    → etiqueta las capas que ENTRAN al destino (sólo si es un bucket):
+                     así el tránsito sabe qué unidades viajan en qué caja.
+     · refId / refTxt / fecha → trazabilidad en el kardex (remito y fecha real).
    Devuelve las unidades efectivamente movidas.
    ============================================================ */
-function transferStock(prod, origen, destino, cantidad, costoExtraUnit, obs, legLabel){
-  cantidad = Math.min(Math.max(0, +cantidad||0), stockDe(prod, origen));
+function transferStock(prod, origen, destino, cantidad, costoExtraUnit, obs, legLabel, opts){
+  opts = opts || {};
+  let tope = stockDe(prod, origen);
+  if(opts.disponible!=null) tope = Math.min(tope, Math.max(0, +opts.disponible||0));
+  cantidad = Math.min(Math.max(0, +cantidad||0), tope);
   if(cantidad<=0 || origen===destino) return 0;
   costoExtraUnit = +costoExtraUnit || 0;
   const legTxt = costoExtraUnit>0 ? t("eng.mov.legcost",{n:round2(costoExtraUnit)}) : "";   // costo capitalizado del tramo, visible en el kardex
+  const refTxt = opts.refTxt ? " · "+opts.refTxt : "";
+  const fechaMov = opts.fecha || new Date().toISOString();
   // consumo FIFO del origen (mutando las capas y sabiendo el costo exacto)
-  const { unit, consumed } = fifoConsumir(prod, origen, cantidad);
+  const { unit, consumed } = fifoConsumir(prod, origen, cantidad, opts.filtro);
   // --- salida del origen ---
   if(isBucket(origen)){
     prod.stockPorTienda[origen] = round4((prod.stockPorTienda[origen]||0) - cantidad);
   } else {
-    moverStock(prod, -cantidad, unit, "transfer", null, "→ "+storeName(destino)+legTxt, { store:origen, tipo:"transfer-out", obs:obs||"" });
+    moverStock(prod, -cantidad, unit, "transfer", opts.refId||null, "→ "+storeName(destino)+refTxt+legTxt, { store:origen, tipo:"transfer-out", obs:obs||"", fecha:fechaMov });
   }
   // --- entrada al destino: cada capa entra a su costo + el extra del tramo, arrastrando el desglose ---
+  const tag = (isBucket(destino) && opts.remitoId) ? opts.remitoId : null;
   consumed.forEach(c=>{
     if(c.synthetic) return;
     const base = c.d || { us:c.costoUnit, intl:0, arg:0 };   // legacy sin desglose: todo es "us"
@@ -249,15 +277,16 @@ function transferStock(prod, origen, destino, cantidad, costoExtraUnit, obs, leg
     if(legLabel==="intl")      nd.intl = round2(nd.intl + costoExtraUnit);
     else if(legLabel==="arg")  nd.arg  = round2(nd.arg  + costoExtraUnit);
     else                       nd.us   = round2(nd.us   + costoExtraUnit);
-    fifoLayers(prod, destino).push({ id:uid(), fecha:new Date().toISOString(), cantidad:c.cantidad, costoUnit:round2(c.costoUnit + costoExtraUnit), d:nd, ref:"from "+storeName(origen)+legTxt });
+    const L = { id:uid(), fecha:fechaMov, cantidad:c.cantidad, costoUnit:round2(c.costoUnit + costoExtraUnit), d:nd, ref:"from "+storeName(origen)+refTxt+legTxt };
+    if(tag) L.remitoId = tag;
+    fifoLayers(prod, destino).push(L);
   });
   if(isBucket(destino)){
     prod.stockPorTienda[destino] = round4((prod.stockPorTienda[destino]||0) + cantidad);
   } else {
-    moverStock(prod, +cantidad, round2(unit + costoExtraUnit), "transfer", null, "← "+storeName(origen)+legTxt, { store:destino, tipo:"transfer-in", obs:obs||"" });
+    moverStock(prod, +cantidad, round2(unit + costoExtraUnit), "transfer", opts.refId||null, "← "+storeName(origen)+refTxt+legTxt, { store:destino, tipo:"transfer-in", obs:obs||"", fecha:fechaMov });
     prod.ultimoCosto = round2(unit + costoExtraUnit);   // referencia: último costo landed en ese depósito
   }
   save();
   return cantidad;
 }
-

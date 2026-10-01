@@ -541,6 +541,84 @@ function enTransitoAR(p){ return transUnits(p) > 0; }
 /* Total de unidades en tránsito rumbo AR (para el KPI de la vista Joint/Transit). */
 function unidadesEnTransitoAR(){ return db.productos.reduce((a,p)=> a + transUnits(p), 0); }
 function valorEnTransitoAR(){ return round2(db.productos.reduce((a,p)=> a + transValor(p), 0)); }
+
+/* ============================================================
+   ENVÍOS PROPIOS CON SEGUIMIENTO (remito U de stock propio)
+   ------------------------------------------------------------
+   "Despachar a tránsito" emite un remito U con `propio:true` y ETIQUETA las
+   capas FIFO que entran al tránsito con `remitoId`. Así el tránsito sabe qué
+   unidades viajan en qué caja y la recepción en AR se hace POR ENVÍO.
+   El estado NO se guarda: se DERIVA (no se puede desincronizar):
+     · pendiente = unidades del remito que siguen en tránsito (capas etiquetadas)
+     · recibido / baja = suma de las recepciones registradas en el remito
+     · otros = lo que salió del envío por otra vía (ej. puerta de emergencia)
+   Estados: transito → parcial → recibido  (cerrado = se vació sin recepción).
+   Lo que está en tránsito SIN remito (cargas viejas, compras conjuntas) es
+   "suelto" y se sigue entregando por producto, como antes.
+   ============================================================ */
+const ENVIO_ESTADOS = { TRANSITO:"transito", PARCIAL:"parcial", RECIBIDO:"recibido", CERRADO:"cerrado" };
+function esEnvioPropio(r){ return !!(r && r.letra==="U" && r.propio); }
+function esCapaSuelta(L){ return !L.remitoId; }
+/* Unidades de un producto que viajan dentro del remito `rid`. */
+function transUnitsRemito(p, rid){
+  return round4(transLayers(p).reduce((a,L)=> a + (L.remitoId===rid ? (L.cantidad||0) : 0), 0));
+}
+/* Unidades en tránsito que pertenecen a ALGÚN envío con remito. */
+function transUnitsEnRemitos(p){
+  return round4(transLayers(p).reduce((a,L)=> a + (L.remitoId ? (L.cantidad||0) : 0), 0));
+}
+/* Unidades en tránsito SUELTAS (sin remito): se entregan por producto. */
+function transUnitsSueltas(p){ return round4(Math.max(0, transUnits(p) - transUnitsEnRemitos(p))); }
+function transValorSuelto(p){ return round2(transLayers(p).reduce((a,L)=> a + (L.remitoId ? 0 : L.cantidad*L.costoUnit), 0)); }
+function enviosPropios(){ return (db.remitos||[]).filter(esEnvioPropio); }
+function envioEstadoLabel(e){ return t("env.st."+e); }
+/* Fecha YYYY-MM-DD de hoy (local). */
+function hoyISO(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+/* Días corridos entre dos fechas YYYY-MM-DD (b por defecto = hoy). */
+function diasEntre(a, b){
+  const da = new Date(String(a||"").slice(0,10)+"T00:00:00"), db_ = new Date(String(b||hoyISO()).slice(0,10)+"T00:00:00");
+  if(isNaN(da)||isNaN(db_)) return 0;
+  return Math.max(0, Math.round((db_-da)/86400000));
+}
+/* Resumen derivado de un envío propio: por línea y totales + estado. */
+function envioResumen(r){
+  const recs = Array.isArray(r.recepciones) ? r.recepciones : [];
+  const porProd = {};
+  (r.lineas||[]).forEach(l=>{
+    if(!l.productoId) return;
+    const k = l.productoId;
+    if(!porProd[k]) porProd[k] = { productoId:k, sku:l.sku||"", nombre:l.nombre||"", enviado:0, recibido:0, baja:0, pendiente:0, otros:0 };
+    porProd[k].enviado = round4(porProd[k].enviado + (+l.cantidad||0));
+  });
+  recs.forEach(rc=> (rc.lineas||[]).forEach(x=>{
+    const e = porProd[x.productoId]; if(!e) return;
+    e.recibido = round4(e.recibido + (+x.recibido||0));
+    e.baja     = round4(e.baja     + (+x.baja||0));
+  }));
+  const lineas = Object.values(porProd).map(e=>{
+    const p = prodById(e.productoId);
+    e.pendiente = p ? transUnitsRemito(p, r.id) : 0;
+    e.otros = round4(Math.max(0, e.enviado - e.recibido - e.baja - e.pendiente));
+    if(p){ e.nombre = p.nombre || e.nombre; e.sku = p.sku || e.sku; }
+    return e;
+  });
+  const sum = k => round4(lineas.reduce((a,e)=> a + e[k], 0));
+  const tot = { enviado:sum("enviado"), recibido:sum("recibido"), baja:sum("baja"), pendiente:sum("pendiente"), otros:sum("otros") };
+  let estado;
+  if(tot.pendiente>0) estado = (tot.recibido+tot.baja+tot.otros>0) ? ENVIO_ESTADOS.PARCIAL : ENVIO_ESTADOS.TRANSITO;
+  else estado = tot.recibido>0 ? ENVIO_ESTADOS.RECIBIDO : ENVIO_ESTADOS.CERRADO;
+  const ultima = recs.length ? recs.map(x=> x.fecha||"").sort().slice(-1)[0] : "";
+  const primera = recs.length ? recs.map(x=> x.fecha||"").sort()[0] : "";
+  const abierto = estado===ENVIO_ESTADOS.TRANSITO || estado===ENVIO_ESTADOS.PARCIAL;
+  return { lineas, tot, estado, abierto, primeraRecepcion:primera, ultimaRecepcion:ultima,
+           dias: diasEntre(r.fecha, abierto ? hoyISO() : (ultima||hoyISO())) };
+}
+function enviosAbiertos(){ return enviosPropios().filter(r=> envioResumen(r).abierto); }
+/* Pill de estado de un envío (HTML). */
+function envioEstadoPill(e){
+  const col = e===ENVIO_ESTADOS.RECIBIDO ? "var(--up)" : e===ENVIO_ESTADOS.PARCIAL ? "var(--accent)" : e===ENVIO_ESTADOS.CERRADO ? "var(--muted)" : "var(--accent-ink)";
+  return `<span class="rm-pill" style="border-color:${col};color:${col};white-space:nowrap">${esc(envioEstadoLabel(e))}</span>`;
+}
 /* products visible for normal SELLING views: hides only the fully-held items,
    and (for sellers) is later intersected with their store's stock. */
 function productosVendibles(){ return db.productos.filter(p=> !soloEnVault(p)); }
@@ -964,6 +1042,9 @@ function crearRemito(o){
     carrier:  o.carrier || "",                     // ups | fedex | dhl | usps | otro
     obs: o.obs || ""
   };
+  // Envío de STOCK PROPIO con seguimiento (Swan → tránsito → Select): el remito
+  // pasa a tener estado, derivado de sus capas en tránsito + sus recepciones.
+  if(o.propio){ r.propio = true; r.origenStore = o.origenStore || STORE_IDS[0]; r.recepciones = []; }
   (db.remitos || (db.remitos=[])).push(r);
   return r;
 }
