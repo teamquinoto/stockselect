@@ -459,6 +459,12 @@ function buildupEnStores(p, stores){
   per.total = round2(per.us + per.intl + per.arg);
   return per;
 }
+/* En el catálogo PDF no figura el nombre de los depósitos (Swan / Select):
+   se identifican por país. */
+function pdfxStoreLbl(id){
+  const s=STORES.find(x=>x.id===id);
+  return s ? (s.pais==="AR" ? "Argentina" : s.pais==="US" ? "USA" : s.pais) : storeName(id);
+}
 function precioEnStore(p, s){ return (p.precioVentaPorTienda && +p.precioVentaPorTienda[s]) || 0; }
 
 /* Modal: qué columnas exportar. `base` = productos visibles (filtros) o seleccionados. */
@@ -526,7 +532,7 @@ function generarProdPDF(base, stores, o){
   }
   if(o.price){
     if(stores.length===1) cols.push({ k:"pr_"+stores[0], s:stores[0], h:t("pdfx.h.price"), w:88, bold:true });
-    else stores.forEach(s=> cols.push({ k:"pr_"+s, s, h:t("pdfx.h.priceat",{store:String((STORES.find(x=>x.id===s)||{}).short||s).toUpperCase()}), w:96, bold:true }));
+    else stores.forEach(s=> cols.push({ k:"pr_"+s, s, h:t("pdfx.h.priceat",{store:pdfxStoreLbl(s).toUpperCase()}), w:96, bold:true }));
   }
 
   const { jsPDF } = window.jspdf;
@@ -539,20 +545,18 @@ function generarProdPDF(base, stores, o){
   const INK=[26,26,26], MUT=[120,120,120], LINE=[228,225,220], ACC=[217,119,6], ZEBRA=[248,247,245], ALERT=[185,28,28];
   const setInk=c=>doc.setTextColor(c[0],c[1],c[2]);
   const hoy = fmtDate(new Date().toISOString());
-  const focoTxt = stores.length===1 ? storeName(stores[0]) : t("pdfx.scope.all");
+  const focoTxt = stores.length===1 ? pdfxStoreLbl(stores[0]) : t("pdfx.scope.all");
   const queTxt = [o.qty&&t("pdfx.col.qty"), o.cost&&(t("pdfx.col.cost")+(o.brk?" ("+t("pdfx.brk.short")+")":"")), o.price&&t("pdfx.col.price")].filter(Boolean).join(" · ");
 
   /* Encabezado */
   doc.setFillColor(ACC[0],ACC[1],ACC[2]); doc.rect(0,0,W,84,"F");
   doc.setTextColor(255,255,255);
   doc.setFont("helvetica","bold"); doc.setFontSize(18);
-  doc.text(pdfTxt(em.nombre || t("pdf.lc.brand")), M, 38);
+  doc.text(pdfTxt(t("pdfx.doctitle")), M, 38);
   doc.setFont("helvetica","normal"); doc.setFontSize(9);
   doc.text(pdfTxt(queTxt+"  ·  "+t("pdfx.h.store")+": "+focoTxt), M, 56);
-  doc.setFont("helvetica","bold"); doc.setFontSize(15);
-  doc.text(pdfTxt(t("pdfx.doctitle")), W-M, 38, {align:"right"});
-  doc.setFont("helvetica","normal"); doc.setFontSize(9);
-  doc.text(hoy, W-M, 56, {align:"right"});
+  doc.setFont("helvetica","normal"); doc.setFontSize(10);
+  doc.text(hoy, W-M, 38, {align:"right"});
 
   let y=106;
   setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
@@ -658,11 +662,11 @@ function generarProdPDF(base, stores, o){
     doc.setPage(i);
     doc.setDrawColor(LINE[0],LINE[1],LINE[2]); doc.setLineWidth(0.6); doc.line(M, H-30, W-M, H-30);
     doc.setFont("helvetica","normal"); doc.setFontSize(7.5); setInk(MUT);
-    doc.text(pdfTxt((em.nombre||t("pdf.lc.brand"))+" · "+t("pdfx.doctitle")+" · "+focoTxt+" · "+hoy), M, H-18);
+    doc.text(pdfTxt(t("pdfx.doctitle")+" · "+focoTxt+" · "+hoy), M, H-18);
     doc.text(pdfTxt(t("pdf.lc.page",{p:i,n:n})), W-M, H-18, {align:"right"});
   }
 
-  doc.save("productos-"+new Date().toISOString().slice(0,10)+".pdf");
+  doc.save(pdfTxt(t("pdfx.filename")).toLowerCase()+"-"+new Date().toISOString().slice(0,10)+".pdf");
   toast(t("pdfx.done",{n:filas.length}));
   return true;
 }
