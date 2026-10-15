@@ -99,7 +99,16 @@ function closeModal(){
 
   let openPop = null;   // popup abierto actualmente (select o calendario)
   function closeOpen(){ if(openPop){ openPop.remove(); openPop=null; document.removeEventListener('scroll', onDocScroll, true); } }
-  function onDocScroll(){ closeOpen(); }
+  /* Cerramos el popup cuando scrollea la PÁGINA (quedaría flotando desacoplado del
+     control), pero NO cuando el scroll ocurre ADENTRO del propio popup: la lista de
+     opciones tiene su propio scroll (max-height) y el listener en captura también
+     recibe esos eventos. Antes cualquier scroll interno —la rueda del mouse o el
+     auto-scroll hasta la opción tildada al abrir— lo cerraba al instante y el filtro
+     "dejaba de responder" en cuanto la lista era larga. */
+  function onDocScroll(e){
+    if(openPop && e && e.target && (e.target===openPop || (e.target.nodeType===1 && openPop.contains(e.target)))) return;
+    closeOpen();
+  }
 
   /* Posiciona un popup respecto de su "ancla" (el control), eligiendo abrir
      hacia abajo o hacia arriba según el espacio disponible en el viewport. */
@@ -141,9 +150,12 @@ function closeModal(){
     pop.__forSel = sel;
     openPop = pop;
     place(pop, sel);
-    // scroll a la opción seleccionada
+    // scroll a la opción seleccionada: movemos SÓLO el scroll interno del popup.
+    // (scrollIntoView podía mover también la página y ese scroll cerraba el popup.)
     const selEl = pop.querySelector('.csel-opt.sel');
-    if(selEl) selEl.scrollIntoView({ block:'nearest' });
+    if(selEl && pop.scrollHeight > pop.clientHeight){
+      pop.scrollTop = Math.max(0, selEl.offsetTop - (pop.clientHeight - selEl.offsetHeight)/2);
+    }
     document.addEventListener('scroll', onDocScroll, true);
   }
 
