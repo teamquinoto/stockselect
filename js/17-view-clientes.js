@@ -528,9 +528,14 @@ function confirmCompraTerceros(){
   // ---- Task 3: EDICIÓN. Revertimos la compra previa y sus consignaciones en
   // tránsito, y recreamos todo abajo como si fuera nueva. Si alguna consignación
   // ya avanzó (hecho físico), no se toca. ----
+  // Fecha del REMITO = día en que se emite (no la de la factura de compra, que es anterior).
+  // Si se está editando una compra que ya tenía remito, se conserva la fecha de ese remito.
+  let fechaRemito = hoyISO();
   if(draft.editingId){
     const prev = db.compras.find(x=>x.id===draft.editingId);
     if(prev){
+      const remPrev = prev.remitoId ? (db.remitos||[]).find(r=> r.id===prev.remitoId) : null;
+      if(remPrev && remPrev.fecha) fechaRemito = remPrev.fecha;
       const cons = (db.consignaciones||[]).filter(cs=> cs.conjuntaId===prev.id);
       if(cons.some(cs=> cs.estado!==CONSIGN_ESTADOS.TRANSITO)){
         toast(t("cl.err.editmoved"),"warn"); return;
@@ -612,7 +617,7 @@ function confirmCompraTerceros(){
   let uRemito = null;
   if(remitoLineas.length){
     uRemito = crearRemito({ letra:"U", tipo:"salida-us",
-      fecha:fechaISO, fuente:{ tipo:"compra", id: compraDoc?compraDoc.id:null },
+      fecha:fechaRemito, fuente:{ tipo:"compra", id: compraDoc?compraDoc.id:null },
       lineas:remitoLineas, obs:(numero?t("cl.obs.invoice",{n:numero}):"")+(ownerName?(" · "+ownerName):"") });
     if(compraDoc){ compraDoc.remitoId = uRemito.id; compraDoc.remitoCodigo = uRemito.codigo; }
   }
@@ -624,7 +629,7 @@ function confirmCompraTerceros(){
       udsTerc += r.aTerc;
       crearConsignacion({
         conjuntaId: compraDoc ? compraDoc.id : null,
-        envioRef: numero, fecha: fechaISO, terceroId: ownerId,
+        envioRef: numero, fecha: fechaRemito, terceroId: ownerId,
         remitoId: uRemito ? uRemito.id : null,
         remitoCodigo: uRemito ? uRemito.codigo : "",
         productoId:r.prod.id, sku:r.prod.sku, nombre:r.prod.nombre,

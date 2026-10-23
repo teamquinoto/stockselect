@@ -1052,18 +1052,45 @@ function removeConsignacion(id){
 function openEditarTracking(remitoId){
   if(!isAdmin()){ toast(t("conj.tt.admintrack"),"warn"); return; }
   const r = remitoById(remitoId); if(!r){ toast(t("pdf.err.remNotFound"),"warn"); return; }
+  /* Fecha de despacho editable: el remito que nace de una compra (o de un pedido
+     conjunto) se genera al cargar el documento, pero la mercadería puede salir
+     días después. Los de "Despachar a tránsito" NO: su fecha ya se eligió al
+     despachar y está atada al kardex de ese movimiento. */
+  const fuenteTipo = (r.fuente && r.fuente.tipo) || "";
+  const fechaEditable = r.letra==="U" && fuenteTipo!=="transito";
+  // Límites: no antes del documento de origen (la factura / el pedido) ni después de hoy
+  // ni de la primera recepción en AR (no puede llegar antes de salir).
+  let minF = "";
+  if(fuenteTipo==="compra" && r.fuente.id){ const c=(db.compras||[]).find(x=>x.id===r.fuente.id); if(c) minF=String(c.fecha||"").slice(0,10); }
+  if(fuenteTipo==="conjunta" && r.fuente.id){ const c=(db.conjuntas||[]).find(x=>x.id===r.fuente.id); if(c) minF=String(c.fecha||"").slice(0,10); }
+  const recs = (r.recepciones||[]).map(x=> String(x.fecha||"").slice(0,10)).filter(Boolean).sort();
+  const maxF = (recs[0] && recs[0] < hoyISO()) ? recs[0] : hoyISO();
   const body = `
     <p class="hint" style="margin:0 0 12px">${t("trk.hint",{code:esc(r.codigo)})}</p>
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0;gap:10px">
+      ${fechaEditable?`<div class="field" style="grid-column:1/-1"><label>${t("trk.date")}</label><input class="inp" type="date" id="trk_fecha" value="${esc(String(r.fecha||"").slice(0,10))}" ${minF?`min="${esc(minF)}"`:""} max="${esc(maxF)}"></div>`:""}
       <div class="field"><label>${t("trk.carrier")}</label><select class="inp" id="trk_car"><option value="">—</option>${carrierOptionsHTML(r.carrier)}</select></div>
       <div class="field"><label>${t("trk.number")}</label><input class="inp" id="trk_num" value="${esc(r.tracking||"")}" placeholder="${t("trk.ph")}"></div>
     </div>`;
   buildModal(t("trk.md.title",{code:esc(r.codigo)}), body, [
     {label:t("common.cancel"),cls:"btn",act:closeModal},
     {label:t("common.save"),cls:"btn primary",act:()=>{
+      let fechaCambio = false;
+      if(fechaEditable){
+        const f = envioFechaLeer("trk_fecha", minF);
+        if(!f || f > maxF){ toast(t("trk.tt.baddate"),"warn"); return; }
+        if(f !== String(r.fecha||"").slice(0,10)){
+          r.fecha = f; fechaCambio = true;
+          // Las consignaciones de terceros que viajan en este remito salen ese mismo día.
+          (db.consignaciones||[]).forEach(cs=>{ if(cs.remitoId===r.id) cs.fecha = f; });
+        }
+      }
       r.carrier  = document.getElementById("trk_car").value||"";
       r.tracking = (document.getElementById("trk_num").value||"").trim();
-      save(); closeModal(); toast(r.tracking?t("trk.tt.saved",{code:r.codigo}):t("trk.tt.cleared",{code:r.codigo}),"up"); render();
+      save(); closeModal();
+      toast(fechaCambio ? t("trk.tt.savedship",{code:r.codigo,date:fmtDate(r.fecha)})
+                        : (r.tracking?t("trk.tt.saved",{code:r.codigo}):t("trk.tt.cleared",{code:r.codigo})),"up");
+      render();
     }}
   ], "mini");
 }
