@@ -430,7 +430,7 @@ function confirmDoc(){
                        : round2(subtotalLineas + envioMonto + cargosClienteMonto);
   const doc = {
     id: editing ? draft.editingId : uid(), tipo:draft.tipo, contraparte:draft.contraparte.trim(),
-    fecha:normISO(draft.fecha) || new Date().toISOString().slice(0,10), numero:draft.numero.trim(),
+    fecha:normISO(draft.fecha) || hoyISO(), numero:draft.numero.trim(),
     lineas: resolved.map(r=>{
       const base = { productoId:r.prod.id, sku:r.prod.sku, nombre:r.prod.nombre, cantidad:r.cantidad, precio:r.precio, costo:r.costo };
       if(isC){
@@ -573,7 +573,7 @@ function confirmCompraTerceros(){
   const ownerId   = draft.terceroId || null;
   const ownerName = ownerId ? ((clienteById(ownerId)||{}).nombre || "") : "";
   const numero    = (draft.numero||"").trim();
-  const fechaISO  = normISO(draft.fecha) || new Date().toISOString().slice(0,10);
+  const fechaISO  = normISO(draft.fecha) || hoyISO();
 
   // --- Unidades NUESTRAS -> compra normal (nace en tránsito, no mueve stock aún) ---
   const oursLines = resolved.filter(r=> r.ours>0);
@@ -807,7 +807,7 @@ function copyDoc(tipo,id){
     cargosCliente: (tipo==="venta") ? (d.cargosCliente||[]).map(c=>({ key:uid(), nota:c.nota||"", monto:c.monto||0 })) : undefined,
     vendedorId: (tipo==="venta") ? (isSeller() ? (currentVendedorId()||"") : (d.vendedorId||"")) : "",
     contraparte: tipo==="compra"?(d.contraparte||""):"",
-    fecha:new Date().toISOString().slice(0,10),
+    fecha:hoyISO(),
     numero: tipo==="venta" ? nextFacturaVenta() : "",
     clienteId: tipo==="venta"?(d.clienteId||""):"",
     envio: (tipo==="venta" && d.envio) ? {tipo:d.envio.tipo, monto:d.envio.monto||0} : {tipo:"free",monto:0},

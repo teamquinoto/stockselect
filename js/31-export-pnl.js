@@ -132,11 +132,11 @@ function exportPnL(desde, hasta){
   for(let r=5;r<=dAoa.length;r++){ ["D","E","F"].forEach(col=> setFmt(ws3, col+r, MFMT)); setFmt(ws3, "G"+r, PFMT); }
   XLSX.utils.book_append_sheet(wb, ws3, "Detail Consolidated");
 
-  XLSX.writeFile(wb, `income-statement-${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(wb, `income-statement-${hoyISO()}.xlsx`);
   toast(t("pnl.tt.exported"));
 }
 function openPnLExport(){
-  const today=new Date().toISOString().slice(0,10);
+  const today=hoyISO();
   const first=today.slice(0,8)+"01";
   buildModal(t("pnl.md.title"), `
     <p class="hint" style="margin:0 0 12px">${t("pnl.hint")}</p>

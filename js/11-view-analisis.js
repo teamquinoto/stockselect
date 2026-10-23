@@ -465,7 +465,7 @@ function finPanelHTML(P, desde, hasta){
       <td class="r num">${money(e.monto)}</td>
       <td class="r"><button class="btn ghost xs" data-findel="${esc(e.id)}" title="${t("common.delete")}" style="color:var(--alert)">\u2715</button></td>
     </tr>`).join("") : `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:14px">${t("fin.empty")}</td></tr>`;
-  const today = new Date().toISOString().slice(0,10);
+  const today = hoyISO();
   const depOpts = `<option value="">${t("fin.general")}</option>` + STORE_IDS.map(sid=>`<option value="${sid}" ${(!consolidado && effectiveStores()[0]===sid)?"selected":""}>${esc(storeName(sid))}</option>`).join("");
   return `<div class="panel chart" style="grid-column:1/-1;margin-top:16px">
     <p class="ctitle">${t("fin.title")}</p>

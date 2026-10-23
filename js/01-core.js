@@ -134,7 +134,7 @@ function costosFinAll(){ return db.costosFinancieros || (db.costosFinancieros=[]
 function registrarCostoFinanciero(o){
   const monto = round2(Math.max(0, +o.monto||0));
   if(monto<=0) return null;
-  const e = { id:uid(), fecha:(o.fecha||new Date().toISOString().slice(0,10)), monto,
+  const e = { id:uid(), fecha:(o.fecha||hoyISO()), monto,
               concepto:(o.concepto||"").trim(), store:(o.store && STORE_IDS.includes(o.store)) ? o.store : null,
               fuente:o.fuente||null, auto:!!o.auto };
   costosFinAll().push(e);
@@ -1033,7 +1033,7 @@ function crearRemito(o){
   const r = {
     id: uid(), letra, numero, codigo: letra+" "+numero,
     tipo: o.tipo || (letra==="A"?"ar-split":"salida-us"),
-    fecha: o.fecha || new Date().toISOString().slice(0,10),
+    fecha: o.fecha || hoyISO(),
     fuente: o.fuente || null,                       // {tipo:"compra"|"conjunta"|"transito", id}
     origenRemitoId: (o.origen && o.origen.id) || null,
     origenCodigo:   (o.origen && o.origen.codigo) || "",

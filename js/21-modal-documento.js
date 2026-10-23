@@ -12,7 +12,7 @@ function openDoc(tipo, pre){
   // Punto 3: un vendedor no puede cargar compras.
   if(tipo==="compra" && !puedeComprar()){ toast(t("md.err.admincompra"),"warn"); return; }
   draft = pre || {
-    tipo, contraparte:"", fecha:new Date().toISOString().slice(0,10),
+    tipo, contraparte:"", fecha:hoyISO(),
     numero: tipo==="venta" ? nextFacturaVenta() : "",
     clienteId:"", envio:{ tipo:"free", monto:0 },
     handling:0, flete:0,
@@ -333,7 +333,7 @@ function renderCostos(){
 let adjDraft = null;
 function openAjuste(prodId){
   if(!puedeAjustar()){ toast(t("md.err.adminajuste"),"warn"); return; }
-  adjDraft = { productoId: prodId||"", store: effectiveStores()[0]||STORE_IDS[0], modo:"delta", cantidad:"", fecha:new Date().toISOString().slice(0,10), obs:"" };
+  adjDraft = { productoId: prodId||"", store: effectiveStores()[0]||STORE_IDS[0], modo:"delta", cantidad:"", fecha:hoyISO(), obs:"" };
   renderAjuste();
 }
 function renderAjuste(){

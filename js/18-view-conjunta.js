@@ -51,7 +51,7 @@ function crearConsignacion(o){
   const cant = Math.max(0, +o.cantidad||0);
   const cs = {
     id: uid(),
-    fecha: o.fecha || new Date().toISOString().slice(0,10),
+    fecha: o.fecha || hoyISO(),
     conjuntaId: o.conjuntaId || null,
     envioRef: o.envioRef || "",
     remitoId: o.remitoId || null,                  // remito U it left on (internal numbering)
@@ -248,7 +248,7 @@ function conjUnidadesAjenas(){ return conjDraft.lineas.reduce((a,l)=> a + conjAj
 function openConjunta(pre){
   if(!isAdmin()){ toast(t("conj.tt.adminjoint"),"warn"); return; }
   conjDraft = pre || {
-    fecha:new Date().toISOString().slice(0,10), clienteId:"", numero:"",
+    fecha:hoyISO(), clienteId:"", numero:"",
     totalEnvio:"", obs:"", lineas:[ nuevaConjLinea() ]
   };
   renderConjModal();
@@ -476,7 +476,7 @@ function confirmConjunta(){
 
   const cli = clienteById(conjDraft.clienteId);
   const doc = {
-    id: uid(), fecha: normISO(conjDraft.fecha) || new Date().toISOString().slice(0,10),
+    id: uid(), fecha: normISO(conjDraft.fecha) || hoyISO(),
     clienteId: conjDraft.clienteId || null,
     cliente: cli ? { nombre:cli.nombre, empresa:cli.empresa } : null,
     numero: (conjDraft.numero||"").trim(),

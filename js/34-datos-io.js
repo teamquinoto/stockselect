@@ -13,7 +13,7 @@ function exportJSON(){
   const blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"});
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
-  a.download=`mayor-stock-${new Date().toISOString().slice(0,10)}.json`;
+  a.download=`mayor-stock-${hoyISO()}.json`;
   a.click(); URL.revokeObjectURL(a.href);
   toast(t("io.tt.backup"));
 }

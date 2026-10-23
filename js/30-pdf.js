@@ -400,7 +400,7 @@ function exportListaPrecios(prods){
     y += Math.max(15, wrapped.length*12);
     doc.setDrawColor(240); doc.line(M, y-5, W-M, y-5);
   });
-  doc.save(`price-list-${new Date().toISOString().slice(0,10)}.pdf`);
+  doc.save(`price-list-${hoyISO()}.pdf`);
   toast(t("pdf.pl.exported",{n:clean.length,extra:dropped>0?t("pdf.pl.excluded",{d:dropped}):""}));
 }
 
@@ -544,7 +544,7 @@ function generarProdPDF(base, stores, o){
   const em = db.config.emisor||{};
   const INK=[26,26,26], MUT=[120,120,120], LINE=[228,225,220], ACC=[217,119,6], ZEBRA=[248,247,245], ALERT=[185,28,28];
   const setInk=c=>doc.setTextColor(c[0],c[1],c[2]);
-  const hoy = fmtDate(new Date().toISOString());
+  const hoy = fmtDate(hoyISO());
   const focoTxt = stores.length===1 ? pdfxStoreLbl(stores[0]) : t("pdfx.scope.all");
   const queTxt = [o.qty&&t("pdfx.col.qty"), o.cost&&(t("pdfx.col.cost")+(o.brk?" ("+t("pdfx.brk.short")+")":"")), o.price&&t("pdfx.col.price")].filter(Boolean).join(" · ");
 
@@ -666,7 +666,7 @@ function generarProdPDF(base, stores, o){
     doc.text(pdfTxt(t("pdf.lc.page",{p:i,n:n})), W-M, H-18, {align:"right"});
   }
 
-  doc.save(pdfTxt(t("pdfx.filename")).toLowerCase()+"-"+new Date().toISOString().slice(0,10)+".pdf");
+  doc.save(pdfTxt(t("pdfx.filename")).toLowerCase()+"-"+hoyISO()+".pdf");
   toast(t("pdfx.done",{n:filas.length}));
   return true;
 }
