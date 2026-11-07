@@ -16,6 +16,29 @@
      3) POST /reindex?space=main  (admin) -> backfill: re-deriva desde
         el blob ya guardado.
 
+   LECTURA DE FACTURAS (oct 2026, portado de Prince Collections v6-v8):
+     /parse-invoice acepta { texto } (lo que la app ya sacó del PDF) o
+     { pdf }. Cascada de modelos "rápido primero, verificado": si la
+     lectura no CUADRA contra el total de la factura, prueba el siguiente.
+     Pensamiento al mínimo por familia, esquema fijo, tope de tiempo,
+     key en header. Modelos configurables con la variable GEMINI_MODELS.
+     La app primero intenta leer LOCAL (sin IA) y sólo llama acá si no
+     reconoce el formato o el usuario lo pide.
+
+   STOCK DEL GRUPO (nov 2026): /grupo/stock (entre servidores, con
+   GRUPO_KEY) y /grupo/consolidado (admin/editor). Variables: GRUPO_KEY
+   (secreto), GRUPO_PEER_URL (dirección del servidor de Prince) y,
+   opcional, GRUPO_NOMBRE. Sin costos ni precios.
+
+   DESPACHO A COURIER (nov 2026): el portal del cliente (rol store) recibe
+   courier, seguimiento y fechas de las líneas despachadas.
+
+   PERFIL EDITOR (nov 2026 · v94): equipo de Argentina. Carga compras y
+   ventas del depósito Select (y lee facturas con IA), crea/edita productos y
+   ajusta el stock de Argentina. Al guardar, el servidor deja todo lo de EE.UU.
+   (ventas, compras, stock, logística) como estaba y rechaza bajas de compras,
+   ventas, productos o clientes. Nunca puede forzar.
+
    MONEDA ÚNICA: USD. Todo el sistema opera en dólares; no hay tipo de
    cambio ni conversiones. (La tabla fx_month de la etapa bimoneda se
    elimina sola en el primer ensureFacts.)
@@ -111,12 +134,142 @@ async function verifyPass(pass, saltHex, hashHex) {
   return diff === 0;
 }
 
-function normRole(r) { r = String(r || "").toLowerCase(); return (r === "admin" || r === "store") ? r : "seller"; }
+function normRole(r) { r = String(r || "").toLowerCase(); return (r === "admin" || r === "store" || r === "editor") ? r : "seller"; }   // nov 2026: + editor
+/* Perfil EDITOR · equipo de ARGENTINA (nov 2026, v94 de la app).
+   Carga compras y ventas del depósito Select, crea/edita productos y ajusta el
+   stock de Argentina. Sobre la versión en la que trabajó (ref = lo que hay en la base):
+   - Lo que no le corresponde (configuración, gastos, plan, logística de EE.UU.…)
+     vuelve a como estaba.
+   - Ventas y compras de EE.UU.: quedan exactamente como estaban (no las puede crear,
+     cambiar ni borrar). Las de Argentina las puede crear y editar, no borrar.
+   - Productos: puede crear y editar; el stock y las capas FIFO de todo lo que no sea
+     Argentina vuelven a como estaban. No puede borrar productos ni clientes.
+   - Movimientos: los de EE.UU. quedan como estaban; los de Argentina, los del editor.
+   Devuelve {es, en} si hay que rechazar, o null si se puede seguir (mio queda corregido). */
+const EDITOR_STORE = "select";
+const EDITOR_RESTAURA = ["config", "gastos", "fpa", "stockSnaps", "solicitudes", "presupuesto",
+                         "conjuntas", "remitos", "consignaciones", "costosFinancieros"];
+const EDITOR_SIN_BAJAS = ["compras", "ventas", "productos", "clientes"];
+const _clon = x => JSON.parse(JSON.stringify(x));
+function _esAR(col, d) {
+  if (!d) return false;
+  if (col === "ventas") return String(d.storeVenta || d.store || "") === EDITOR_STORE;
+  return String(d.store || "") === EDITOR_STORE;                       // compras
+}
+/* Docs de EE.UU. tal cual estaban; los de Argentina, los del editor. */
+function _mergeDocs(col, ref, mio) {
+  const R = Array.isArray(ref[col]) ? ref[col] : [];
+  const M = Array.isArray(mio[col]) ? mio[col] : [];
+  const refById = new Map(R.filter(d => d && d.id).map(d => [d.id, d]));
+  const out = [], vistos = new Set();
+  for (const d of M) {
+    if (!d || !d.id) continue;
+    const viejo = refById.get(d.id);
+    if (viejo && !_esAR(col, viejo)) out.push(_clon(viejo));      // de EE.UU.: no se toca
+    else if (viejo || _esAR(col, d)) out.push(d);                  // de Argentina: se acepta
+    else continue;                                                 // alta nueva de EE.UU.: se ignora
+    vistos.add(d.id);
+  }
+  for (const d of R) if (d && d.id && !vistos.has(d.id) && !_esAR(col, d)) out.push(_clon(d));   // EE.UU. que faltaba
+  mio[col] = out;
+}
+function _stockProducto(ref, p) {
+  const spt = p.stockPorTienda = (p.stockPorTienda && typeof p.stockPorTienda === "object") ? p.stockPorTienda : {};
+  const lot = p.lotes = (p.lotes && typeof p.lotes === "object") ? p.lotes : {};
+  const rs = (ref && ref.stockPorTienda) || {}, rl = (ref && ref.lotes) || {};
+  const claves = new Set([...Object.keys(spt), ...Object.keys(rs), ...Object.keys(lot), ...Object.keys(rl)]);
+  for (const k of claves) {
+    if (k === EDITOR_STORE) continue;
+    if (rs[k] !== undefined) spt[k] = _clon(rs[k]); else if (ref) delete spt[k]; else spt[k] = 0;
+    if (rl[k] !== undefined) lot[k] = _clon(rl[k]); else if (ref) delete lot[k]; else lot[k] = [];
+  }
+  // total vendible = suma de depósitos (los "__" son tránsito / bóveda)
+  p.stock = Object.keys(spt).filter(k => !k.startsWith("__")).reduce((a, k) => a + (Number(spt[k]) || 0), 0);
+}
+function protegerEditor(ref, mio) {
+  if (!ref || !mio) return { es: "No hay una versión base para comparar.", en: "No base version to compare." };
+  for (const col of EDITOR_SIN_BAJAS) {
+    const tiene = new Set((Array.isArray(mio[col]) ? mio[col] : []).map(d => d && d.id));
+    const faltan = (Array.isArray(ref[col]) ? ref[col] : []).filter(d => d && d.id && !tiene.has(d.id));
+    const _EN = { ventas:"sales", compras:"purchases", productos:"products", clientes:"customers" };
+    if (faltan.length) return { es: `El perfil Editor no puede borrar ${col} (${faltan.length}).`, en: `The Editor profile can't delete ${_EN[col]||col} (${faltan.length}).` };
+  }
+  for (const k of EDITOR_RESTAURA) {
+    if (ref[k] !== undefined) mio[k] = _clon(ref[k]);
+    else delete mio[k];
+  }
+  _mergeDocs("ventas", ref, mio);
+  _mergeDocs("compras", ref, mio);
+  const refProd = new Map((Array.isArray(ref.productos) ? ref.productos : []).filter(p => p && p.id).map(p => [p.id, p]));
+  for (const p of (Array.isArray(mio.productos) ? mio.productos : [])) if (p && p.id) _stockProducto(refProd.get(p.id) || null, p);
+  // movimientos: los de EE.UU. como estaban; los de Argentina, los del editor
+  // (editar una venta/compra de Argentina rehace sus movimientos)
+  const esMovAR = m => m && String(m.store || "") === EDITOR_STORE;
+  const RM = Array.isArray(ref.movimientos) ? ref.movimientos : [];
+  const MM = Array.isArray(mio.movimientos) ? mio.movimientos : [];
+  mio.movimientos = _clon(RM.filter(m => m && !esMovAR(m))).concat(MM.filter(esMovAR))
+    .sort((a, b) => String(a.fecha || "").localeCompare(String(b.fecha || "")));
+  return null;
+}
+
+/* QUIÉN CARGÓ CADA DOCUMENTO (compras y ventas): lo pone el servidor.
+   Doc nuevo → el usuario que lo guardó. Doc que ya existía → conserva el autor
+   que tenía (nadie lo puede cambiar desde la app). Los docs viejos quedan sin autor. */
+function marcarAutor(prev, next, user) {
+  for (const col of ["compras", "ventas"]) {
+    const pm = new Map(((prev && prev[col]) || []).map(d => [d && d.id, d]));
+    for (const d of (next[col] || [])) {
+      if (!d || typeof d !== "object") continue;
+      const p = pm.get(d.id);
+      if (p) { if (p.cargadoPor) d.cargadoPor = p.cargadoPor; else delete d.cargadoPor; }
+      else if (user) d.cargadoPor = String(user);
+    }
+  }
+}
+/* Perfil EDITOR: sólo edita las compras y ventas que cargó él, salvo que el admin le
+   haya dado el permiso "editar lo de otros" (usuarios.edita_otros). Marcar una compra
+   como recibida no cuenta como edición. Devuelve el primer doc ajeno modificado o null. */
+const ED_IGNORA = new Set(["srvRev", "status", "cargadoPor"]);
+function edCanon(x) {
+  if (x === undefined) return "u";
+  if (x === null || typeof x !== "object") return JSON.stringify(x);
+  if (Array.isArray(x)) return "[" + x.map(edCanon).join(",") + "]";
+  // vacío = ausente: la app completa campos viejos al abrir (p. ej. vendedor "" → null) y eso no es una edición
+  return "{" + Object.keys(x).filter(k => !ED_IGNORA.has(k) && x[k] !== undefined && x[k] !== null && x[k] !== "").sort()
+    .map(k => JSON.stringify(k) + ":" + edCanon(x[k])).join(",") + "}";
+}
+function editorAjeno(ref, mio, user, cols) {
+  const yo = String(user || "").toLowerCase();
+  for (const col of cols) {
+    const rm = new Map(((ref && ref[col]) || []).map(d => [d && d.id, d]));
+    for (const d of (mio[col] || [])) {
+      const r = d && rm.get(d.id);
+      if (!r || String(r.cargadoPor || "").toLowerCase() === yo) continue;
+      if (edCanon(r) !== edCanon(d)) return { col, numero: r.numero || r.id, quien: r.cargadoPor || "" };
+    }
+  }
+  return null;
+}
+function msgAjeno(a) {
+  const es = a.col === "ventas" ? "las ventas" : "las compras", en = a.col === "ventas" ? "sales" : "purchases";
+  const esDoc = (a.col === "ventas" ? "La venta " : "La compra ") + a.numero, enDoc = (a.col === "ventas" ? "Sale " : "Purchase ") + a.numero;
+  return { es: `Sólo podés editar ${es} que cargaste vos. ${esDoc} ${a.quien ? "la cargó " + a.quien : "es anterior a este control"}. Pedile a un administrador que la cambie o que te dé permiso.`,
+           en: `You can only edit ${en} you entered. ${enDoc} ${a.quien ? "was entered by " + a.quien : "predates this control"}. Ask an administrator to change it or to grant you permission.` };
+}
 
 async function ensureUsuarios(env) {
   await env.DB.prepare(
     "CREATE TABLE IF NOT EXISTS usuarios (user TEXT PRIMARY KEY, pass_hash TEXT, salt TEXT, role TEXT NOT NULL DEFAULT 'seller', vendedor_id TEXT, cliente_id TEXT, name TEXT, created_at TEXT)"
   ).run();
+  // permiso del editor para editar documentos que cargaron otros (0 = sólo los suyos); si ya existe, falla y se ignora
+  try { await env.DB.prepare("ALTER TABLE usuarios ADD COLUMN edita_otros INTEGER NOT NULL DEFAULT 0").run(); } catch (_) {}
+}
+async function editaOtros(env, user) {
+  try {
+    await ensureUsuarios(env);
+    const row = await env.DB.prepare("SELECT role, edita_otros FROM usuarios WHERE user = ?").bind(String(user || "")).first();
+    return !!(row && normRole(row.role) === "editor" && Number(row.edita_otros || 0));
+  } catch (_) { return false; }
 }
 
 /* ============================================================
@@ -326,6 +479,171 @@ async function rollup(env, space, desde, hasta) {
 }
 
 /* ============================================================
+   v6 · LECTURA DE FACTURAS CON IA (Gemini) — más rápida
+   ------------------------------------------------------------
+   Por qué tardaba: los Gemini Flash "piensan" antes de responder y
+   por defecto lo hacen en nivel MEDIO. Para copiar la tabla de una
+   factura no hace falta razonar: ese pensamiento era la mayor parte
+   de la espera (y además se cobra como salida).
+   · Pensamiento al mínimo que admite cada modelo (iaPensamiento).
+   · Esquema fijo de respuesta (responseSchema): Gemini no puede
+     devolver JSON roto. Antes, un JSON roto = leer TODO de nuevo
+     con el modelo siguiente (doble espera).
+   · Tope de tiempo por intento: si un modelo se cuelga, se pasa al
+     siguiente en vez de esperar sin fin.
+   · Si un modelo rechaza un parámetro (400), se reintenta UNA vez
+     sin ese parámetro en vez de saltar de modelo.
+   · Modelos configurables con la variable GEMINI_MODELS (lista
+     separada por comas) sin tocar código.
+   ============================================================ */
+// Verificados contra ListModels de la key (oct 2026). El más rápido primero; 2.5 de red de seguridad.
+const IA_MODELOS_DEF = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.7-flash", "gemini-2.5-flash"];
+const IA_TIMEOUT_MS = 30000;          // v8: tope por intento (antes 45 s)
+const IA_TOTAL_MS = 70000;            // v8: tope TOTAL de la lectura, sumando todos los modelos
+const IA_TRANSITORIOS = [429, 500, 502, 503, 504];
+const IA_PROMPT =
+  "You are reading a purchase invoice. Extract its data. " +
+  "'precio' = net unit price; 'cantidad' = qty; 'msrp' = suggested retail price if present, else 0; " +
+  "'sku' = code before the colon; 'flete' = freight/shipping charge (not inside lineas); " +
+  "'cargos' = sum of other non-product charges such as handling fees (not inside lineas); " +
+  "'impuestos' = tax total; 'total' = invoice grand total; unknown = 0 or \"\". " +
+  "'fecha' = the INVOICE date as YYYY-MM-DD. Numeric dates on these invoices are US format " +
+  "MM/DD/YYYY (07/01/2026 is July 1, 2026, never January 7). " +
+  "Copy every product line exactly as printed, in order. Do not invent lines.";
+const IA_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    numero: { type: "STRING" },
+    fecha: { type: "STRING" },
+    proveedor: { type: "STRING" },
+    moneda: { type: "STRING" },
+    flete: { type: "NUMBER" },
+    cargos: { type: "NUMBER" },
+    impuestos: { type: "NUMBER" },
+    total: { type: "NUMBER" },
+    lineas: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          sku: { type: "STRING" },
+          nombre: { type: "STRING" },
+          cantidad: { type: "NUMBER" },
+          precio: { type: "NUMBER" },
+          msrp: { type: "NUMBER" }
+        },
+        required: ["sku", "nombre", "cantidad", "precio"],
+        propertyOrdering: ["sku", "nombre", "cantidad", "precio", "msrp"]
+      }
+    }
+  },
+  required: ["lineas"],
+  propertyOrdering: ["numero", "fecha", "proveedor", "moneda", "lineas", "flete", "cargos", "impuestos", "total"]
+};
+
+function iaModelos(env) {
+  const l = String(env.GEMINI_MODELS || "").split(",").map(s => s.trim()).filter(Boolean);
+  return l.length ? l : IA_MODELOS_DEF;
+}
+/* Nivel de pensamiento más bajo que acepta cada familia (docs de Google, sep 2026):
+   3.7 / 3.8 Flash y los Pro: "low" (no admiten "minimal") · 3 / 3.5 / 3.6 Flash y Flash-Lite:
+   "minimal" · 2.5: presupuesto 0 (apagado). */
+function iaPensamiento(model) {
+  if (/^gemini-2\.5/.test(model)) return { thinkingBudget: 0 };
+  if (/flash-lite|^gemini-3(\.[56])?-flash/.test(model)) return { thinkingLevel: "minimal" };
+  return { thinkingLevel: "low" };
+}
+/* v8: ¿la lectura cierra contra el total de la factura? Sin total, no se puede verificar (se acepta). */
+function iaCuadre(data) {
+  const lineas = (Array.isArray(data && data.lineas) ? data.lineas : [])
+    .reduce((a, l) => a + (Number(l.cantidad) || 0) * (Number(l.precio) || 0), 0);
+  const suma = r2(lineas + (Number(data.flete) || 0) + (Number(data.cargos) || 0) + (Number(data.impuestos) || 0));
+  const total = r2(Number(data && data.total) || 0);
+  const tol = Math.max(0.05, total * 0.001);
+  const ok = !total || Math.abs(total - suma) <= tol || Math.abs(total - r2(lineas)) <= tol;
+  return { ok, suma, total, verificable: !!total };
+}
+async function iaLlamar(env, model, cuerpo, limiteMs) {
+  const ac = new AbortController();
+  const corte = setTimeout(() => ac.abort(), Math.max(1000, Math.min(IA_TIMEOUT_MS, limiteMs || IA_TIMEOUT_MS)));
+  try {
+    const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent", {
+      method: "POST", signal: ac.signal,
+      // La key va en un header: en la URL queda escrita en logs de proxies y errores.
+      headers: { "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_KEY },
+      body: JSON.stringify(cuerpo)
+    });
+    let j = null;
+    try { j = await res.json(); } catch (_) {}
+    return { ok: res.ok, status: res.status, j };
+  } catch (e) {
+    const timeout = e && e.name === "AbortError";
+    return { ok: false, status: 0, j: null, red: timeout ? "timeout" : ("network: " + String((e && e.message) || e)) };
+  } finally {
+    clearTimeout(corte);
+  }
+}
+async function leerFacturaIA(env, parteDoc) {
+  const t0 = Date.now();
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  let lastErr = "sin respuesta del modelo";
+  let respaldo = null;                              // mejor lectura que NO cuadró (por si ninguna cuadra)
+  const errores = [];                               // un error por modelo, para saber cuál falló y por qué
+  for (const model of iaModelos(env)) {
+    if (Date.now() - t0 > IA_TOTAL_MS - 5000) { lastErr = "tiempo total agotado (" + Math.round((Date.now() - t0) / 1000) + " s)"; break; }
+    let pensamiento = iaPensamiento(model);
+    let esquema = true;
+    let reintentoTransitorio = false;
+    for (let intento = 1; intento <= 4; intento++) {
+      const gen = { temperature: 0, responseMimeType: "application/json" };
+      if (esquema) gen.responseSchema = IA_SCHEMA;
+      if (pensamiento) gen.thinkingConfig = pensamiento;
+      const tIntento = Date.now();
+      const r = await iaLlamar(env, model, {
+        contents: [{ parts: [{ text: IA_PROMPT }, parteDoc] }],
+        generationConfig: gen
+      }, IA_TOTAL_MS - (Date.now() - t0));
+      if (!r.ok) console.log(`parse-invoice intento · ${model} · ${Date.now() - tIntento} ms · ${r.red || ("HTTP " + r.status + " " + ((r.j && r.j.error && r.j.error.message) || "")).slice(0, 200)}`);
+      if (r.ok) {
+        let text = "";
+        try { text = r.j.candidates[0].content.parts.filter(p => !p.thought).map(p => p.text || "").join(""); } catch (_) { text = ""; }
+        try {
+          const data = JSON.parse(text.replace(/[`]{3}json|[`]{3}/g, "").trim());
+          const u = (r.j && r.j.usageMetadata) || {};
+          const ms = Date.now() - t0;
+          const c = iaCuadre(data);
+          console.log(`parse-invoice ${c.ok ? "ok" : "NO CUADRA"} · ${model} · ${parteDoc.text ? "texto" : "pdf"} · ${ms} ms · pensamiento ${u.thoughtsTokenCount || 0} tok · salida ${u.candidatesTokenCount || 0} tok · ${(data.lineas || []).length} líneas · ${c.suma} vs ${c.total}`);
+          if (c.ok) return { ok: true, data, model, ms, cuadra: c.verificable ? true : null, suma: c.suma, total: c.total };
+          // Si ninguno cuadra, se devuelve la lectura que quedó MÁS CERCA del total.
+          if (!respaldo || Math.abs(c.total - c.suma) < Math.abs(respaldo.total - respaldo.suma)) {
+            respaldo = { ok: true, data, model, ms, cuadra: false, suma: c.suma, total: c.total };
+          }
+          lastErr = "no cuadra (" + model + ")";
+          break;                                     // probamos el modelo siguiente
+        } catch (_) { lastErr = "could not parse model output (" + model + ")"; break; }
+      }
+      if (r.red) {                                   // timeout o corte de red
+        lastErr = r.red + " (" + model + ")";
+        if (r.red === "timeout" || reintentoTransitorio) break;
+        reintentoTransitorio = true; await sleep(600); continue;
+      }
+      const msg = (r.j && r.j.error && r.j.error.message) || ("HTTP " + r.status);
+      lastErr = msg + " (" + model + ")";
+      // El modelo no admite un parámetro: se reintenta el MISMO modelo sin ese parámetro.
+      if (r.status === 400 && pensamiento && /think/i.test(msg)) { pensamiento = null; continue; }
+      if (r.status === 400 && esquema && /schema/i.test(msg)) { esquema = false; continue; }
+      if (IA_TRANSITORIOS.includes(r.status) && !reintentoTransitorio) { reintentoTransitorio = true; await sleep(700); continue; }
+      break;                                         // 404 (modelo inexistente) u otro: al siguiente
+    }
+    errores.push(lastErr);
+  }
+  if (respaldo) { respaldo.ms = Date.now() - t0; return respaldo; }
+  console.log(`parse-invoice FALLÓ · ${Date.now() - t0} ms · ${lastErr}`);
+  if (errores[errores.length - 1] !== lastErr) errores.push(lastErr);   // p. ej. tiempo total agotado
+  return { ok: false, error: errores.join(" | ") };
+}
+
+/* ============================================================
    PROYECCIÓN — CLIENTE (store): sólo sus consignaciones.
    ============================================================ */
 /* LISTA CERRADA de campos: la tienda ve SU mercadería, en qué puerta está y el
@@ -341,6 +659,9 @@ function projectStore(data, identity) {
     remitoId: cs.remitoId || null, remitoCodigo: cs.remitoCodigo || "", envioRef: cs.envioRef || "",
     productoId: cs.productoId || null, sku: cs.sku || "", nombre: cs.nombre || "",
     cantidad: num(cs.cantidad), estado: cs.estado || "",
+    // nov 2026 · despacho a courier: sólo courier, seguimiento y fechas (nunca costos)
+    despacho: cs.despacho ? { carrier: String(cs.despacho.carrier || ""), tracking: String(cs.despacho.tracking || ""),
+                              fecha: String(cs.despacho.fecha || ""), entregado: String(cs.despacho.entregado || "") } : null,
     historial: (Array.isArray(cs.historial) ? cs.historial : []).map(h => ({ estado: h.estado || "", fecha: h.fecha || "" }))
   }));
   // Remitos U de sus envíos: sólo identificación + tracking (sin líneas ni montos).
@@ -351,6 +672,59 @@ function projectStore(data, identity) {
   return { config: {}, consignaciones: safeCs, remitos };
 }
 
+/* ============================================================
+   STOCK DEL GRUPO (Prince + Select · nov 2026) — sólo lectura
+   ------------------------------------------------------------
+   - GET /grupo/stock (servidor ↔ servidor): devuelve el stock de esta
+     app SIN costos ni precios. Exige el header X-Grupo-Key = GRUPO_KEY
+     (secreto compartido entre los dos Workers, 16+ caracteres).
+   - GET /grupo/consolidado (usuarios admin/editor logueados): junta el
+     stock propio con el de la otra app (GRUPO_PEER_URL) y lo devuelve.
+     El navegador nunca ve la clave ni habla con la otra app.
+   Si GRUPO_KEY o GRUPO_PEER_URL no están configurados, la otra app
+   figura "no conectada" y todo lo demás sigue igual.
+   ============================================================ */
+function grupoCodigos(p) {
+  const extra = Array.isArray(p && p.skusAsoc) ? p.skusAsoc.map(x => x && x.sku) : [];
+  return [p && p.sku, ...extra].map(s => String(s || "").trim()).filter(Boolean).slice(0, 20);
+}
+function grupoClaveOk(env, req) {
+  const k = String(env.GRUPO_KEY || ""), h = String(req.headers.get("X-Grupo-Key") || "");
+  if (k.length < 16 || h.length !== k.length) return false;
+  let d = 0; for (let i = 0; i < k.length; i++) d |= k.charCodeAt(i) ^ h.charCodeAt(i);
+  return d === 0;
+}
+async function grupoPeer(env) {
+  const base = String(env.GRUPO_PEER_URL || "").replace(/\/+$/, "");
+  if (!base || String(env.GRUPO_KEY || "").length < 16) return { app: "", error: "no-config" };
+  const ac = new AbortController(); const corte = setTimeout(() => ac.abort(), 8000);
+  try {
+    const r = await fetch(base + "/grupo/stock", { headers: { "X-Grupo-Key": env.GRUPO_KEY }, signal: ac.signal });
+    if (!r.ok) return { app: "", error: "http " + r.status };
+    const j = await r.json();
+    return j && j.ok ? j.data : { app: "", error: "respuesta inválida" };
+  } catch (e) { return { app: "", error: (e && e.name === "AbortError") ? "timeout" : "sin conexión" }; }
+  finally { clearTimeout(corte); }
+}
+
+/* Select: depósitos Swan (USA) y Select (AR); en tránsito = bucket "__transito". */
+async function grupoPropio(env) {
+  const row = env.DB ? await env.DB.prepare("SELECT data, updated_at FROM estado WHERE space = ?").bind("main").first() : null;
+  let d = null; try { d = row ? JSON.parse(row.data) : null; } catch (_) { d = null; }
+  const deps = [{ id: "swan", nombre: "Swan" }, { id: "select", nombre: "Select" }];
+  const productos = [];
+  for (const p of ((d && d.productos) || [])) {
+    if (!p || !p.id) continue;
+    const spt = p.stockPorTienda || {};
+    const stock = {}; let tot = 0;
+    for (const dp of deps) { const n = Math.max(0, Number(spt[dp.id]) || 0); stock[dp.id] = n; tot += n; }
+    const tr = Math.max(0, Number(spt.__transito) || 0);
+    if (tot <= 0 && tr <= 0) continue;
+    productos.push({ codigos: grupoCodigos(p), sku: String(p.sku || ""), nombre: String(p.nombre || ""), juego: String(p.categoria || ""),
+                     idioma: String(p.idioma || ""), stock, transito: tr });
+  }
+  return { app: String(env.GRUPO_NOMBRE || "Select").slice(0, 40), depositos: deps, productos, updated_at: row ? row.updated_at : null };
+}
 /* ---------------- Resolución de identidad en /login ---------------- */
 function resolveUserSecret(env, user, pass) {
   if (env.USERS) {
@@ -382,7 +756,8 @@ async function resolveUserDB(env, user, pass) {
           user: row.user, role,
           vendedorId: role === "seller" ? String(row.vendedor_id || row.user).trim().toLowerCase() : "",
           store: role === "store" ? String(row.cliente_id || "").trim() : "",
-          name: row.name || row.user
+          name: row.name || row.user,
+          editaOtros: role === "editor" && !!Number(row.edita_otros || 0)
         };
       }
     } catch (_) { /* si falla la tabla, caemos al secret */ }
@@ -422,8 +797,15 @@ export default {
         return json({
           ok: true, user: u.user, role: u.role,
           vendedorId: u.vendedorId || "", store: u.store || "",
-          name: u.name || u.user, token, space: "main"
+          name: u.name || u.user, token, space: "main", editaOtros: !!u.editaOtros
         }, 200, CORS);
+      }
+
+      // ---------- STOCK DEL GRUPO · servidor ↔ servidor (clave compartida, sin costos) ----------
+      if (path === "/grupo/stock") {
+        if (req.method !== "GET") return json({ error: "use GET" }, 405, CORS);
+        if (!grupoClaveOk(env, req)) return json({ error: "forbidden" }, 403, CORS);
+        return json({ ok: true, data: await grupoPropio(env) }, 200, CORS);
       }
 
       // ---------- De acá en más: token firmado obligatorio ----------
@@ -434,6 +816,14 @@ export default {
       if (!identity) return json({ error: "not authorized" }, 401, CORS);
       const role = identity.role || "admin";
 
+      // ---------- STOCK DEL GRUPO · vista consolidada (admin / editor) ----------
+      if (path === "/grupo/consolidado") {
+        if (req.method !== "GET") return json({ error: "use GET" }, 405, CORS);
+        if (role !== "admin" && role !== "editor") return json({ error: "forbidden" }, 403, CORS);
+        const [propio, otro] = await Promise.all([grupoPropio(env), grupoPeer(env)]);
+        return json({ ok: true, apps: [propio, otro] }, 200, CORS);
+      }
+
       // ---------- USUARIOS (ABM, sólo admin) ----------
       if (path === "/users") {
         if (role !== "admin") return json({ error: "forbidden" }, 403, CORS);
@@ -442,11 +832,12 @@ export default {
 
         if (req.method === "GET") {
           const { results } = await env.DB.prepare(
-            "SELECT user, role, vendedor_id, cliente_id, name, created_at FROM usuarios ORDER BY user"
+            "SELECT user, role, vendedor_id, cliente_id, name, created_at, edita_otros FROM usuarios ORDER BY user"
           ).all();
           const users = (results || []).map(r => ({
             user: r.user, role: r.role, vendedorId: r.vendedor_id || "",
-            clienteId: r.cliente_id || "", name: r.name || "", createdAt: r.created_at || ""
+            clienteId: r.cliente_id || "", name: r.name || "", createdAt: r.created_at || "",
+            editaOtros: normRole(r.role) === "editor" && !!Number(r.edita_otros || 0)
           }));
           return json({ ok: true, users }, 200, CORS);
         }
@@ -461,7 +852,7 @@ export default {
             return json({ error: "store user needs clienteId" }, 400, CORS);
           }
           const existing = await env.DB.prepare(
-            "SELECT user, pass_hash, salt, created_at FROM usuarios WHERE user = ?"
+            "SELECT user, pass_hash, salt, created_at, edita_otros FROM usuarios WHERE user = ?"
           ).bind(u).first();
           if (!existing && !(b && b.pass)) return json({ error: "new user needs a password" }, 400, CORS);
 
@@ -474,12 +865,14 @@ export default {
           const name = String((b && b.name) || u).trim();
           const createdAt = existing ? (existing.created_at || new Date().toISOString()) : new Date().toISOString();
 
+          // permiso "editar lo de otros" (sólo perfil Editor). Si no viene en el pedido, se conserva.
+          const eo = r !== "editor" ? 0 : ((b && b.editaOtros !== undefined) ? (b.editaOtros ? 1 : 0) : Number((existing && existing.edita_otros) || 0));
           await env.DB.prepare(
-            "INSERT INTO usuarios (user, pass_hash, salt, role, vendedor_id, cliente_id, name, created_at) " +
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?) " +
+            "INSERT INTO usuarios (user, pass_hash, salt, role, vendedor_id, cliente_id, name, created_at, edita_otros) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) " +
             "ON CONFLICT(user) DO UPDATE SET pass_hash=excluded.pass_hash, salt=excluded.salt, role=excluded.role, " +
-            "vendedor_id=excluded.vendedor_id, cliente_id=excluded.cliente_id, name=excluded.name"
-          ).bind(u, hash, salt, r, vendedorId, clienteId, name, createdAt).run();
+            "vendedor_id=excluded.vendedor_id, cliente_id=excluded.cliente_id, name=excluded.name, edita_otros=excluded.edita_otros"
+          ).bind(u, hash, salt, r, vendedorId, clienteId, name, createdAt, eo).run();
 
           return json({ ok: true, user: u }, 200, CORS);
         }
@@ -521,70 +914,32 @@ export default {
         return json({ ok: true, reindexed: res }, 200, CORS);
       }
 
-      // ---------- PARSE INVOICE (sólo admin) ----------
+      // ---------- PARSE INVOICE (sólo admin) · lógica en leerFacturaIA() (portada de Prince Collections) ----------
       if (path === "/parse-invoice") {
         if (req.method !== "POST") return json({ error: "use POST" }, 405, CORS);
-        if (role !== "admin") return json({ ok: false, error: "forbidden" }, 403, CORS);
+        if (role !== "admin" && role !== "editor") return json({ ok: false, error: "forbidden" }, 403, CORS);   // nov 2026: el editor carga compras
         if (!env.GEMINI_KEY) return json({ ok: false, error: "config: missing GEMINI_KEY" }, 500, CORS);
         let b;
         try { b = await req.json(); } catch { return json({ ok: false, error: "invalid JSON" }, 400, CORS); }
+        // La app puede mandar el TEXTO ya extraído del PDF (más rápido) o el PDF entero (escaneados).
+        const texto = typeof (b && b.texto) === "string" ? b.texto.slice(0, 60000).trim() : "";
         const pdf = b && b.pdf;
         const mime = (b && b.mime) || "application/pdf";
-        if (!pdf) return json({ ok: false, error: "missing 'pdf'" }, 400, CORS);
-
-        const MODELS = ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-2.5-flash"];
-        const prompt =
-          "You are reading a purchase invoice (e.g. Coqui Hobby style). Return ONLY a JSON object, no markdown, " +
-          "no extra text, with this exact shape: " +
-          "{\"numero\":\"\",\"fecha\":\"\",\"proveedor\":\"\",\"moneda\":\"\",\"flete\":0," +
-          "\"lineas\":[{\"sku\":\"\",\"nombre\":\"\",\"cantidad\":0,\"precio\":0,\"msrp\":0}]}. " +
-          "RULES:\n" +
-          "- 'precio' = the NET unit price / NET PRICE of the line (the real unit cost).\n" +
-          "- 'msrp' = the MSRP unit price if present, else 0.\n" +
-          "- 'cantidad' = QTY (units).\n" +
-          "- 'sku' = the item code before the colon (e.g. 'BAN2696877'); 'nombre' = the rest of the description.\n" +
-          "- 'flete' = the SUM of all freight/shipping/handling amounts (lines like 'Freight and Handling', " +
-          "'Handling Fees', 'ZZZFEES', shipping). Use the EXT/line amount for these, not a unit price.\n" +
-          "- DO NOT include freight/shipping/handling lines inside 'lineas'. Only real products go in 'lineas'.\n" +
-          "- 'fecha' MUST be returned as YYYY-MM-DD.\n" +
-          "- If a value is unknown use 0 or an empty string. Numbers must be plain (no thousands separators, dot decimals).";
-
-        const gReq = {
-          contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mime, data: pdf } }] }],
-          generationConfig: { temperature: 0, response_mime_type: "application/json", thinkingConfig: { thinkingLevel: "low" } }
-        };
-        const TRANSIENT = [429, 500, 502, 503, 504];
-        const MAX_INTENTOS = 2;
-        const sleep = ms => new Promise(r => setTimeout(r, ms));
-        let lastErr = "sin respuesta del modelo";
-
-        for (const model of MODELS) {
-          const gUrl = "https://generativelanguage.googleapis.com/v1beta/models/" +
-                       model + ":generateContent?key=" + encodeURIComponent(env.GEMINI_KEY);
-          for (let intento = 1; intento <= MAX_INTENTOS; intento++) {
-            let gRes, gJson;
-            try {
-              gRes = await fetch(gUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(gReq) });
-              gJson = await gRes.json();
-            } catch (e) {
-              lastErr = "network: " + String(e && e.message || e);
-              if (intento < MAX_INTENTOS) await sleep(intento * 700);
-              continue;
-            }
-            if (gRes.ok) {
-              let text = "";
-              try { text = gJson.candidates[0].content.parts.map(p => p.text || "").join(""); } catch { text = ""; }
-              try {
-                const data = JSON.parse(text.replace(/```json|```/g, "").trim());
-                return json({ ok: true, data, model }, 200, CORS);
-              } catch (e) { lastErr = "could not parse model output (" + model + ")"; break; }
-            }
-            lastErr = (gJson && gJson.error && gJson.error.message) || ("HTTP " + gRes.status);
-            if (TRANSIENT.includes(gRes.status)) { if (intento < MAX_INTENTOS) await sleep(intento * 700); continue; }
-            break;
+        if (!texto && !pdf) return json({ ok: false, error: "missing 'pdf'" }, 400, CORS);
+        if (!texto) {
+          if (typeof pdf !== "string" || pdf.length > 14_000_000) {
+            return json({ ok: false, error: "file too large", detalle: "El archivo es demasiado grande (máx. ~10 MB)." }, 413, CORS);
+          }
+          if (!["application/pdf", "image/png", "image/jpeg", "image/webp"].includes(mime)) {
+            return json({ ok: false, error: "unsupported file", detalle: "Tipo de archivo no soportado." }, 400, CORS);
           }
         }
-        return json({ ok: false, error: "gemini error", detalle: lastErr }, 502, CORS);
+        const parteDoc = texto
+          ? { text: "INVOICE TEXT (extracted from the PDF; each line is one printed row, columns separated by spaces):\n" + texto }
+          : { inline_data: { mime_type: mime, data: pdf } };
+        const r = await leerFacturaIA(env, parteDoc);
+        if (r.ok) return json({ ok: true, data: r.data, model: r.model, ms: r.ms, cuadra: r.cuadra, suma: r.suma, total: r.total }, 200, CORS);
+        return json({ ok: false, error: "gemini error", detalle: r.error }, 502, CORS);
       }
 
       if (!env.DB) return json({ error: "config: missing D1 binding 'DB'" }, 500, CORS);
@@ -619,7 +974,7 @@ export default {
         if (!body || typeof body.data !== "object") return json({ error: "missing 'data'" }, 400, CORS);
 
         const baseRev = Number(body.baseRev || 0);
-        const force = !!body.force;
+        const force = role === "editor" ? false : !!body.force;   // nov 2026: el editor nunca fuerza
         const cur = await env.DB.prepare(
           "SELECT data, rev, updated_at FROM estado WHERE space = ?"
         ).bind(space).first();
@@ -632,6 +987,20 @@ export default {
             updated_at: cur ? cur.updated_at : null
           }, 409, CORS);
         }
+
+        // nov 2026 · EDITOR: sólo compras, productos, tránsito y su stock (ver protegerEditor).
+        const prevData = cur ? JSON.parse(cur.data) : null;
+        if (role === "editor") {
+          if (!cur) return json({ error: "forbidden", es: "El perfil Editor no puede inicializar la base.", en: "The Editor profile can't initialize the database." }, 403, CORS);
+          const pe = protegerEditor(JSON.parse(cur.data), body.data);
+          if (pe) return json({ error: "editor", es: pe.es, en: pe.en }, 403, CORS);
+          // sólo sus propias compras y ventas, salvo permiso del admin (se lee de la base en cada guardado)
+          if (!(await editaOtros(env, identity.u))) {
+            const aj = editorAjeno(prevData, body.data, identity.u, ["compras", "ventas"]);
+            if (aj) { const m = msgAjeno(aj); return json({ error: "editor", es: m.es, en: m.en }, 403, CORS); }
+          }
+        }
+        marcarAutor(prevData, body.data, identity.u);
 
         const newRev = currentRev + 1;
         const now = new Date().toISOString();

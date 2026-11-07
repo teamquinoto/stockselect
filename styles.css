@@ -27,7 +27,7 @@
     --nav-ink:#6f6250;
     --topbar-bg:#ffffff;
     --login-bg:#f2e9db;
-    --on-accent:#1c1810;
+    --on-accent:#ffffff;   /* v103: letra blanca sobre el ámbar en modo claro (en oscuro sigue negra) */
     --up-ink:#0f7a34;
     --down-ink:#b91c1c;
     --alert-ink:#b91c1c;
@@ -958,7 +958,7 @@
 
 
 /* 3 · Headers de tabla pegajosos, justo debajo de la topbar fija (sólo tablas de contenido) */
-#main table thead th{top:var(--topbar-h);z-index:3;box-shadow:inset 0 -1px 0 var(--line)}
+#main table thead th{top:0;z-index:3;box-shadow:inset 0 -1px 0 var(--line)}   /* top:0: en Select la barra de arriba NO queda fija al scrollear (antes quedaba un hueco de 54px con filas asomando arriba del encabezado) */
 #main .recv-scroll thead th{top:0;z-index:1}   /* tabla con scroll propio: se mantiene como estaba */
 @media (max-width:860px){ #main table thead th{top:0} }
 
