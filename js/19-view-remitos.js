@@ -35,7 +35,7 @@ function remitoLineasVisibles(r){
 function remitoUnidades(r){ return remitoLineasVisibles(r).reduce((a,l)=> a+(l.cantidad||0), 0); }
 /* Detalle corto: dueños involucrados; si es 100% propio, lo marca como tal. */
 function remitoDetalle(r){
-  const owners = [...new Set(remitoLineasVisibles(r).map(l=> (l.owner||"").trim()).filter(Boolean))];
+  const owners = [...new Set(remitoLineasVisibles(r).map(l=> nombreVis(l.owner||"")).filter(Boolean))];   // v89: con mayúscula
   if(owners.length) return owners.join(", ");
   if(r.letra==="U") return t("rem.detail.own");
   return (r.obs||"").trim() || "—";
@@ -145,7 +145,7 @@ function viewRemitos(){
         <td class="r num">${qty(remitoUnidades(r))}</td>
         <td class="r" style="white-space:nowrap">
           ${R?`<button class="btn ghost sm" data-rmtl="${esc(r.id)}" title="${t("rem.tl.btn")}" aria-expanded="${tlOpen?"true":"false"}">${t("rem.tl.btn")} ${tlOpen?"\u25b4":"\u25be"}</button>`:""}
-          ${R && R.abierto && isAdmin()?`<button class="btn up sm" data-rmrecv="${esc(r.id)}">${ICO.receive}${t("env.b.receive")}</button>`:""}
+          ${R && R.abierto && isAdmin()?`<button class="btn primary sm" data-rmrecv="${esc(r.id)}">${ICO.receive}${t("env.b.receive")}</button>`:""}
           <button class="btn ghost sm" data-rmdoc="${esc(r.id)}" title="${t('rem.dl',{code:esc(r.codigo)})}">${ICO.pdf}PDF</button>
         </td>
       </tr>`;

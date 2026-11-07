@@ -79,7 +79,7 @@
     if(r) return r;
     r=document.createElement("div");
     r.id="obRoot"; r.className="ob-scrim";
-    r.innerHTML='<div id="obCard" class="ob-card" role="dialog" aria-modal="true" aria-label="Stock Select"></div>';
+    r.innerHTML='<div id="obCard" class="ob-card" role="dialog" aria-modal="true" aria-label="Select"></div>';
     document.body.appendChild(r);
     r.addEventListener("click", function(e){
       var el=e.target.closest && e.target.closest("[data-ob-next],[data-ob-back],[data-ob-skip],[data-ob-lang],[data-ob-dot]");

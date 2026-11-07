@@ -13,7 +13,7 @@ function viewProd(){
     <div class="title"><h2>${t("pr.title")}</h2><p>${t("pr.sub")}</p></div>
     <div class="actions">
       ${total?`<button class="btn" id="btnExpPrecios">${ICO.price}${t("pr.btn.pricelist")}</button>`:""}
-      ${(total&&isAdmin())?`<button class="btn" id="btnExpPdf" title="${t('pr.btn.exppdf.tip')}">${ICO.landed}${t("pr.btn.exppdf")}</button>`:""}
+      ${total?`<button class="btn" id="btnExpPdf" title="${t(verCostos()?'pr.btn.exppdf.tip':'pr.btn.exppdf.tip2')}">${ICO.landed}${t(verCostos()?"pr.btn.exppdf":"pr.btn.exppdf2")}</button>`:""}
       ${(total&&isAdmin())?`<button class="btn" id="btnSel">${selMode?ICO.x+t("common.cancel"):ICO.select+t("pr.btn.select")}</button>`:""}
       ${puedeEditarProductos()?`<button class="btn primary" data-newp>${ICO.plus}${t("pr.btn.newprod")}</button>`:""}
     </div>
@@ -32,7 +32,7 @@ function viewProd(){
     ${total ? `
     ${filterBarHTML("p", prodFiltros)}
     <div class="table-scroll"><table>
-      <thead><tr>${selMode?`<th class="c"><input type="checkbox" id="selall"></th>`:""}${sortTh(prodFiltros,"sku","SKU","")}${sortTh(prodFiltros,"nombre",t("prod.l.name"),"")}${sortTh(prodFiltros,"lang",t("pr.th.lang"),"c")}${sociedadColsHead(prodFiltros)}${sortTh(prodFiltros,"stock",stockView==="cases"?t("pr.th.stockcases"):t("pr.th.stock"),"r")}${sortTh(prodFiltros,"costo",t("pr.th.lastcost"),"r")}${sortTh(prodFiltros,"pventa",t("prod.l.listprice"),"r")}<th></th></tr></thead>
+      <thead><tr>${selMode?`<th class="c"><input type="checkbox" id="selall"></th>`:""}${verSku()?sortTh(prodFiltros,"sku","SKU",""):""}${sortTh(prodFiltros,"nombre",t("prod.l.name"),"")}${sortTh(prodFiltros,"lang",t("pr.th.lang"),"c")}${sociedadColsHead(prodFiltros)}${sortTh(prodFiltros,"stock",stockView==="cases"?t("pr.th.stockcases"):t("pr.th.stock"),"r")}${verCostos()?sortTh(prodFiltros,"costo",t("pr.th.lastcost"),"r"):""}${sortTh(prodFiltros,"pventa",t("prod.l.listprice"),"r")}<th></th></tr></thead>
       <tbody id="prodBody"></tbody></table></div>`
       : emptyState(t("pr.empty.title"),t("pr.empty.sub"), puedeEditarProductos()?{label:t("pr.btn.newprod"),onclick:"openProd()"}:null)}
   </div>`;
@@ -41,7 +41,7 @@ function renderProdRows(){
   const body=document.getElementById("prodBody"); if(!body) return;
   const list=filtrarProds(prodFiltros);
   const showCols = showSociedadCols();
-  const cols = (selMode?1:0)+7+(showCols?STORE_IDS.length:0);
+  const cols = (selMode?1:0)+7+(showCols?STORE_IDS.length:0)-(verSku()?0:1)-(verCostos()?0:1);
   body.innerHTML = stockRowset(list, prodFiltros).map(({p,kind})=>{
     const isT = kind==="transit";
     const units = isT ? transitoEnFoco(p) : stockEnFoco(p);
@@ -59,14 +59,14 @@ function renderProdRows(){
       : "—");   // consolidado: el precio varía por depósito -> ver por depósito
     return `<tr data-ficha="${p.id}" class="${isT?'row-transit':''}" style="cursor:pointer">
       ${chk}
-      <td><span class="sku">${esc(p.sku||"—")}</span></td>
+      ${verSku()?`<td><span class="sku">${esc(p.sku||"—")}</span></td>`:""}
       <td>${esc(p.nombre)}${flag}</td>
       <td class="c">${esc(langLabel(p.idioma))}</td>
       ${perStore}
       <td class="r ${cls}">${stockDisplay(p,units)}</td>
-      <td class="r num">${money(cost)}</td>
+      ${verCostos()?`<td class="r num">${money(cost)}</td>`:""}
       <td class="r num">${priceCell}</td>
-      <td class="r"><button class="btn ghost sm" data-editp="${p.id}">${ICO.edit}${t("common.edit")}</button></td>
+      <td class="r">${puedeEditarProductos()?`<button class="btn ghost sm" data-editp="${p.id}">${ICO.edit}${t("common.edit")}</button>`:""}</td>
     </tr>`;
   }).join("") || `<tr><td colspan="${cols}" style="text-align:center;color:var(--muted);padding:22px">${t("pr.nomatch")}</td></tr>`;
   const cnt=document.getElementById("prodCount");

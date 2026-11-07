@@ -38,7 +38,18 @@ function viewMov(){
       <input class="inp num" id="mvmax" placeholder="${t("mov.maxval")}" value="${esc(movFiltros.vmax)}" style="width:86px">
       <button class="btn ghost sm" id="mclear">${t("dash.f.clear")}</button>
     </div>
-    <div class="feed" id="movBody"></div>`
+    <div class="table-scroll"><table class="mov-tbl">
+      <thead><tr>
+        ${sortTh(movFiltros,"fecha",t("common.date"),"")}
+        ${sortTh(movFiltros,"tipo",t("md.lbl.type"),"")}
+        ${showStore?sortTh(movFiltros,"store",t("md.lbl.deposit"),""):""}
+        ${sortTh(movFiltros,"nombre",t("common.product"),"")}
+        ${sortTh(movFiltros,"cant",t("fi.th.qty"),"r")}
+        ${sortTh(movFiltros,"valor",t("fi.th.unitvalue"),"r")}
+        ${sortTh(movFiltros,"ref",t("fi.th.source"),"")}
+        <th id="movActTh" hidden></th>
+      </tr></thead>
+      <tbody id="movBody"></tbody></table></div>`
       : emptyState(t("mov.empty.title"),t("mov.empty.sub"))}
   </div>`;
 }
@@ -88,41 +99,70 @@ function filtrarMovs(){
   });
   return out;
 }
+/* v100 · Movimientos en TABLA, igual que la otra app del grupo (antes lista tipo feed). */
+(function(){
+  try{
+    Object.assign(I18N.en, { "mov.ref.sale":"Sale", "mov.ref.purchase":"Purchase", "mov.ref.adjust":"Adjustment" });
+    Object.assign(I18N.es, { "mov.ref.sale":"Venta", "mov.ref.purchase":"Compra", "mov.ref.adjust":"Ajuste" });
+  }catch(e){}
+})();
+function _movHora(d){ return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
+function movOrigenHTML(m){
+  const raw = String(m.ref||"");
+  const sub = x => x ? `<div class="mv-sub" title="${esc(x)}">${esc(x)}</div>` : "";
+  const main = x => `<div class="mv-reftxt" title="${esc(x)}">${esc(x)}</div>`;
+  if((m.refTipo==="venta"||m.refTipo==="compra") && m.refId){
+    const mm = /^(?:Sale|Purchase|Venta|Compra|Invoice|Factura)\s*([^·]*?)\s*(?:·\s*(.*))?$/.exec(raw) || [];
+    const num = (mm[1]||"").trim(), quien = nombreVis(mm[2]||"");
+    const kind = m.refTipo==="venta" ? t("mov.ref.sale") : t("mov.ref.purchase");
+    return `<button type="button" class="mv-doc" data-verdoc="${m.refTipo}:${esc(m.refId)}" title="${esc(kind)}${num?` #${esc(num)}`:""}">${esc(kind)}${num?` #${esc(num)}`:""}</button>` + sub(quien);
+  }
+  if(m.tipo==="inv-out" || m.tipo==="inv-return") return main(m.tipo==="inv-out" ? t("mov.tovault") : t("mov.fromvault")) + sub(m.obs);
+  if(m.tipo==="ajuste" || m.refTipo==="ajuste"){
+    const esApertura = [I18N.en["prod.obs.opening"], I18N.es["prod.obs.opening"]].includes(raw);
+    return main(esApertura ? t("prod.obs.opening") : t("mov.ref.adjust")) + sub(esApertura ? "" : m.obs);
+  }
+  // v101: textos largos (tránsito, remitos, puertas): lo primero arriba y el resto abajo, cortado con "…"
+  if(raw.includes(" · ")){ const [a, ...rest] = raw.split(" · "); return main(a) + sub(rest.join(" · ")); }
+  return raw ? main(raw) : `<span class="mv-sub">—</span>`;
+}
 function renderMovRows(){
   const body=document.getElementById("movBody"); if(!body) return;
   const all=filtrarMovs();
   const list=all.slice(0,400);
   const showStore = allowedStores().length>1;
-  const cols = showStore?8:7;
+  const hayAcciones = list.some(m=> m.tipo==="ajuste");      // la columna de borrar ajuste sólo si hay alguno
+  const th = document.getElementById("movActTh"); if(th) th.hidden = !hayAcciones;
+  const cols = (showStore?7:6) + (hayAcciones?1:0);
   body.innerHTML = list.map(m=>{
     const isAdj=m.tipo==="ajuste";
     const isInv=m.tipo==="inv-out"||m.tipo==="inv-return";
     const signed=(m.delta!=null)?m.delta:(m.tipo==="entrada"?m.cantidad:-m.cantidad);
     const up=signed>=0;
     const d=new Date(m.fecha);
-    const _lc=(typeof lang==="function"&&lang()==="es")?"es-AR":"en-US";
-    const fecha=d.toLocaleDateString(_lc)+" "+d.toLocaleTimeString(_lc,{hour:"2-digit",minute:"2-digit",hour12:false});
+    const fechaTxt=fmtDate(isoLocal(d)), horaTxt=_movHora(d);
     const pill=isInv?`<span class="pill inv">◈ ${m.tipo==="inv-out"?t("mov.tovault"):t("mov.fromvault")}</span>`
                :isAdj?`<span class="pill adj">⇄ ${t("mov.adjust")}</span>`
                :`<span class="pill ${up?'in':'out'}">${up?t("mov.in"):t("mov.out")}</span>`;
     const deltaCls=isAdj?"flat":(up?'up':'down');
     const accion=isAdj?`<button class="btn ghost sm" data-delaj="${m.id}" style="color:var(--alert)" title="${t("mov.deladjust")}">${ICO.trash}</button>`:"";
-    return `<div class="fitem">
-      <div class="ftime">${fecha}</div>
-      <div class="fmain">
-        <div class="fname">${pill} ${esc(m.nombre)}</div>
-        <div class="fref"><span class="sku">${esc(m.sku||"—")}</span> · ${esc(m.ref||"—")}${showStore?` · ${isDeposito(m.store)?storeBadge(m.store):esc(storeName(m.store))}`:""}</div>
-      </div>
-      <div class="fright">
-        <div class="fdelta ${deltaCls}">${up?'+':'−'}${qty(Math.abs(signed))}</div>
-        <div class="fval">${money(m.valorUnit)}${accion?` &nbsp;${accion}`:""}</div>
-      </div>
-    </div>`;
-  }).join("") || `<div class="fitem" style="display:block;text-align:center;color:var(--muted);padding:22px">${t("mov.nomatch")}</div>`;
+    const dep = !m.store ? "—" : (isDeposito(m.store) ? storeBadge(m.store) : `<span class="hint">${esc(storeName(m.store))}</span>`);
+    return `<tr>
+      <td class="mv-date">${fechaTxt}<span>${horaTxt}</span></td>
+      <td>${pill}</td>
+      ${showStore?`<td class="mv-soc">${dep}</td>`:""}
+      <td class="mv-prod"><div class="mv-name" title="${esc(m.nombre||"")}">${esc(m.nombre||"—")}</div>${verSku()?`<div class="mv-sku">${esc(m.sku||"—")}</div>`:""}</td>
+      <td class="r delta ${deltaCls}">${up?'+':'−'}${qty(Math.abs(signed))}</td>
+      <td class="r num">${(+m.valorUnit||0) ? money(m.valorUnit) : '<span class="hint">—</span>'}</td>
+      <td class="mv-ref">${movOrigenHTML(m)}</td>
+      ${hayAcciones?`<td class="r mv-act">${accion}</td>`:""}
+    </tr>`;
+  }).join("") || `<tr><td colspan="${cols}" style="text-align:center;color:var(--muted);padding:22px">${t("mov.nomatch")}</td></tr>`;
   const cnt=document.getElementById("movCount");
   const totalF=db.movimientos.filter(m=>!m.store||effectiveStores().includes(m.store)).length;
   if(cnt) cnt.textContent = (all.length===totalF?`${totalF} ${t("mov.entries")}`:t("mov.showing",{n:all.length,total:totalF}))+(list.length<all.length?t("mov.cap400"):"");
   body.querySelectorAll("[data-delaj]").forEach(b=> b.onclick=()=> deleteAjuste(b.dataset.delaj));
+  body.querySelectorAll("[data-verdoc]").forEach(b=> b.onclick=()=>{ const [tp,id]=b.dataset.verdoc.split(":"); verDoc(tp,id); });
 }
 function wireMovFiltros(){
   if(!document.getElementById("movBody")) return;
@@ -151,15 +191,44 @@ function wireMovFiltros(){
   renderMovRows();
 }
 /* Borrar un ajuste manual: revierte su efecto en el stock y saca el asiento */
+/* v103 · (igual que Prince) Borrar un ajuste manual: revierte su efecto en el stock de SU sociedad y en las
+   capas FIFO, y saca el asiento. Antes sólo tocaba el espejo p.stock (que se
+   recalcula desde stockPorTienda), así que el borrado no revertía nada real.
+   TRABA: si el ajuste sumó unidades que ya se usaron (vendidas / movidas), no se
+   puede borrar — dejaría stock negativo. Mismo criterio que las compras. */
 function deleteAjuste(id){
   const m=db.movimientos.find(x=>x.id===id && x.tipo==="ajuste"); if(!m) return;
   const p=prodById(m.productoId);
   const d=(m.delta!=null)?m.delta:0;
+  const store = m.store || STORE_IDS[0];
+  if(p){
+    const cur = stockDe(p, store);
+    let libres = cur;
+    if(d>0 && m.refId){   // ajustes nuevos: su capa está marcada con el refId del movimiento
+      const quedan = fifoLayers(p, store).filter(L=> L.refId===m.refId).reduce((a,L)=>a+(L.cantidad||0),0);
+      libres = Math.min(quedan, cur);
+    }
+    if(d>0 && libres < d-0.0001){
+      toast(t("mov.lock.tt"),"warn");
+      alert(t("mov.lock.adj",{name:p.nombre, store:storeName(store), n:qty(d), used:qty(round4(d-libres))}));
+      return;
+    }
+  }
   const msg = p
-    ? t("mov.cf.deladj",{name:p.nombre,delta:`${d>=0?'+':'−'}${qty(Math.abs(d))}`,from:qty(p.stock),to:qty(+((p.stock||0)-d).toFixed(4))})
+    ? t("mov.cf.deladj",{name:p.nombre, delta:(d>=0?'+':'−')+qty(Math.abs(d)), from:qty(stockDe(p,store)), to:qty(round4(stockDe(p,store)-d))})
     : t("mov.cf.deladj.gone");
   if(!confirm(msg)) return;
-  if(p) p.stock = +((p.stock||0) - d).toFixed(4);
+  if(p){
+    if(d>0){
+      if(m.refId && fifoLayers(p, store).some(L=> L.refId===m.refId)) fifoQuitarCompra(p, store, m.refId);   // saca exactamente su capa
+      else fifoConsumir(p, store, d);                                                                     // ajuste viejo sin vínculo
+    } else if(d<0){
+      if(Array.isArray(m.consumed) && m.consumed.length) fifoDevolver(p, store, m.consumed);             // repone las capas exactas
+      else fifoEntrada(p, store, -d, m.valorUnit||p.ultimoCosto||0, "revert", null);                    // ajuste viejo
+    }
+    p.stockPorTienda[store] = round4(stockDe(p, store) - d);
+    recalcStockMirror(p);
+  }
   db.movimientos = db.movimientos.filter(x=>x.id!==id);
   save(); toast(t("mov.toast.deleted"),"warn"); render();
 }

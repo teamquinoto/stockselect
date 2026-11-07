@@ -6,88 +6,80 @@
 /* ============================================================
    VISTA: Datos
    ============================================================ */
+/* v85 · textos de Configuración → General (reordenada) */
+(function(){
+  try{
+    Object.assign(I18N.en, {
+      "cfg.title":"General settings", "cfg.sub":"Company details, collection accounts and your account.",
+      "cfg.company":"Company & invoicing", "cfg.company.hint":"These details print on the PDF invoices{rem}.", "cfg.company.rem":" and delivery notes",
+      "cfg.contact":"Company details", "cfg.save":"Save changes", "cfg.saved.hint":"Changes apply to new documents.",
+      "cfg.acct":"Account & data", "cfg.acct.hint":"Your session, sync and backups.",
+      "cfg.session":"Session", "cfg.session.sub":"{u} · {role} · inventory {sp}, rev {rev}{dirty}",
+      "cfg.numbering":"Numbering · first number", "cfg.num.fac":"Invoice", "cfg.num.remu":"Delivery note U", "cfg.num.rema":"Delivery note A",
+      "cfg.inv.u":"Each document starts from this number. Only used until the first one is issued.",
+      "pnl.var.nobudget":"Import a sales plan in the Sales plan tab to see the variance here."
+    });
+    Object.assign(I18N.es, {
+      "cfg.title":"Configuración general", "cfg.sub":"Datos de la empresa, cuentas de cobro y tu cuenta.",
+      "cfg.company":"Empresa y facturación", "cfg.company.hint":"Estos datos salen en la factura en PDF{rem}.", "cfg.company.rem":" y en los remitos",
+      "cfg.contact":"Datos de la empresa", "cfg.save":"Guardar cambios", "cfg.saved.hint":"Los cambios aplican a los documentos nuevos.",
+      "cfg.acct":"Cuenta y datos", "cfg.acct.hint":"Tu sesión, la sincronización y las copias.",
+      "cfg.session":"Sesión", "cfg.session.sub":"{u} · {role} · inventario {sp}, rev {rev}{dirty}",
+      "cfg.numbering":"Numeración · número inicial", "cfg.num.fac":"Factura", "cfg.num.remu":"Remito U", "cfg.num.rema":"Remito A",
+      "cfg.inv.u":"Cada documento arranca desde este número. Solo se usa hasta emitir el primero.",
+      "pnl.var.nobudget":"Importá un plan en la pestaña Plan de ventas para ver el desvío acá."
+    });
+  }catch(e){ console.warn("cfg i18n", e); }
+})();
 function viewDatos(){
   const conf = syncState==="conflict";
   const roleLbl = isAdmin() ? t("dat.acct.admin") : t("dat.acct.seller",{name:esc((session&&session.name)||"—")});
-  const sepL = `<div style="height:1px;background:var(--line);margin:2px 18px"></div>`;
-  const subH = (ti,hi)=>`<div style="padding:16px 18px 0"><div style="font-size:var(--fs-sm);font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.4px">${ti}</div>${hi?`<p class="hint" style="margin:5px 0 0">${hi}</p>`:""}</div>`;
-  const saveBtn = `<button class="btn" data-savecfg style="justify-self:start;margin-top:4px">${ICO.save}${t("common.save")}</button>`;
+  /* v85 · Configuración → General reordenada (igual en las dos apps):
+       fila 1 · Empresa y facturación | Cuentas de cobro (misma altura)
+       fila 2 · Cuenta y datos, a lo ancho (lista de ajustes)
+     v139/v86: se quitó "Numeración": ya están facturando y cada documento sigue solo
+     desde el último emitido (los valores guardados no se tocan).
+     Estilos en configuracion.css. */
+  const em = db.config.emisor||{};
+  const row = (tit,sub,acts)=>`<div class="cfg-row"><div class="cfg-row-txt"><b>${tit}</b><span>${sub}</span></div><div class="cfg-row-acts">${acts}</div></div>`;
+  const fld = (id,label,val,cls,extra)=>{ const num = !!(cls && cls.includes("num")), c = num ? (cls||"").replace("num","").trim() : (cls||"");
+    return `<div class="field ${c}"><label for="${id}">${label}${extra||""}</label><input class="inp${num?" num":""}" id="${id}" value="${esc(val)}"${num?' inputmode="numeric"':""}></div>`; };
+  const sesion = t("cfg.session.sub",{u:`<b>${esc(session?session.user:"—")}</b>`, role:esc(roleLbl), sp:`<b>${esc(session?session.space:"main")}</b>`, rev:syncMeta.syncedRev, dirty:syncMeta.dirty?t("dat.inv.dirty"):""});
   return `
-  <div class="head"><div class="title"><h2>${t("dat.title")}</h2><p>${t("dat.sub")}</p></div></div>
+  <div class="head"><div class="title"><h2>${t("cfg.title")}</h2><p>${t("cfg.sub")}</p></div></div>
 
-  <div class="panel">
-    <div class="phead"><h3>${t("dat.acct")}</h3><span class="hint" data-syncchip>●</span></div>
-    <div class="grid-form">
-      <p class="hint" style="margin:0">
-        ${t("dat.acct.signedin",{u:`<b>${esc(session?session.user:"—")}</b>`,role:`<b>${esc(roleLbl)}</b>`})}
-      </p>
-      ${conf ? `<div class="banner warn">
-        <div>${t("dat.conf.title")}
-          <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn sm" data-confserver>${t("dat.conf.takeserver")}</button>
-            <button class="btn sm danger" data-conflocal>${t("dat.conf.overwrite")}</button>
-          </div>
+  <div class="cfg-grid">
+    <section class="panel cfg-card">
+      <div class="cfg-head"><div><h3>${t("cfg.company")}</h3><p>${t("cfg.company.hint",{rem:t("cfg.company.rem")})}</p></div></div>
+      <div class="cfg-body">
+        <div class="cfg-form">
+          ${fld("cfgEmNom", t("dat.issuer.name"), em.nombre||"", "cfg-wide")}
+          ${fld("cfgEmDir", t("dat.issuer.addr"), em.direccion||"", "cfg-wide")}
+          ${fld("cfgEmMail", t("dat.issuer.email"), em.email||"")}
+          ${fld("cfgEmTel", t("dat.issuer.phone"), em.tel||"")}
         </div>
-      </div>`:""}
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn" data-syncnow>${ICO.sync}${t("dat.syncnow")}</button>
-        <button class="btn danger" data-logout>${ICO.logout}${t("tb.logout")}</button>
       </div>
-      <p class="hint" style="margin:0">
-        ${t("dat.inv.line",{sp:`<b>${esc(session?session.space:"main")}</b>`,rev:syncMeta.syncedRev,dirty:syncMeta.dirty?t("dat.inv.dirty"):""})}.
-      </p>
-    </div>
-  </div>
+      <div class="cfg-foot"><span class="hint">${t("cfg.saved.hint")}</span><button class="btn primary sm" data-savecfg>${ICO.save||""}${t("cfg.save")}</button></div>
+    </section>
 
-  <div class="panel">
-    <div class="phead"><h3>${t("dat.grp.billing")}</h3><span class="hint">${t("dat.issuer.hint")}</span></div>
-    <div class="grid-form" style="grid-template-columns:1fr 1fr">
-      <div class="field" style="grid-column:1/3"><label>${t("dat.issuer.name")}</label><input class="inp" id="cfgEmNom" value="${esc((db.config.emisor||{}).nombre||"")}"></div>
-      <div class="field" style="grid-column:1/3"><label>${t("dat.issuer.addr")}</label><input class="inp" id="cfgEmDir" value="${esc((db.config.emisor||{}).direccion||"")}"></div>
-      <div class="field"><label>${t("dat.issuer.email")}</label><input class="inp" id="cfgEmMail" value="${esc((db.config.emisor||{}).email||"")}"></div>
-      <div class="field"><label>${t("dat.issuer.phone")}</label><input class="inp" id="cfgEmTel" value="${esc((db.config.emisor||{}).tel||"")}"></div>
-    </div>
-    ${sepL}
-    ${subH(t("dat.grp.numbering"), "")}
-    <div class="grid-form" style="grid-template-columns:1fr 1fr">
-      <div class="field"><label>${t("dat.set.startinv")}</label><input class="inp num" id="cfgFac" value="${esc(String(db.config.facturaInicio||101))}"></div>
-      ${isAdmin()?`<div class="field"><label>${t("dat.set.remu")} <span class="hint" style="font-weight:400">${t("dat.set.remu.hint")}</span></label><input class="inp num" id="cfgRemU" value="${esc(String(remitoSeqInicio("U")))}"></div>
-      <div class="field"><label>${t("dat.set.rema")} <span class="hint" style="font-weight:400">${t("dat.set.rema.hint")}</span></label><input class="inp num" id="cfgRemA" value="${esc(String(remitoSeqInicio("A")))}"></div>`:""}
-      ${saveBtn}
-    </div>
-  </div>
+    ${cuentasCobroCardHTML("")}
 
-  ${isAdmin()?`<div class="panel">
-    <div class="phead"><h3>${t("dat.bud.title")}</h3></div>
-    <p class="hint" style="margin:0;padding:14px 18px 0">${t("dat.bud.hint")}</p>
-    <div class="grid-form" style="grid-template-columns:1fr 1fr 1fr auto;align-items:end">
-      <div class="field"><label>${t("dat.fx.month")}</label><input class="inp" type="month" id="budMes"></div>
-      <div class="field"><label>${t("dat.bud.net")} <span class="hint" style="font-weight:400">${CCY_SYM}</span></label><input class="inp num" id="budNet" inputmode="decimal" placeholder="0"></div>
-      <div class="field"><label>${t("dat.bud.contrib")} <span class="hint" style="font-weight:400">${CCY_SYM}</span></label><input class="inp num" id="budContrib" inputmode="decimal" placeholder="0"></div>
-      <button class="btn primary" data-budadd style="margin-bottom:2px">${ICO.plus}${t("dat.bud.add")}</button>
-    </div>
-    <div style="margin-top:12px">
-      ${(function(){
-        const bp=db.config.presupuesto||{}; const ks=Object.keys(bp).sort();
-        if(!ks.length) return `<p class="hint" style="margin:0;padding:0 18px 14px">${t("dat.bud.empty")}</p>`;
-        return `<div class="table-scroll"><table><thead><tr><th>${t("dat.fx.month")}</th><th class="r">${t("dat.bud.net")}</th><th class="r">${t("dat.bud.contrib")}</th><th></th></tr></thead><tbody>`+ks.map(k=>{ const [y,mo]=k.split("-"); const e=bp[k]||{}; const sym=CCY_SYM; return `<tr><td style="font-weight:600">${t("cal.mon."+((+mo)-1))} ${y}</td><td class="r num">${sym} ${nf0.format(+e.net||0)}</td><td class="r num">${sym} ${nf0.format(+e.contrib||0)}</td><td class="r"><button class="btn sm danger" data-buddel="${k}">${t("common.delete")}</button></td></tr>`; }).join("")+`</tbody></table></div>`;
-      })()}
-    </div>
-  </div>`:""}
-
-  <div class="panel">
-    <div class="phead"><h3>${t("dat.grp.backup")}</h3></div>
-    <div class="grid-form">
-      <p class="hint" style="margin:0">${t("dat.backup.sub")}</p>
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn" data-export>${ICO.export}${t("dat.exportjson")}</button>
-      </div>
-    </div>
+      <section class="panel cfg-card cfg-full">
+        <div class="cfg-head"><div><h3>${t("cfg.acct")}</h3><p>${t("cfg.acct.hint")}</p></div><span class="hint" data-syncchip>●</span></div>
+        ${conf ? `<div class="banner warn cfg-conf"><div>${t("dat.conf.title")}
+            <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn sm" data-confserver>${t("dat.conf.takeserver")}</button>
+              <button class="btn sm danger" data-conflocal>${t("dat.conf.overwrite")}</button>
+            </div></div></div>`:""}
+        <div class="cfg-list">
+          ${row(t("cfg.session"), sesion, `<button class="btn sm" data-syncnow>${ICO.sync||""}${t("dat.syncnow")}</button><button class="btn sm" data-logout>${ICO.logout||""}${t("tb.logout")}</button>`)}
+          ${row(t("dat.grp.backup"), t("dat.backup.sub"), `<button class="btn sm" data-export>${ICO.download||""}${t("dat.exportjson")}</button>`)}
+        </div>
+      </section>
   </div>`;
-  /* v69 · Se quitaron "Importar JSON" y la "Zona de peligro" (Borrar todo): en el día a
-     día no tienen uso y un clic de más reemplazaba o vaciaba toda la base. Exportar JSON
-     queda como copia extra. */
 }
+  /* v85 · Se quitó "Objetivos por mes (presupuesto)": el P&L y el Resumen comparan contra el
+     Plan de ventas (Finanzas → Plan de ventas). Los objetivos viejos quedan guardados, sin uso. */
 
 /* ---------- utilidades UI ---------- */
 function esc(s){ return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
@@ -108,8 +100,7 @@ function wire(){
   m.querySelectorAll("[data-ficha]").forEach(tr=> tr.onclick=()=> openFicha(tr.dataset.ficha));
   wireDashFiltros();
   wireProd();
-  wireAnalisis();
-  if(typeof wirePnL==="function") wirePnL();
+  wireAnalisis();   // v83: el P&L, Resumen, Gastos y Plan se cablean desde el router (sólo en su vista)
   wireDocFiltros();
   wireMovFiltros();
   wireClientes();
@@ -143,7 +134,7 @@ function wire(){
   });
   const exp=m.querySelector("[data-export]"); if(exp) exp.onclick=exportJSON;
   m.querySelectorAll("[data-savecfg]").forEach(cfg=> cfg.onclick=()=>{
-    const fi=parseInt(document.getElementById("cfgFac").value,10); if(!isNaN(fi)&&fi>0) db.config.facturaInicio=fi;
+    const fe=document.getElementById("cfgFac"); if(fe){ const fi=parseInt(fe.value,10); if(!isNaN(fi)&&fi>0) db.config.facturaInicio=fi; }   // v139/v86: ya no se muestra (la numeración sigue sola)
     const ru=document.getElementById("cfgRemU"); if(ru){ const n=parseInt(ru.value,10); if(!isNaN(n)&&n>0){ db.config.remitoSeq=db.config.remitoSeq||{}; db.config.remitoSeq.U={inicio:n}; } }
     const ra=document.getElementById("cfgRemA"); if(ra){ const n=parseInt(ra.value,10); if(!isNaN(n)&&n>0){ db.config.remitoSeq=db.config.remitoSeq||{}; db.config.remitoSeq.A={inicio:n}; } }
     db.config.emisor = {
@@ -202,7 +193,7 @@ async function apiUsers(method, body, qs){
   if(!res.ok) throw new Error(j.error||("HTTP "+res.status));
   return j;
 }
-function usrRoleLabel(r){ return r==="admin"?t("usr.role.admin"):(r==="store"?t("usr.role.store"):t("usr.role.seller")); }
+function usrRoleLabel(r){ return r==="admin"?t("usr.role.admin"):(r==="store"?t("usr.role.store"):(r==="editor"?t("usr.role.editor"):t("usr.role.seller"))); }
 function clienteNombre(id){ const c=(db.clientes||[]).find(x=>x.id===id); return c?(c.nombre||c.id):(id||"\u2014"); }
 
 function viewUsuarios(){
@@ -222,6 +213,7 @@ function viewUsuarios(){
         <div class="field" style="flex:0 0 130px"><label>${t("usr.f.role")}</label>
           <select class="inp" id="uNewRole">
             <option value="seller">${t("usr.role.seller")}</option>
+            <option value="editor">${t("usr.role.editor")}</option>
             <option value="store">${t("usr.role.store")}</option>
             <option value="admin">${t("usr.role.admin")}</option>
           </select></div>
@@ -249,7 +241,7 @@ function usrSubline(u){
   const role=usrRoleLabel(u.role);
   if(u.role==="seller"){ const v=vendedorById(u.vendedorId); const r=v?round2((v.rate!=null?v.rate:(db.config.commissionRate||0))*100):null; return "@"+u.user+" \u00b7 "+role+(r!=null?(" \u00b7 "+r+"% com."):""); }
   if(u.role==="store"){ return "@"+u.user+" \u00b7 "+role+" \u00b7 "+clienteNombre(u.clienteId); }
-  return "@"+u.user+" \u00b7 "+role;
+  return "@"+u.user+" \u00b7 "+role+(u.role==="editor"&&u.editaOtros?" \u00b7 "+t("usr.sub.editothers"):"");
 }
 function renderUsrCards(users){
   if(!users || !users.length) return `<p class="hint">${t("usr.none")}</p>`;
@@ -318,10 +310,15 @@ function openUsuarioModal(u){
       <div class="field"><label>${t("usr.f.role")}</label>
         <select class="inp" id="eRole">
           <option value="seller" ${u.role==="seller"?"selected":""}>${t("usr.role.seller")}</option>
+          <option value="editor" ${u.role==="editor"?"selected":""}>${t("usr.role.editor")}</option>
           <option value="store" ${u.role==="store"?"selected":""}>${t("usr.role.store")}</option>
           <option value="admin" ${u.role==="admin"?"selected":""}>${t("usr.role.admin")}</option>
         </select></div>
       <div class="field um-when-seller" style="${u.role==="seller"?"":"display:none"}"><label>${t("usr.f.comm")}</label><input class="inp num" id="eComm" value="${esc(String(rate))}"></div>
+      <div class="field um-when-editor" style="grid-column:1/-1;${u.role==="editor"?"":"display:none"}">
+        <label class="u-flex u-items-center u-gap2" style="text-transform:none;letter-spacing:0;font-size:var(--fs-sm);font-weight:600;color:var(--text);cursor:pointer">
+          <input type="checkbox" id="eOtros" ${u.editaOtros?"checked":""} style="width:16px;height:16px;accent-color:var(--accent)"> ${t("usr.f.editothers")}</label>
+        <div class="hint" style="font-size:12px;margin-top:4px">${t("usr.f.editothers.h")}</div></div>
       <div class="field um-when-store" style="grid-column:1/3;${u.role==="store"?"":"display:none"}"><label>${t("usr.f.cliente.pick")}</label>
         <select class="inp" id="eCli"><option value="">${t("usr.f.cliente.none")}</option>${cliOpts}</select></div>
     </div>`;
@@ -337,6 +334,7 @@ function openUsuarioModal(u){
         const name=(document.getElementById("eName").value||"").trim();
         const pass=document.getElementById("ePass").value||"";
         const body2={ user:u.user, role, name };
+        if(role==="editor"){ const eo=document.getElementById("eOtros"); body2.editaOtros = !!(eo && eo.checked); }
         if(pass) body2.pass=pass;
         if(role==="seller"){
           const vid=(u.role==="seller" && u.vendedorId) ? u.vendedorId : u.user;
@@ -360,6 +358,7 @@ function openUsuarioModal(u){
   if(er) er.onchange=()=>{
     const r=er.value;
     document.querySelectorAll(".um-when-seller").forEach(el=> el.style.display = r==="seller"?"":"none");
+    document.querySelectorAll(".um-when-editor").forEach(el=> el.style.display = r==="editor"?"":"none");
     document.querySelectorAll(".um-when-store").forEach(el=> el.style.display = r==="store"?"":"none");
   };
 }

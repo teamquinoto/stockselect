@@ -8,7 +8,7 @@
    ============================================================ */
 function openFicha(id){
   const p = prodById(id); if(!p) return;
-  const movs = db.movimientos.filter(m=>m.productoId===id)
+  const movs = db.movimientos.filter(m=>m.productoId===id && (!isEditor() || m.store===EDITOR_STORE))   // v94: el editor ve sólo los movimientos de Argentina
                  .sort((a,b)=> new Date(a.fecha)-new Date(b.fecha));
 
   let bal=0; const serie=[0];
@@ -28,21 +28,21 @@ function openFicha(id){
       ? `<button class="btn ghost sm" data-fdoc="${m.refTipo}:${m.refId}">${esc(m.ref||t("fi.viewinvoice"))}</button>`
       : `<span style="color:var(--muted)">${esc(m.ref||"—")}</span>`;
     const isInv = m.tipo==="inv-out"||m.tipo==="inv-return";
-    const pill = isInv ? `<span class="pill inv">◈ ${m.tipo==="inv-out"?t("fi.pill.tovault"):t("fi.pill.fromvault")}</span>`
+    const pill = isInv ? `<span class="pill inv">${ICO.vault}${m.tipo==="inv-out"?t("fi.pill.tovault"):t("fi.pill.fromvault")}</span>`
                : isAdj ? `<span class="pill adj">${t("fi.pill.adjust")}</span>`
                : `<span class="pill ${up?'in':'out'}">${up?t("mov.in"):t("mov.out")}</span>`;
     return `<tr>
       <td class="num">${fecha}</td>
       <td>${pill}${m.store?` ${isDeposito(m.store)?storeBadge(m.store):`<span class="pill" style="opacity:.7">${esc(storeName(m.store))}</span>`}`:""}</td>
       <td class="r delta ${isAdj?'flat':(up?'up':'down')}">${up?'+':'−'}${qty(Math.abs(signed))}</td>
-      <td class="r num">${money(m.valorUnit)}</td>
+      ${verCostos()?`<td class="r num">${money(m.valorUnit)}</td>`:""}
       <td class="r num" style="font-weight:600">${qty(bal)}</td>
       <td>${origen}</td>
     </tr>`;
   }).reverse().join("");
 
-  const totComp = movs.filter(m=>m.refTipo==="compra").reduce((a,m)=>a+m.cantidad,0);
-  const totVend = movs.filter(m=>m.refTipo==="venta").reduce((a,m)=>a+m.cantidad,0);
+  const totComp = movs.filter(m=>m.refTipo==="compra").reduce((a,m)=>a+Math.abs(m.cantidad!=null?+m.cantidad:(+m.delta||0)),0);
+  const totVend = movs.filter(m=>m.refTipo==="venta").reduce((a,m)=>a+Math.abs(m.cantidad!=null?+m.cantidad:(+m.delta||0)),0);
   const margen = (p.precioVenta||0)-(p.ultimoCosto||0);
   const margenPct = p.precioVenta>0 ? (margen/p.precioVenta*100) : 0;
   const totalStock = stockTotalP(p);
@@ -50,18 +50,18 @@ function openFicha(id){
   const inTr = (typeof transUnits==="function") ? transUnits(p) : 0;
   const perStore = STORE_IDS.map(s=>`${storeBadge(s)} <b>${qty(stockDe(p,s))}</b>`).join(" · ")
     + (inTr>0 ? ` · <span style="color:var(--muted)">⋯ ${t("fi.transit")}: <b>${qty(inTr)}</b></span>` : "")
-    + (held>0 ? ` · <span style="color:var(--accent-ink)">◈ ${t("fi.vault")}: <b>${qty(held)}</b></span>` : "");
+    + (held>0 ? ` · <span class="inv-inline" style="color:var(--accent-ink)">${ICO.vault} ${t("fi.vault")}: <b>${qty(held)}</b></span>` : "");
   const badge = esInversion(p)?' <span class="pill inv">'+t("inv.pill")+'</span>':(esBloqueado(p)?' <span class="pill blocked">'+t("fi.badge.blocked")+'</span>':'');
 
   const body = `
-    <div class="kpis" style="grid-template-columns:repeat(4,1fr);margin-bottom:18px">
-      <div class="kpi"><div class="lbl">${t("fi.kpi.totalstock")}</div><div class="val" style="color:${totalStock<0?'var(--alert)':'inherit'}">${qty(totalStock)}</div><div class="sub">${esc(perStore)}</div></div>
-      <div class="kpi"><div class="lbl">${t("fi.kpi.avgcost")}</div><div class="val">${money(stockTotalP(p)>0?round2(valorFifoTotal(p)/stockTotalP(p)):0)}</div><div class="sub">${t("fi.kpi.fifovalued",{m:money(valorFifoTotal(p))})}</div></div>
-      <div class="kpi"><div class="lbl">${t("fi.kpi.listprice")}</div><div class="val">${moneyOpt(p.precioVenta)}</div><div class="sub">${p.precioVenta>0?t("fi.kpi.margin",{p:nf0.format(margenPct)}):t("fi.kpi.noprice")}${badge}</div></div>
+    <div class="kpis fi-kpis" style="grid-template-columns:repeat(${verCostos()?4:3},1fr);margin-bottom:18px">
+      <div class="kpi"><div class="lbl">${t("fi.kpi.totalstock")}</div><div class="val" style="color:${totalStock<0?'var(--alert)':'inherit'}">${qty(totalStock)}</div><div class="sub">${perStore}</div></div>
+      ${verCostos()?`<div class="kpi"><div class="lbl">${t("fi.kpi.avgcost")}</div><div class="val">${money(stockTotalP(p)>0?round2(valorFifoTotal(p)/stockTotalP(p)):0)}</div><div class="sub">${t("fi.kpi.fifovalued",{m:moneyRound(valorFifoTotal(p))})}</div></div>`:""}
+      <div class="kpi"><div class="lbl">${t("fi.kpi.listprice")}</div><div class="val">${moneyOpt(p.precioVenta)}</div><div class="sub">${p.precioVenta>0?(verCostos()?t("fi.kpi.margin",{p:nf0.format(margenPct)}):""):t("fi.kpi.noprice")}${badge}</div></div>
       <div class="kpi"><div class="lbl">${t("fi.kpi.boughtsold")}</div><div class="val" style="font-size:20px"><span class="delta up">${qty(totComp)}</span> / <span class="delta down">${qty(totVend)}</span></div><div class="sub">${t("fi.kpi.lifetime")}</div></div>
     </div>
 
-    ${(()=>{ const b=landedBuildup(p); return (b.intl>0||b.arg>0) ? `<div class="panel" style="box-shadow:none;margin-bottom:16px">
+    ${(()=>{ if(!verCostos()) return ""; const b=landedBuildup(p); return (b.intl>0||b.arg>0) ? `<div class="panel" style="box-shadow:none;margin-bottom:16px">
       <div class="phead"><h3>${t("fi.landed.title")}</h3><span class="hint">${t("fi.landed.hint")}</span></div>
       <div style="padding:10px 14px;display:flex;gap:18px;flex-wrap:wrap;align-items:baseline">
         <span>${t("fi.landed.us")} <b>${money(b.us)}</b></span><span style="color:var(--muted)">+</span>
@@ -78,16 +78,16 @@ function openFicha(id){
     <div class="panel" style="box-shadow:none">
       <div class="phead"><h3>${t("fi.kardex.title")}</h3><span class="hint">${t("fi.kardex.hint")}</span></div>
       ${movs.length ? `<div class="table-scroll"><table>
-        <thead><tr><th>${t("fi.th.date")}</th><th>${t("fi.th.movement")}</th><th class="r">${t("fi.th.qty")}</th><th class="r">${t("fi.th.unitvalue")}</th><th class="r">${t("fi.th.balance")}</th><th>${t("fi.th.source")}</th></tr></thead>
+        <thead><tr><th>${t("fi.th.date")}</th><th>${t("fi.th.movement")}</th><th class="r">${t("fi.th.qty")}</th>${verCostos()?`<th class="r">${t("fi.th.unitvalue")}</th>`:""}<th class="r">${t("fi.th.balance")}</th><th>${t("fi.th.source")}</th></tr></thead>
         <tbody>${rows}</tbody></table></div>`
         : `<div class="empty"><p>${t("fi.kardex.empty")}</p></div>`}
     </div>`;
 
-  buildModal(`${p.sku?("["+esc(p.sku)+"] "):""}${esc(p.nombre)}`, body, [
-    puedeAjustar() ? {label:t("fi.btn.adjust"),cls:"btn",act:()=>{ closeModal(); openAjuste(id); }} : null,
-    (puedeInvertir() && totalStock>0) ? {label:t("fi.btn.toinv"),cls:"btn",act:()=>{ closeModal(); openSendToInvestment(id); }} : null,
-    (puedeInvertir() && held>0) ? {label:t("fi.btn.retvault"),cls:"btn",act:()=>{ closeModal(); openReturnFromInvestment(id); }} : null,
-    puedeEditarProductos() ? {label:t("fi.btn.editprod"),cls:"btn",act:()=>{ closeModal(); openProd(id); }} : null,
+  buildModal(`${(p.sku&&verSku())?("["+esc(p.sku)+"] "):""}${esc(p.nombre)}`, body, [
+    puedeAjustar() ? {label:t("fi.btn.adjust"),icon:ICO.adjust,cls:"btn",act:()=>{ closeModal(); openAjuste(id); }} : null,
+    (puedeInvertir() && totalStock>0) ? {label:t("fi.btn.toinv"),icon:ICO.vault,cls:"btn",act:()=>{ closeModal(); openSendToInvestment(id); }} : null,
+    (puedeInvertir() && held>0) ? {label:t("fi.btn.retvault"),icon:ICO.vault,cls:"btn",act:()=>{ closeModal(); openReturnFromInvestment(id); }} : null,
+    puedeEditarProductos() ? {label:t("fi.btn.editprod"),icon:ICO.edit,cls:"btn",act:()=>{ closeModal(); openProd(id); }} : null,
     {label:t("common.close"),cls:"btn primary",act:closeModal}
   ].filter(Boolean), true);
 

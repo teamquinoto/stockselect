@@ -71,7 +71,7 @@ function isBucket(id){ return id===INV_STORE || id===TRANSITO_STORE; }
    conversiones. Si algo se paga en pesos, el operador lo pasa a USD a
    mano ANTES de cargarlo. Por eso money() no recibe moneda.
    ============================================================ */
-const CCY_SYM = "US$";
+const CCY_SYM = "USD";   // v100: "USD" como en la otra app (antes "US$")
 function storePais(store){ const s=STORES.find(x=>x.id===store); return (s && s.pais) || ""; }
 
 /* ============================================================
@@ -154,21 +154,38 @@ function costosFinEnRango(desde, hasta, stores){
   });
 }
 
-const ROLES = { ADMIN:"admin", SELLER:"seller", STORE:"store" };
+const ROLES = { ADMIN:"admin", SELLER:"seller", STORE:"store", EDITOR:"editor" };   // v79: + editor
 function currentRole(){ return (session && session.role) || ROLES.ADMIN; }  // Local mode (no session) = full access
 function isAdmin(){ return currentRole()===ROLES.ADMIN; }
 function isSeller(){ return currentRole()===ROLES.SELLER; }
+/* v79/v94 · PERFIL EDITOR (equipo de Argentina): carga compras y ventas del depósito
+   Select, crea/edita productos y ajusta el stock de Argentina. No ve costos, márgenes,
+   comisiones, SKU ni nada de EE.UU. salvo cuánto stock hay. No borra documentos.
+   El servidor rechaza cualquier cambio sobre lo de EE.UU. y las bajas. */
+function isEditor(){ return currentRole()===ROLES.EDITOR; }
 function isStore(){ return currentRole()===ROLES.STORE; }
 /* For a store user, the AR client (terceroId) whose merchandise they may track. */
 function storeClienteId(){ return (session && session.store) || ""; }
 /* Vistas reservadas al admin. Un vendedor NO carga compras, no manda a inversión,
    no ve análisis/comisiones globales ni la exportación de datos. Sólo vende. */
-const ADMIN_VIEWS = ["compras","inv","analisis","pnl","datos","mov","conjunta","remitos"];
+const ADMIN_VIEWS = ["compras","inv","analisis","pnl","resumen","gastos","plan","datos","mov","conjunta","remitos","grupo"];   // v83: + Resumen, Gastos de estructura, Plan de ventas
+const EDITOR_VIEWS = ["dash","ventas","compras","prod","grupo"];   // v94: editor de Argentina (compras y ventas del depósito Select). La logística (conjunta, remitos) la maneja el admin.
+function vistaPermitida(v){ if(isAdmin()) return true; if(isEditor()) return EDITOR_VIEWS.includes(v); return !ADMIN_VIEWS.includes(v); }
 /* Capacidades gateadas por rol (punto 3). El modo Local (sin sesión) = admin. */
-function puedeComprar(){ return isAdmin(); }        // cargar compras / recibir facturas
+function puedeComprar(){ return isAdmin() || isEditor(); }        // cargar compras / recibir facturas
 function puedeInvertir(){ return isAdmin(); }       // enviar / traer de la bóveda de inversión
-function puedeAjustar(){ return isAdmin(); }        // ajustes de inventario
-function puedeEditarProductos(){ return isAdmin(); }// ABM de productos
+function puedeAjustar(){ return isAdmin() || isEditor(); }   // ajustes de inventario (v94: el editor, sólo en el depósito de Argentina)
+function puedeEditarProductos(){ return isAdmin() || isEditor(); }// ABM de productos
+/* v94 · Qué ve cada perfil (pedido del cliente):
+   - Costos y valuaciones de stock: sólo admin (vendedores y editor ven unidades).
+   - Margen de SU venta: admin y vendedor de EE.UU. (el editor de Argentina no gana por venta).
+   - SKU: código de orden interno → lo ve todo el equipo (admin, vendedores, editor);
+     NO los clientes (portal, factura, remito al dueño, catálogo y lista de precios). (v100) */
+function verCostos(){ return isAdmin(); }
+function verMargenVenta(){ return isAdmin() || isSeller(); }
+function verSku(){ return !(typeof isStore==="function" && isStore()); }
+/* El editor trabaja sólo con el depósito de Argentina (Select). */
+const EDITOR_STORE = "select";
 /* SOCIEDADES: akira/silver (y futuras) son las entidades que COMPRAN. Definen la
    procedencia de cada lote, NO un local de venta. El stock es un pool único: para
    VENDER no se elige sociedad. Todos ven el mismo pool; el desglose por sociedad
@@ -183,7 +200,7 @@ function sociedadColsCells(p, isT){ return showSociedadCols() ? STORE_IDS.map(s=
 let activeStore = "all";
 /* Swan y Select son depósitos FÍSICOS (no un pool): el foco por depósito
    aplica a stock, compras, ventas, kardex, análisis y P&L. */
-const SOCIETY_VIEWS = ["dash", "prod", "compras", "ventas", "mov", "analisis", "pnl"];
+const SOCIETY_VIEWS = ["dash", "prod", "compras", "ventas", "mov", "analisis", "pnl", "resumen"];   // v83: el Resumen también se abre por depósito
 function viewUsesSociety(){ return SOCIETY_VIEWS.includes(view); }
 function effectiveStores(){
   const allow = allowedStores();
@@ -201,7 +218,9 @@ function langLabel(v){ const l=LANGS.find(x=>x[0]===v); return l?l[1]:(v||"—")
 
 /* URL del servidor (Cloudflare Worker). Si algún día lo redeploya en otra
    cuenta/nombre, cambiar solo esta línea. */
-const API_URL = "https://stockselect-api.teamquinoto.workers.dev";
+/* Local: en tu PC (localhost) la app habla con el servidor local del puerto 8788,
+   nunca con el de producción. Publicada, sigue usando el de siempre. */
+const API_URL = (location.hostname==="localhost"||location.hostname==="127.0.0.1") ? "http://localhost:8788" : "https://stockselect-api.teamquinoto.workers.dev";
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
 
@@ -678,7 +697,7 @@ async function pullNow(){
     if(!j.data){ if(hasData(db)) await pushNow(true); else { syncMeta.syncedRev=0; saveSyncMeta(); setSyncState("idle"); } return; }
     if(serverRev===syncMeta.syncedRev && !syncMeta.dirty){ setSyncState("idle"); return; }
     if(serverRev>syncMeta.syncedRev && !syncMeta.dirty){
-      db=j.data; syncMeta.syncedRev=serverRev; syncMeta.dirty=false; saveSyncMeta(); persistLocal();
+      db=migrate(j.data); syncMeta.syncedRev=serverRev;   // v103: igual que Prince, normalizar lo que baja del servidor syncMeta.dirty=false; saveSyncMeta(); persistLocal();
       setSyncState("idle"); render(); toast(t("core.tt.updated")); return;
     }
     if(syncMeta.dirty && serverRev!==syncMeta.syncedRev){ conflictPayload=j; setSyncState("conflict"); if(view==="datos") render(); return; }
@@ -693,12 +712,19 @@ function resolveConflict(keepLocal){
   if(!conflictPayload) return;
   if(keepLocal){ syncMeta.syncedRev=conflictPayload.rev; saveSyncMeta(); pushNow(true); }
   else{
-    db=conflictPayload.data; syncMeta.syncedRev=conflictPayload.rev; syncMeta.dirty=false; saveSyncMeta(); persistLocal();
+    db=migrate(conflictPayload.data); syncMeta.syncedRev=conflictPayload.rev; syncMeta.dirty=false; saveSyncMeta(); persistLocal();
     render(); toast(t("core.tt.tookserver"));
   }
   conflictPayload=null; setSyncState("idle");
 }
 
+const SYNC_ICO = {
+  off:     '<path d="M2 2l20 20"/><path d="M5.8 9.5A6 6 0 0 0 7 21h9.5"/><path d="M20.4 17.4A4.5 4.5 0 0 0 17.5 10h-1.3A7 7 0 0 0 9.2 5.3"/>',
+  idle:    '<path d="M17.5 19H7a5 5 0 1 1 1.3-9.8A7 7 0 0 1 21 11.5a4 4 0 0 1-3.5 7.5z"/><path d="M9.5 14l2 2 3.5-3.5"/>',
+  saving:  '<path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>',
+  offline: '<path d="M2 2l20 20"/><path d="M5.8 9.5A6 6 0 0 0 7 21h9.5"/><path d="M20.4 17.4A4.5 4.5 0 0 0 17.5 10h-1.3A7 7 0 0 0 9.2 5.3"/>',
+  conflict:'<path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/>'
+};
 function paintSync(){
   const map={
     off:["●",t("core.sync.off"),"var(--muted)"],
@@ -708,7 +734,15 @@ function paintSync(){
     conflict:["▲",t("core.sync.conflict"),"var(--alert)"]
   };
   const [dot,txt,col]=map[syncState]||map.off;
-  document.querySelectorAll("[data-syncchip]").forEach(el=>{ el.style.color=col; el.textContent=dot+" "+txt; });
+  // v107: mismo indicador que Prince (nubecita con tilde; gira al guardar)
+  const st = map[syncState] ? syncState : "off";
+  document.querySelectorAll("[data-syncchip]").forEach(el=>{
+    el.style.color = ""; el.dataset.state = st; el.setAttribute("role","status");
+    el.innerHTML = `<svg class="sc-ico${st==="saving"?" spin":""}" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SYNC_ICO[st]}</svg>`;
+    const sp=document.createElement("span"); sp.textContent=txt; el.appendChild(sp);
+    if(st==="offline" && I18N.en["core.sync.offline.sub"]){ const sub=document.createElement("span"); sub.className="sc-sub"; sub.textContent=" · "+t("core.sync.offline.sub"); el.appendChild(sub); }
+    el.title = txt;
+  });
   document.querySelectorAll("[data-syncicon]").forEach(el=>{
     el.style.color = (syncState==="idle"||syncState==="off") ? "" : col;
     el.classList.toggle("spin", syncState==="saving");
@@ -739,13 +773,13 @@ async function doLogin(){
     const j=await res.json();
     console.log("[login] ok, entrando como", j.user, "role:", j.role);
     const switching = !session || session.user!==j.user;
-    session={ user:j.user, token:j.token, space:j.space||"main", role:j.role||"admin", vendedorId:j.vendedorId||"", store:j.store||"", name:j.name||j.user }; saveSession();
+    session={ user:j.user, token:j.token, space:j.space||"main", role:j.role||"admin", vendedorId:j.vendedorId||"", store:j.store||"", name:j.name||j.user, editaOtros:!!j.editaOtros }; saveSession();
     // El stock es UNO SOLO: todos (admin y vendedores) arrancan en la vista
     // consolidada. Las sociedades son sólo procedencia, no locales de venta.
     activeStore = "all";
     if(view==="inv" && !isAdmin()) view="dash";
     // Si un vendedor entra a una vista admin-only (compras/inversión/análisis/datos), lo mandamos al panel.
-    if(!isAdmin() && ADMIN_VIEWS.includes(view)) view="dash";
+    if(!vistaPermitida(view)) view="dash";
     if(switching){
       db={ config:{}, productos:[], compras:[], ventas:[], movimientos:[], clientes:[], solicitudes:[] };
       persistLocal(); syncMeta={ syncedRev:0, dirty:false }; saveSyncMeta();
@@ -793,8 +827,16 @@ function hideLogin(){
 }
 
 /* ---------- Formato ---------- */
-const nf0 = new Intl.NumberFormat("en-US",{maximumFractionDigits:2});
-const nf2 = new Intl.NumberFormat("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+/* v100 · Formato según el idioma de la app (igual que la otra app del grupo):
+   ES -> USD 1.234,56 · EN -> USD 1,234.56. parseNum() acepta los dos formatos. */
+const _NF_CACHE = {};
+function _nfFor(minD, maxD){
+  const loc = (typeof lang==="function" && lang()==="es") ? "es-AR" : "en-US";
+  const k = loc+"|"+minD+"|"+maxD;
+  return _NF_CACHE[k] || (_NF_CACHE[k] = new Intl.NumberFormat(loc,{minimumFractionDigits:minD,maximumFractionDigits:maxD}));
+}
+const nf0 = { format: n => _nfFor(0,2).format(n) };
+const nf2 = { format: n => _nfFor(2,2).format(n) };
 /* money(n): formatea en USD (moneda única del sistema). */
 const money = n => CCY_SYM + "\u00A0" + nf2.format(n||0);
 const qty = n => nf0.format(n||0);
@@ -928,15 +970,26 @@ function lastVentaVend(){ try{ return localStorage.getItem("ss_lastVentaVend")||
 /* ---------- Helpers de stock ---------- */
 function prodById(id){ return db.productos.find(p=>p.id===id); }
 function clienteById(id){ return db.clientes.find(c=>c.id===id); }
-function clienteLinea(c){ return c ? (c.empresa ? `${c.nombre} · ${c.empresa}` : c.nombre) : ""; }
+/* empresa distinta del nombre (si el usuario cargó lo mismo en los dos, se muestra una sola vez) */
+function clienteEmpresaExtra(c){ const e=String((c&&c.empresa)||"").trim(); return (e && e.toLowerCase()!==String(c.nombre||"").trim().toLowerCase()) ? e : ""; }
+function clienteLinea(c){ const N=(typeof nombreVis==="function")?nombreVis:(x=>x); return c ? (clienteEmpresaExtra(c) ? `${N(c.nombre)} · ${N(clienteEmpresaExtra(c))}` : N(c.nombre)) : ""; }   // v87: mayúsculas al mostrar
 function clienteDireccion(c){
   if(!c) return "";
-  return [c.direccion, [c.ciudad, c.estado, c.zip].filter(Boolean).join(", ")].filter(Boolean).join(" · ");
+  const V = (typeof nombreVis==="function") ? nombreVis : (x=> x);   // v98: mayúsculas al mostrar
+  return [V(c.direccion||""), [V(c.ciudad||""), V(c.estado||""), String(c.zip||"").toUpperCase()].filter(Boolean).join(", ")].filter(Boolean).join(" · ");
 }
+/* v77 · SKU asociados: un producto puede tener códigos de otros proveedores en
+   p.skusAsoc = [{sku, prov, fecha}]. Ver js/35-sku-asociados.js. */
+function normSku(s){ return String(s||"").trim().toLowerCase(); }
+function skusAsocDe(p){ return (p && Array.isArray(p.skusAsoc)) ? p.skusAsoc.filter(x=>x && x.sku) : []; }
+/* Texto para buscadores: SKU propio + códigos asociados. */
+function skuHay(p){ return [(p && p.sku)||"", ...skusAsocDe(p).map(x=>x.sku)].join(" "); }
 function findProdBySku(sku){
-  if(!sku) return null;
-  const s = sku.trim().toLowerCase();
-  return db.productos.find(p => (p.sku||"").trim().toLowerCase() === s) || null;
+  const s = normSku(sku);
+  if(!s) return null;
+  return db.productos.find(p => normSku(p.sku) === s)
+      || db.productos.find(p => skusAsocDe(p).some(x => normSku(x.sku) === s))
+      || null;
 }
 /* ¿Ese SKU ya lo usa OTRO producto? Devuelve el producto en conflicto o null.
    - SKU vacío nunca colisiona (muchos productos pueden no tener código).
@@ -946,7 +999,8 @@ function findProdBySku(sku){
 function skuEnUso(sku, exceptId){
   const s = (sku||"").trim().toLowerCase();
   if(!s) return null;
-  return db.productos.find(p => p.id!==exceptId && (p.sku||"").trim().toLowerCase()===s) || null;
+  return db.productos.find(p => p.id!==exceptId &&
+    (normSku(p.sku)===s || skusAsocDe(p).some(x => normSku(x.sku)===s))) || null;
 }
 /* FIFO valuation of the sellable stock in the stores currently in focus.
    Sums the actual cost layers, not stock×lastcost. Excludes the vault. */

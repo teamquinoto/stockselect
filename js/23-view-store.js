@@ -23,12 +23,13 @@ function storeShipments(){
   });
   return Object.keys(map).map(k=>map[k]).sort((a,b)=> String(b.fecha||"").localeCompare(String(a.fecha||"")));
 }
-/* Current gate of a shipment: 0 in transit, 1 in AR, 2 delivered. */
+/* Current gate of a shipment: 0 in transit, 1 in AR, 2 with courier (v80), 3 delivered. */
 function storeGate(g){
   const st = g.lineas.map(l=>l.estado);
   if(st.some(e=> e===CONSIGN_ESTADOS.TRANSITO)) return 0;
   if(st.some(e=> e===CONSIGN_ESTADOS.AR)) return 1;
-  return 2;
+  if(st.some(e=> e===CONSIGN_ESTADOS.DESPACHADO)) return 2;
+  return 3;
 }
 function storeShipmentCard(g){
   const u = g.lineas.reduce((a,l)=> a+(l.cantidad||0), 0);
@@ -36,11 +37,12 @@ function storeShipmentCard(g){
   const nodes = [
     {icon:"plane", label:t("store.gate.transit")},
     {icon:"pin",   label:t("store.gate.ar")},
+    {icon:"truck", label:t("store.gate.courier")},
     {icon:"store", label:t("store.gate.delivered")}
   ];
   const rows = g.lineas.map(l=>`<tr>
       <td><span class="sku">${esc(l.sku||"\u2014")}</span></td>
-      <td>${esc(l.nombre)}</td>
+      <td>${esc(l.nombre)}${l.estado===CONSIGN_ESTADOS.DESPACHADO?despachoHTML(l):""}</td>
       <td class="r num">${qty(l.cantidad)}</td>
     </tr>`).join("");
   return `<div class="rl-card">
@@ -63,8 +65,8 @@ function viewStore(){
   if(!storeClienteId()) return head + `<div class="panel"><div class="rl-empty">${t("store.noacct")}</div></div>`;
 
   const ships = storeShipments();
-  const inflight  = ships.filter(g=> storeGate(g)<2);
-  const delivered = ships.filter(g=> storeGate(g)===2);
+  const inflight  = ships.filter(g=> storeGate(g)<3);   // v80: lo despachado a courier sigue "en camino"
+  const delivered = ships.filter(g=> storeGate(g)===3);
   const cards = inflight.map(storeShipmentCard).join("") || `<div class="rl-empty">${t("store.empty")}</div>`;
 
   let out = head + `<div class="panel"><div class="rl-wrap">${cards}</div></div>`;

@@ -73,7 +73,7 @@ function filtrarProds(f){
     // Punto 9: en vista de UN local, sólo productos que pertenecen a ese local
     if(activeStore!=="all" && !perteneceAStore(p, activeStore)) return false;
     const sf = stockEnFoco(p);                   // stock under the active store focus
-    if(q){ const hay=((p.nombre||"")+" "+(p.sku||"")).toLowerCase(); if(!hay.includes(q)) return false; }
+    if(q){ const hay=((p.nombre||"")+" "+skuHay(p)).toLowerCase(); if(!hay.includes(q)) return false; }
     if(f.saga && sagaDe(p)!==f.saga) return false;
     if(f.idioma && (p.idioma||"")!==f.idioma) return false;
     // En modo "in transit" listamos sólo productos con mercadería en camino y NO
@@ -134,7 +134,7 @@ function wireSortHeaders(f){
 function filterBarHTML(prefix, f){
   const sagas=sagasUnicas();
   return `<div class="filtros">
-    <input class="inp" id="${prefix}q" placeholder="${t("dash.f.search")}" value="${esc(f.q)}" style="flex:2;min-width:180px">
+    <input class="inp" id="${prefix}q" placeholder="${t(verSku()?"dash.f.search":"dash.f.search2")}" value="${esc(f.q)}" style="flex:2;min-width:180px">
     <select class="inp" id="${prefix}saga" style="flex:1;min-width:120px">
       <option value="">${t("dash.f.alllines")}</option>
       ${sagas.map(s=>`<option value="${esc(s)}" ${f.saga===s?"selected":""}>${esc(s)}</option>`).join("")}
@@ -156,8 +156,8 @@ function filterBarHTML(prefix, f){
       <option value="avail" ${f.xstate==="avail"?"selected":""}>${t("dash.f.availonly")}</option>
       <option value="transit" ${f.xstate==="transit"?"selected":""}>${t("dash.f.transitonly")}</option>
     </select>
-    <input class="inp num" id="${prefix}cmin" placeholder="${t("dash.f.mincost")}" value="${esc(f.cmin)}" style="width:90px">
-    <input class="inp num" id="${prefix}cmax" placeholder="${t("dash.f.maxcost")}" value="${esc(f.cmax)}" style="width:90px">
+    ${verCostos()?`<input class="inp num" id="${prefix}cmin" placeholder="${t("dash.f.mincost")}" value="${esc(f.cmin)}" style="width:90px">
+    <input class="inp num" id="${prefix}cmax" placeholder="${t("dash.f.maxcost")}" value="${esc(f.cmax)}" style="width:90px">`:""}
     <button class="btn ghost sm" id="${prefix}clear" title="${t("dash.f.cleartip")}">${t("dash.f.clear")}</button>
   </div>`;
 }
@@ -169,8 +169,8 @@ function wireFilterBar(prefix, f, onChange){
   const idi=document.getElementById(prefix+"idioma"); if(idi) idi.onchange=e=>upd("idioma",e.target);
   document.getElementById(prefix+"estado").onchange=e=>upd("estado",e.target);
   const xst=document.getElementById(prefix+"xstate"); if(xst) xst.onchange=e=>upd("xstate",e.target);
-  document.getElementById(prefix+"cmin").oninput=e=>upd("cmin",e.target);
-  document.getElementById(prefix+"cmax").oninput=e=>upd("cmax",e.target);
+  const cmn=document.getElementById(prefix+"cmin"); if(cmn) cmn.oninput=e=>upd("cmin",e.target);
+  const cmx=document.getElementById(prefix+"cmax"); if(cmx) cmx.oninput=e=>upd("cmax",e.target);
   document.getElementById(prefix+"clear").onclick=()=>{
     f.q="";f.saga="";f.idioma="";f.estado="";f.xstate="";f.cmin="";f.cmax="";f.sortKey="";f.sortDir="";
     render();
@@ -200,7 +200,7 @@ function viewDash(){
   const _isAdm = isAdmin();
   const _transitProds = _isAdm ? db.productos.filter(p=> transUnits(p)>0).length : 0;
   const _remActivos = (_isAdm && typeof remitosActivos==="function") ? remitosActivos() : [];
-  const _remPend = _remActivos.filter(g=> g.uTransito>0 || g.uAr>0).length;
+  const _remPend = _remActivos.filter(g=> g.uTransito>0 || g.uAr>0 || g.uDesp>0).length;
   const _svgWarn = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>`;
   const _svgSplit = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3M7 9l3 3-3 3M17 9l-3 3 3 3"/></svg>`;
   const _pchips = [];
@@ -215,19 +215,19 @@ function viewDash(){
   let heroHTML;
   if(cc){ heroHTML = housesHTML(); }
   else { heroHTML = `  <div class="kpis">
-    <div class="kpi"><div class="lbl">${t("dash.kpi.products")}</div><div class="val">${vend.length}</div><div class="sub">${t("dash.kpi.sellableskus")}</div></div>
+    <div class="kpi"><div class="lbl">${t("dash.kpi.products")}</div><div class="val">${vend.length}</div><div class="sub">${t(verSku()?"dash.kpi.sellableskus":"dash.kpi.sellable2")}</div></div>
     <div class="kpi"><div class="lbl">${t("dash.kpi.unitsstock")}</div><div class="val">${qty(unidadesTotales())}</div><div class="sub">${esc(foco)}</div></div>
-    <div class="kpi"><div class="lbl">${t("dash.kpi.valuation")}</div><div class="val">${money(valorizacion())}</div><div class="sub">${t("dash.kpi.fifolayers")}</div></div>
-    ${unidadesEnTransito()>0?`<div class="kpi"><div class="lbl">${t("dash.kpi.transit")}</div><div class="val">${qty(unidadesEnTransito())}</div><div class="sub">${t("dash.kpi.incoming")} · ${money(vend.reduce((a,p)=>a+transitoValorEnFoco(p),0))}</div></div>`:""}
+    ${verCostos()?`<div class="kpi"><div class="lbl">${t("dash.kpi.valuation")}</div><div class="val">${money(valorizacion())}</div><div class="sub">${t("dash.kpi.fifolayers")}</div></div>`:""}
+    ${unidadesEnTransito()>0?`<div class="kpi"><div class="lbl">${t("dash.kpi.transit")}</div><div class="val">${qty(unidadesEnTransito())}</div><div class="sub">${t("dash.kpi.incoming")}${verCostos()?" · "+money(vend.reduce((a,p)=>a+transitoValorEnFoco(p),0)):""}</div></div>`:""}
     <div class="kpi ${porPedir.length?'warn kpi-click':''}" ${porPedir.length?'data-goto-pedir role="button" tabindex="0" title="${t("dash.kpi.reordertip")}"':''}><div class="lbl">${t("dash.kpi.alerts")}</div><div class="val">${porPedir.length}</div><div class="sub">${subAlerta}</div></div>
   </div>`; }
 
   return `
   <div class="head">
-    <div class="title"><h2>${t("dash.title")}</h2><p>${t("dash.subtitle")}${multi?` · <b>${esc(foco)}</b>`:""}.</p></div>
+    <div class="title"><h2>${t("dash.title")}</h2><p>${t(verCostos()?"dash.subtitle":"dash.subtitle2")}${multi?` · <b>${esc(foco)}</b>`:""}.</p></div>
     <div class="actions">
-      ${puedeComprar()?`<button class="btn up" data-open="compra">${ICO.buy}${t("dash.newpurchase")}</button>`:""}
-      <button class="btn down" data-open="venta">${ICO.sale}${t("dash.newsale")}</button>
+      ${puedeComprar()?`<button class="btn" data-open="compra">${ICO.buy}${t("dash.newpurchase")}</button>`:""}
+      <button class="btn primary" data-open="venta">${ICO.sale}${t("dash.newsale")}</button>
     </div>
   </div>
 
@@ -240,18 +240,20 @@ function viewDash(){
 
   ${heroHTML}
 
+  ${(isAdmin() && typeof planMesCardHTML==="function") ? planMesCardHTML({ compact:true }) : ""}
+
   <div class="panel">
     <div class="phead"><h3>${t("dash.stockonhand")}</h3><span class="hint" id="dashCount">${t("dash.taphistory")}</span></div>
     ${vend.length ? `
     ${filterBarHTML("f", dashFiltros)}
     <div class="table-scroll"><table>
       <thead><tr>
-        ${sortTh(dashFiltros,"sku","SKU","")}
+        ${verSku()?sortTh(dashFiltros,"sku","SKU",""):""}
         ${sortTh(dashFiltros,"nombre",t("common.product"),"")}
         ${sociedadColsHead(dashFiltros)}
         ${sortTh(dashFiltros,"stock",stockView==="cases"?t("pr.th.stockcases"):t("pr.th.stock"),"r")}
-        ${sortTh(dashFiltros,"costo",t("pr.th.lastcost"),"r")}
-        ${sortTh(dashFiltros,"valor",t("dash.th.valued"),"r")}
+        ${verCostos()?sortTh(dashFiltros,"costo",t("pr.th.lastcost"),"r"):""}
+        ${verCostos()?sortTh(dashFiltros,"valor",t("dash.th.valued"),"r"):""}
       </tr></thead>
       <tbody id="dashBody"></tbody>
     </table></div>` : emptyState(t("dash.empty.title"),t("dash.empty.sub"))}
@@ -278,7 +280,7 @@ function renderDashRows(){
   const body=document.getElementById("dashBody"); if(!body) return;
   const list=filteredDashProds();
   const showCols = showSociedadCols();
-  const colspan = 5 + (showCols ? STORE_IDS.length : 0);
+  const colspan = 5 + (showCols ? STORE_IDS.length : 0) - (verSku()?0:1) - (verCostos()?0:2);
   const rowset = stockRowset(list, dashFiltros);
   body.innerHTML = rowset.map(({p,kind})=>{
     const isT = kind==="transit";
@@ -294,12 +296,12 @@ function renderDashRows(){
                : bajoStock(p) ? `<span class="pill low">${t("pr.badge.reorder")}</span>` : "";
     const perStore = sociedadColsCells(p, isT);
     return `<tr data-ficha="${p.id}" class="${isT?'row-transit':''}" style="cursor:pointer">
-      <td><span class="sku">${esc(p.sku||"—")}</span></td>
+      ${verSku()?`<td><span class="sku">${esc(p.sku||"—")}</span></td>`:""}
       <td>${esc(p.nombre)} ${flag}</td>
       ${perStore}
       <td class="r ${cls}">${stockDisplay(p,units)}</td>
-      <td class="r num">${money(costo)}</td>
-      <td class="r num">${money(val)}</td>
+      ${verCostos()?`<td class="r num">${money(costo)}</td>`:""}
+      ${verCostos()?`<td class="r num">${money(val)}</td>`:""}
     </tr>`;
   }).join("") || `<tr><td colspan="${colspan}" style="text-align:center;color:var(--muted);padding:22px">${t("dash.nomatch")}</td></tr>`;
   const cnt=document.getElementById("dashCount");

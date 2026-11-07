@@ -16,11 +16,12 @@ function viewDocs(tipo){
   <div class="head">
     <div class="title">
       <h2>${isC?t("nav.compras"):t("nav.ventas")}</h2>
-      <p>${isC?t("doc.sub.purch"):t("doc.sub.sales")}</p>
+      <p>${isC?t("doc.sub.purch"):t(verCostos()?"doc.sub.sales":"doc.sub.sales2")}</p>
     </div>
     <div class="actions">
+      ${(!isC && typeof cobrosExcelBtnHTML==="function") ? cobrosExcelBtnHTML() : ""}
       ${(isC&&puedeComprar())?`<button class="btn" data-import>${ICO.importpdf}${t("doc.btn.import")}</button>`:""}
-      <button class="btn ${isC?'up':'down'}" data-open="${tipo}">${isC?ICO.buy+t("doc.btn.manualbuy"):ICO.sale+t("doc.btn.newsale")}</button>
+      <button class="btn primary" data-open="${tipo}">${isC?ICO.buy+t("doc.btn.manualbuy"):ICO.sale+t("doc.btn.newsale")}</button>
     </div>
   </div>
   ${list.length ? `<div class="kpis" id="docKpis">${docKpisHTML(tipo, filtrarDocs(tipo))}</div>` : ""}
@@ -34,6 +35,7 @@ function viewDocs(tipo){
         ${vendedores().map(v=>`<option value="${esc(v.id)}" ${f.vend===v.id?"selected":""}>${esc(v.nombre)}</option>`).join("")}
         <option value="__none" ${f.vend==="__none"?"selected":""}>${t("doc.o.house")}</option>
       </select>` : ""}
+      ${!isC ? cobroFiltroHTML(f) : ""}
       <label style="font-size:12px;color:var(--muted)">${t("mov.from")} <input class="inp" id="ddesde" type="date" value="${esc(f.desde)}" style="width:128px"></label>
       <label style="font-size:12px;color:var(--muted)">${t("mov.to")} <input class="inp" id="dhasta" type="date" value="${esc(f.hasta)}" style="width:128px"></label>
       <button class="btn ghost sm" id="dclear">${t("dash.f.clear")}</button>
@@ -64,6 +66,9 @@ function viewDocs(tipo){
    - ventas: un vendedor ve SÓLO las suyas; el admin ve todas, filtradas por el
      depósito en foco (Swan / Select). */
 function docsVisibles(tipo){
+  // v94 · editor de Argentina: sólo compras y ventas del depósito Select
+  if(isEditor()) return tipo==="compra" ? db.compras.filter(d=> (d.store||STORE_IDS[0])===EDITOR_STORE)
+                                        : db.ventas.filter(v=> storeDeVenta(v)===EDITOR_STORE);
   if(tipo==="compra"){
     const stores = effectiveStores();
     return db.compras.filter(d=> stores.includes(d.store||STORE_IDS[0]));
@@ -75,6 +80,7 @@ function docsVisibles(tipo){
   const stores = effectiveStores();
   return db.ventas.filter(v=> stores.includes(storeDeVenta(v)));
 }
+function ventasVisibles(){ return docsVisibles("venta"); }
 /* Encabezado ordenable: muestra ↑ (asc), ↓ (desc) o ↕ (inactivo, "sin flecha") */
 function sortTh(f, key, label, align){
   const active = f.sortKey===key && f.sortDir;
@@ -110,18 +116,18 @@ function docKpisHTML(tipo, list){
     return `
     <div class="kpi"><div class="lbl">${t("doc.kpi.purch")}</div><div class="val">${n}</div><div class="sub">${t("doc.kpi.inrange")}</div></div>
     <div class="kpi"><div class="lbl">${t("doc.kpi.unitsb")}</div><div class="val">${qty(uds)}</div><div class="sub">${t("doc.kpi.itemsin")}</div></div>
-    <div class="kpi"><div class="lbl">${t("doc.kpi.totalb")}</div><div class="val">${money(total)}</div><div class="sub">${t("doc.kpi.suminv")}</div></div>
-    <div class="kpi"><div class="lbl">${t("doc.kpi.avgticket")}</div><div class="val">${n?money(total/n):"—"}</div><div class="sub">${t("doc.kpi.perpurch")}</div></div>`;
+    <div class="kpi"><div class="lbl">${t("doc.kpi.totalb")}</div><div class="val">${bigMoney(total)}</div><div class="sub">${t("doc.kpi.suminv")}</div></div>
+    <div class="kpi"><div class="lbl">${t("doc.kpi.avgticket")}</div><div class="val">${n?bigMoney(total/n):"—"}</div><div class="sub">${t("doc.kpi.perpurch")}</div></div>`;
   }
   const margen = total - cogs;
   const margenPct = total>0 ? (margen/total*100) : 0;
   const commKpi = isAdmin() ? `
-    <div class="kpi"><div class="lbl">${t("doc.kpi.comm")}</div><div class="val">${money(list.reduce((a,d)=>a+saleCommission(d),0))}</div><div class="sub">${t("doc.kpi.commsub")}</div></div>` : "";
+    <div class="kpi"><div class="lbl">${t("doc.kpi.comm")}</div><div class="val">${bigMoney(list.reduce((a,d)=>a+saleCommission(d),0))}</div><div class="sub">${t("doc.kpi.commsub")}</div></div>` : "";
   return `
     <div class="kpi"><div class="lbl">${t("doc.kpi.sales")}</div><div class="val">${n}</div><div class="sub">${t("doc.kpi.inrange")}</div></div>
     <div class="kpi"><div class="lbl">${t("doc.kpi.unitss")}</div><div class="val">${qty(uds)}</div><div class="sub">${t("doc.kpi.itemsout")}</div></div>
-    <div class="kpi"><div class="lbl">${t("doc.kpi.totals")}</div><div class="val">${money(total)}</div><div class="sub">${n?t("doc.kpi.avgticketv",{m:money(total/n)}):"—"}</div></div>
-    <div class="kpi"><div class="lbl">${t("doc.kpi.gross")}</div><div class="val">${money(margen)}</div><div class="sub">${total>0?t("doc.kpi.onrev",{p:nf0.format(margenPct)}):t("doc.kpi.loadsales")}</div></div>
+    <div class="kpi"><div class="lbl">${t("doc.kpi.totals")}</div><div class="val">${bigMoney(total)}</div><div class="sub">${n?t("doc.kpi.avgticketv",{m:moneyRound(total/n)}):"—"}</div></div>
+    ${verMargenVenta()?`<div class="kpi"><div class="lbl">${t("doc.kpi.gross")}</div><div class="val">${bigMoney(margen)}</div><div class="sub">${total>0?t("doc.kpi.onrev",{p:nf0.format(margenPct)}):t("doc.kpi.loadsales")}</div></div>`:""}
     ${commKpi}`;
 }
 
@@ -138,6 +144,7 @@ function filtrarDocs(tipo){
       if(f.vend==="__none"){ if(d.vendedorId) return false; }
       else if((d.vendedorId||"")!==f.vend) return false;
     }
+    if(tipo==="venta" && !cobroFiltroOk(d, f)) return false;   // v78 · medio / cuenta de cobro
     return true;
   });
   // Orden: si no hay columna activa, default = fecha ↓ (más reciente primero)
@@ -178,24 +185,42 @@ function renderDocRows(tipo){
     const received = d.status===INVOICE_STATUS.RECEIVED;
     const statusCell = isC ? `<td class="c"><span class="inv-badge ${received?'received':'transit'}">${received?t('doc.badge.received'):t('doc.badge.transit')}</span></td>` : "";
     const commCell = showComm ? `<td class="r num">${money(saleCommission(d))}</td>` : "";
-    return `<tr>
+    return `<tr class="row-open" data-vrow="${tipo}:${d.id}" tabindex="0" aria-label="${t("doc.act.view")} ${esc(d.numero||"")}">
       <td class="num">${esc(d.numero||"—")}</td>
       <td>${esc(fmtDate(d.fecha))}</td>
       ${showSocCol?`<td>${storeBadge(isC ? (d.store||STORE_IDS[0]) : storeDeVenta(d))}</td>`:""}
       ${showVendCol?`<td>${esc(saleVendedorNombre(d))}</td>`:""}
-      <td>${esc(d.contraparte||"—")}</td>
+      <td>${esc(nombreVis(d.contraparte)||"—")}${isC?"":cobroPendienteHTML(d)}</td>
       <td class="c num">${qty(items)}</td>
       <td class="r num">${money(d.total)}</td>
       ${statusCell}
       ${commCell}
-      <td class="r" style="white-space:nowrap">${(()=>{const canStatus=(isC&&puedeComprar());const bStatus=canStatus?`<button class="btn ghost sm" data-invstatus="${d.id}">${received?ICO.plane+t('doc.act.marktransit'):ICO.receive+t('doc.act.markreceived')}</button>`:"";const bView=`<button class="btn ghost sm" data-vdoc="${tipo}:${d.id}">${ICO.view}${t("doc.act.view")}</button>`;const bCopy=tipo==="venta"?`<button class="btn ghost sm" data-copydoc="${tipo}:${d.id}">${ICO.copy}${t("doc.act.copy")}</button>`:"";const bEdit=`<button class="btn ghost sm" data-editdoc="${tipo}:${d.id}">${ICO.edit}${t("common.edit")}</button>`;const bDel=`<button class="btn ghost sm" data-deldoc="${tipo}:${d.id}" style="color:var(--alert)" title="${t("common.delete")}" aria-label="${t("common.delete")}">${ICO.trash}${t("common.delete")}</button>`;const primary=canStatus?bStatus:bView;const rest=canStatus?(bView+bCopy+bEdit+bDel):(bCopy+bEdit+bDel);return rowOverflow(primary,rest);})()}</td>
+      <td class="r" style="white-space:nowrap">${(()=>{
+        // v87 · tocar la fila = Ver. Acá queda el estado (compras) y el menú "⋯" con el resto.
+        const canStatus=(isC&&puedeComprar());
+        const mb=(attrs,ico,lbl,danger)=>`<button type="button" class="btn ghost sm${danger?" danger-ghost":""}" ${attrs}>${ico||""}${lbl}</button>`;
+        const bStatus=canStatus?`<button class="btn ghost sm" data-invstatus="${d.id}">${received?ICO.plane+t('doc.act.marktransit'):ICO.receive+t('doc.act.markreceived')}</button>`:"";
+        const bCopy=tipo==="venta"?mb(`data-copydoc="${tipo}:${d.id}"`,ICO.copy,t("doc.act.copy")):"";
+        const bEdit=mb(`data-editdoc="${tipo}:${d.id}"`,ICO.edit,t("common.edit"));
+        const bDel=isEditor()?"":mb(`data-deldoc="${tipo}:${d.id}"`,ICO.trash,t("common.delete"),true);   // v94: el editor no borra
+        return rowOverflow(bStatus, bCopy+bEdit+bDel);
+      })()}</td>
     </tr>`;
   }).join("") || `<tr><td colspan="${cols}" style="text-align:center;color:var(--muted);padding:22px">${t("doc.nomatch")}</td></tr>`;
   const cnt=document.getElementById("docCount");
   if(cnt) cnt.textContent = list.length===total ? t("doc.count",{n:total}) : t("doc.showing",{n:list.length,total});
   const kp=document.getElementById("docKpis");
   if(kp) kp.innerHTML = docKpisHTML(tipo, list);
-  body.querySelectorAll("[data-vdoc]").forEach(b=> b.onclick=()=>{ const[t,id]=b.dataset.vdoc.split(":"); verDoc(t,id); });
+  // Tocar la fila abre el documento (salvo que el click sea en un botón / el menú "⋯", o que se esté seleccionando texto).
+  body.querySelectorAll("tr[data-vrow]").forEach(tr=>{
+    const open=()=>{ const[tp,id]=tr.dataset.vrow.split(":"); verDoc(tp,id); };
+    tr.onclick=e=>{
+      if(e.target.closest(".rowacts, .rowovf, button, a, input, select")) return;
+      const sel=window.getSelection && String(window.getSelection()); if(sel && sel.trim()) return;
+      open();
+    };
+    tr.onkeydown=e=>{ if((e.key==="Enter"||e.key===" ") && e.target===tr){ e.preventDefault(); open(); } };
+  });
   body.querySelectorAll("[data-invstatus]").forEach(b=> b.onclick=()=> toggleInvoiceStatus(b.dataset.invstatus));
   body.querySelectorAll("[data-copydoc]").forEach(b=> b.onclick=()=>{ const[t,id]=b.dataset.copydoc.split(":"); copyDoc(t,id); });
   body.querySelectorAll("[data-editdoc]").forEach(b=> b.onclick=()=>{ const[t,id]=b.dataset.editdoc.split(":"); editDoc(t,id); });
@@ -208,12 +233,8 @@ function renderDocRows(tipo){
 function toggleInvoiceStatus(id){
   const c = db.compras.find(x=>x.id===id); if(!c) return;
   if(c.status===INVOICE_STATUS.RECEIVED){
-    const store = c.store||STORE_IDS[0];
-    const enRiesgo = c.lineas.filter(l=>{ const p=prodById(l.productoId); return p && stockDe(p,store) < l.cantidad; });
-    if(enRiesgo.length){
-      const det = enRiesgo.map(l=>`· ${l.nombre}`).join("\n");
-      if(!confirm(t("doc.cf.negative",{store:storeName(store),det:det}))) return;
-    }
+    // v103: antes sólo avisaba y dejaba seguir (el stock podía quedar negativo). Ahora traba, igual que Prince.
+    if(trabaCompraUsada(c)) return;
     unreceiveInvoice(c);
     c.status = INVOICE_STATUS.IN_TRANSIT;
     toast(t("doc.tt.backtransit"), "warn");
@@ -234,12 +255,13 @@ function wireDocFiltros(){
   document.getElementById("dq").oninput=e=>upd("q",e.target);
   document.getElementById("ddesde").onchange=e=>upd("desde",e.target);
   document.getElementById("dhasta").onchange=e=>upd("hasta",e.target);
-  const dvend=document.getElementById("dvend"); if(dvend) dvend.onchange=e=>{ f.vend=e.target.value; render(); };   // render completo: actualiza filas + KPIs (comisión)
+  const dvend=document.getElementById("dvend"); if(dvend) dvend.onchange=e=>{ f.vend=e.target.value; render(); };
+  const dcob=document.getElementById("dcob"); if(dcob) dcob.onchange=e=>{ f.cob=e.target.value; render(); };   // render completo: actualiza filas + KPIs (comisión)
   document.getElementById("dclear").onclick=()=>{
     docFiltros[tipo]= tipo==="venta"
-      ? {q:"",desde:"",hasta:"",vend:"",sortKey:"",sortDir:""}
+      ? {q:"",desde:"",hasta:"",vend:"",cob:"",sortKey:"",sortDir:""}
       : {q:"",desde:"",hasta:"",sortKey:"",sortDir:""};
-    ["dq","ddesde","dhasta","dvend"].forEach(id=>{const el=document.getElementById(id); if(el)el.value="";});
+    ["dq","ddesde","dhasta","dvend","dcob"].forEach(id=>{const el=document.getElementById(id); if(el)el.value="";});
     render();   // re-render para resetear también las flechas de los headers
   };
   // Orden por columna: clic cicla desc -> asc -> sin orden (default fecha ↓)

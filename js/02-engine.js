@@ -15,11 +15,25 @@ function fifoLayers(prod, store){
   if(!Array.isArray(prod.lotes[store])) prod.lotes[store] = [];
   return prod.lotes[store];
 }
-/* Add a purchase layer (landed unit cost already includes prorated handling+freight). */
-function fifoEntrada(prod, store, cantidad, costoUnit, ref, refId, desg){
-  const L = { id:uid(), fecha:new Date().toISOString(), cantidad:+cantidad, costoUnit:round2(costoUnit), ref:ref||"", refId:refId||null };
+/* Add a purchase layer (landed unit cost already includes prorated handling+freight).
+   v103: `fecha` opcional = fecha de ENTRADA de la capa (igual que Prince). Al editar una
+   compra ya recibida, la capa vuelve con su fecha original: antes nacía "ahora" y la
+   compra editada pasaba al final de la cola FIFO. */
+function fifoEntrada(prod, store, cantidad, costoUnit, ref, refId, desg, fecha){
+  const L = { id:uid(), fecha:fecha||new Date().toISOString(), cantidad:+cantidad, costoUnit:round2(costoUnit), ref:ref||"", refId:refId||null };
   if(desg) L.d = { us:round2(desg.us||0), intl:round2(desg.intl||0), arg:round2(desg.arg||0) };   // desglose landed por puerta
   fifoLayers(prod, store).push(L);
+}
+/* v103 (igual que Prince v117): ordena las capas de UNA sociedad por fecha de entrada
+   (estable: a igual fecha respeta el orden de inserción). Las devoluciones reponen capas
+   con su fecha original, así que el array podía quedar desordenado y un ajuste o una
+   venta tomaban una capa más nueva que la más vieja. */
+function fifoOrdenar(prod, store){
+  const L = fifoLayers(prod, store);
+  const idx = L.map((x,i)=>[x,i]);
+  idx.sort((a,b)=>{ const fa=a[0].fecha||"", fb=b[0].fecha||""; return fa<fb?-1 : fa>fb?1 : a[1]-b[1]; });
+  idx.forEach((x,i)=> L[i]=x[0]);
+  return L;
 }
 /* Remove (or shrink) the layer(s) a given purchase created, when reverting it. */
 function fifoQuitarCompra(prod, store, refId){
@@ -29,7 +43,7 @@ function fifoQuitarCompra(prod, store, refId){
 /* Peek the FIFO cost of consuming `cantidad` WITHOUT mutating (for previews/margin). */
 function fifoCostoPeek(prod, store, cantidad){
   let need = cantidad, cogs = 0;
-  for(const L of fifoLayers(prod, store)){
+  for(const L of fifoOrdenar(prod, store)){
     if(need<=0) break;
     const take = Math.min(L.cantidad, need);
     cogs += take * L.costoUnit; need -= take;
@@ -44,7 +58,7 @@ function fifoCostoPeek(prod, store, cantidad){
    el orden FIFO entre ellas. Se usa en TRÁNSITO para separar lo que viaja dentro
    de un envío con remito (capas etiquetadas con `remitoId`) de lo "suelto". */
 function fifoConsumir(prod, store, cantidad, pred){
-  const layers = fifoLayers(prod, store);
+  const layers = fifoOrdenar(prod, store);   // v103: más vieja primero, siempre
   let need = cantidad, cogs = 0; const consumed = [];
   if(typeof pred === "function"){
     for(const L of layers){
@@ -52,7 +66,7 @@ function fifoConsumir(prod, store, cantidad, pred){
       if(!pred(L) || !(L.cantidad>0)) continue;
       const take = Math.min(L.cantidad, need);
       cogs += take * L.costoUnit;
-      consumed.push({ costoUnit:L.costoUnit, cantidad:take, d:L.d, rid:L.remitoId||null });
+      consumed.push({ costoUnit:L.costoUnit, cantidad:take, d:L.d, rid:L.remitoId||null, refId:L.refId||null, fecha:L.fecha||null });   // v103: refId (traba de compras) + fecha (vuelve a su lugar FIFO)
       L.cantidad = round4(L.cantidad - take);
       need -= take;
     }
@@ -62,7 +76,7 @@ function fifoConsumir(prod, store, cantidad, pred){
       const L = layers[0];
       const take = Math.min(L.cantidad, need);
       cogs += take * L.costoUnit;
-      consumed.push({ costoUnit:L.costoUnit, cantidad:take, d:L.d, rid:L.remitoId||null });
+      consumed.push({ costoUnit:L.costoUnit, cantidad:take, d:L.d, rid:L.remitoId||null, refId:L.refId||null, fecha:L.fecha||null });   // v103: refId (traba de compras) + fecha (vuelve a su lugar FIFO)
       L.cantidad = round4(L.cantidad - take);
       need -= take;
       if(L.cantidad<=0.00001) layers.shift();
@@ -84,8 +98,11 @@ function fifoDevolver(prod, store, consumed){
   for(let i=consumed.length-1;i>=0;i--){
     const c = consumed[i];
     if(c.synthetic) continue; // synthetic shortfall wasn't real stock
-    const L = { id:uid(), fecha:new Date().toISOString(), cantidad:c.cantidad, costoUnit:c.costoUnit, ref:"revert" };
+    // v103: vuelve con su fecha original y atada a su compra (refId): así deshacer una venta
+    // destraba la compra y no le cambia el orden FIFO a nadie.
+    const L = { id:uid(), fecha:c.fecha||new Date().toISOString(), cantidad:c.cantidad, costoUnit:c.costoUnit, ref:"revert", refId:c.refId||null };
     if(c.d) L.d = { us:c.d.us||0, intl:c.d.intl||0, arg:c.d.arg||0 };   // conserva el desglose por puerta (landed cost PDF)
+    if(c.rid) L.remitoId = c.rid;
     layers.unshift(L);
   }
 }
@@ -144,7 +161,7 @@ function fifoConsumirGlobal(prod, cantidad){
     const take = Math.min(c.L.cantidad, need);
     if(take<=0) continue;
     cogs += take * c.L.costoUnit;
-    consumed.push({ sociedad:c.sociedad, costoUnit:c.L.costoUnit, cantidad:take, d:c.L.d });
+    consumed.push({ sociedad:c.sociedad, costoUnit:c.L.costoUnit, cantidad:take, d:c.L.d, refId:c.L.refId||null, fecha:c.L.fecha||null });
     (porSoc[c.sociedad] = porSoc[c.sociedad] || { cantidad:0, cogs:0 });
     porSoc[c.sociedad].cantidad += take;
     porSoc[c.sociedad].cogs = round2(porSoc[c.sociedad].cogs + take*c.L.costoUnit);
@@ -175,8 +192,10 @@ function fifoDevolverGlobal(prod, consumed, fallbackSoc){
     const c = consumed[i];
     if(c.synthetic) continue;   // el faltante sintético no era stock real
     const soc = isDeposito(c.sociedad) ? c.sociedad : (isDeposito(fallbackSoc)?fallbackSoc:STORE_IDS[0]);
-    const L = { id:uid(), fecha:new Date().toISOString(), cantidad:c.cantidad, costoUnit:c.costoUnit, ref:"revert" };
+    // v103: vuelve con la FECHA ORIGINAL y el refId de su compra (igual que Prince)
+    const L = { id:uid(), fecha:c.fecha||new Date().toISOString(), cantidad:c.cantidad, costoUnit:c.costoUnit, ref:"revert", refId:c.refId||null };
     if(c.d) L.d = { us:c.d.us||0, intl:c.d.intl||0, arg:c.d.arg||0 };   // conserva el desglose por puerta
+    if(c.rid) L.remitoId = c.rid;
     fifoLayers(prod, soc).unshift(L);
     repuesto[soc] = round4((repuesto[soc]||0) + c.cantidad);
   }

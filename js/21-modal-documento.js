@@ -11,6 +11,7 @@ let draft = null;  // { tipo, contraparte, fecha, numero, lineas:[{key,productoI
 function openDoc(tipo, pre){
   // Punto 3: un vendedor no puede cargar compras.
   if(tipo==="compra" && !puedeComprar()){ toast(t("md.err.admincompra"),"warn"); return; }
+  // v94: el editor (Argentina) carga compras y ventas, siempre del depósito Select
   draft = pre || {
     tipo, contraparte:"", fecha:hoyISO(),
     numero: tipo==="venta" ? nextFacturaVenta() : "",
@@ -30,6 +31,7 @@ function openDoc(tipo, pre){
     // Origen de la factura: "propia" (todo entra a stock) o "terceros" (parte nuestra + parte
     // que sigue viaje al dueño). Viene pre-cargado desde el import; si no, default propia.
     if(draft.origen!=="terceros" && draft.origen!=="propia") draft.origen = "propia";
+    if(isEditor()){ draft.store = EDITOR_STORE; draft.origen = "propia"; }   // v94: compras de Argentina (FEDEM), sin terceros
     if(draft.terceroId===undefined) draft.terceroId = "";
     draft.lineas.forEach(l=>{ if(l.aNuestro==null) l.aNuestro = 0; });
   } else {
@@ -41,6 +43,7 @@ function openDoc(tipo, pre){
     }
     // Y elige VENDEDOR (para la comisión). Vendedor logueado => fijado a sí mismo;
     // admin => arranca SIEMPRE en "Casa" (0%); elige el vendedor manualmente si corresponde.
+    if(isEditor()){ draft.storeVenta = EDITOR_STORE; draft.vendedorId = ""; }   // v94: Argentina, sin comisión
     if(isSeller()){
       draft.vendedorId = currentVendedorId() || "";
     } else if(draft.vendedorId===undefined){
@@ -63,8 +66,9 @@ function renderDocModal(){
         <span class="ppick-label">${cli?esc(clienteLinea(cli)):t("md.pick.customer")}</span><span class="ppick-caret">▾</span>
       </button>
       ${cli?`<div class="hint" style="font-size:11px;margin-top:4px">${esc(clienteDireccion(cli)||cli.email||"")}</div>`:""}
+      ${cli&&clienteIncompleto(cli)?`<div class="ferr fwarn" style="margin-top:6px">${ICO.warn} ${t("md.warn.cliinc.short")} <a href="#" id="d_clifix">${t("md.warn.cliinc.fix")}</a></div>`:""}
     </div>`;
-  const allowSt = allowedStores();
+  const allowSt = isEditor() ? [EDITOR_STORE] : allowedStores();   // v94: el editor, sólo Argentina
   // PUNTO 1 — barra "Invoice type" (propia / terceros). En terceros aparece el dueño.
   let origenBar = "";
   if(isC){
@@ -118,7 +122,9 @@ function renderDocModal(){
     const depSel = `<div class="field"><label>${t("md.lbl.deposit")} <span class="hint" style="font-weight:400">${t("md.deposit.hint")}</span></label>
         <select class="inp" id="d_storeventa">${allowSt.map(s=>`<option value="${s}" ${s===draft.storeVenta?"selected":""}>${esc(storeName(s))}</option>`).join("")}</select></div>`;
     let vendSel;
-    if(isSeller()){
+    if(isEditor()){
+      vendSel = "";   // v94: en Argentina no hay comisión por venta
+    } else if(isSeller()){
       vendSel = `<div class="field"><label>${t("md.lbl.seller")}</label>
            <input class="inp" value="${esc((session&&session.name)||vendedorNombre(draft.vendedorId))}" disabled></div>`;
     } else {
@@ -132,19 +138,20 @@ function renderDocModal(){
     topSel = depSel + vendSel;
   }
   const body = `
-    ${isC?origenBar:""}
-    <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0;margin-bottom:10px">${topSel}</div>
+    ${(isC&&!isEditor())?origenBar:""}
+    <div class="grid-form" style="grid-template-columns:${(!isC&&isEditor())?"1fr":"1fr 1fr"};padding:0;margin-bottom:10px">${topSel}</div>
     ${isC?`<div class="banner ok" style="justify-content:space-between;align-items:center">
       <span>${t("md.import.banner")}</span>
-      <button class="btn sm" id="d_import" style="white-space:nowrap">${t("md.import.btn")}</button>
+      <button class="btn sm" id="d_import" style="white-space:nowrap">${ICO.importpdf}${t("md.import.btn")}</button>
     </div>`:""}
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0;margin-bottom:12px">
       ${isC?`<div class="field" style="grid-column:1/3"><label>${t("md.lbl.supplier")}</label><input class="inp" id="d_cp" value="${esc(draft.contraparte)}"></div>`:clienteRow}
-      <div class="field"><label>${t("common.date")}</label><input class="inp" type="date" id="d_fe" value="${esc(draft.fecha)}"></div>
+      <div class="field"><label>${t("common.date")}</label><input class="inp" type="date" id="d_fe" value="${esc(draft.fecha)}" max="${isoLocal(new Date())}"></div>
       <div class="field"><label>${isC?t("md.lbl.docno"):t("md.lbl.invno")+' <span class="hint" style="font-weight:400">'+t("md.invno.hint")+'</span>'}</label><input class="inp" id="d_nu" value="${esc(draft.numero)}"></div>
+      ${isC?"":cobroCamposVentaHTML(draft,true)}
     </div>
     <div id="lineHost"></div>
-    <button class="btn sm" id="addLine" style="margin-top:10px">${t("md.btn.addline")}</button>
+    <button class="btn sm" id="addLine" style="margin-top:10px">${ICO.plus}${t("md.btn.addline")}</button>
     ${isC?`
     <div class="phead" style="margin:16px 0 6px;padding:0"><h3 style="font-size:13px">${t("md.h.addcosts")}</h3></div>
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
@@ -165,11 +172,11 @@ function renderDocModal(){
     </div>
     <div class="phead" style="margin:16px 0 6px;padding:0"><h3 style="font-size:13px">${t("md.h.extra")} <span class="hint" style="font-weight:400">${t("md.extra.hint")}</span></h3></div>
     <div id="cargoHost"></div>
-    <button class="btn sm" id="addCargo" style="margin-top:8px">${t("md.btn.addcharge")}</button>
+    <button class="btn sm" id="addCargo" style="margin-top:8px">${ICO.plus}${t("md.btn.addcharge")}</button>
     ${isAdmin()?`
     <div class="phead" style="margin:16px 0 6px;padding:0"><h3 style="font-size:13px">${t("md.h.selling")} <span class="hint" style="font-weight:400">${t("md.selling.hint")}</span></h3></div>
     <div id="costHost"></div>
-    <button class="btn sm" id="addCost" style="margin-top:8px">${t("md.btn.addcost")}</button>
+    <button class="btn sm" id="addCost" style="margin-top:8px">${ICO.plus}${t("md.btn.addcost")}</button>
     <div id="netBox" style="margin-top:12px"></div>`:""}`}
     <div id="docWarn"></div>
   `;
@@ -178,7 +185,7 @@ function renderDocModal(){
     isC?(editing?t("md.title.editpurchase"):t("md.title.newpurchase")):(editing?t("md.title.editsale"):t("md.title.newsale")), body,
     [
       {label:t("common.cancel"),cls:"btn",act:()=>{ draft.editingId=null; closeModal(); }},
-      {label: editing?t("md.btn.savechanges") : (isC?t("md.btn.confirmpurchase"):t("md.btn.confirmsale")),cls:isC?"btn up":"btn down",act:confirmDoc}
+      {label: editing?t("md.btn.savechanges") : (isC?t("md.btn.confirmpurchase"):t("md.btn.confirmsale")),cls:"btn primary",act:confirmDoc}   // v103: color de la app (antes verde/rojo), igual que Prince
     ],
     "wide doc",
     `<div class="totrow"><span style="color:var(--muted)">${t("md.doctotal")}</span><span class="num" id="docTotal">${money(docTotal())}</span></div>`
@@ -195,7 +202,7 @@ function renderDocModal(){
   const dOw=document.getElementById("d_owner"); if(dOw) dOw.onclick=(e)=> openDocOwnerPicker(e.currentTarget);
   const dOe=document.getElementById("d_origen_edit"); if(dOe) dOe.onclick=()=>{ draft._origenEdit=true; renderDocModal(); };
   const dst=document.getElementById("d_store"); if(dst) dst.onchange=e=>{ draft.store=e.target.value; };
-  const dvend=document.getElementById("d_vend"); if(dvend) dvend.onchange=e=>{ draft.vendedorId=e.target.value; };
+  const dvend=document.getElementById("d_vend"); if(dvend) dvend.onchange=e=>{ draft.vendedorId=e.target.value; refreshNet(); };
   const dsv=document.getElementById("d_storeventa"); if(dsv) dsv.onchange=e=>{ draft.storeVenta=e.target.value; renderDocModal(); };   // re-render: refresca disponibilidad y costos del depósito
   const cp=document.getElementById("d_cp"); if(cp) cp.oninput=e=>draft.contraparte=e.target.value;
   document.getElementById("d_fe").oninput=e=>draft.fecha=e.target.value;
@@ -208,6 +215,8 @@ function renderDocModal(){
     pintarProrateo();
   } else {
     document.getElementById("d_cli").onclick=(e)=> openClientePicker(e.currentTarget);
+    const dfix=document.getElementById("d_clifix"); if(dfix) dfix.onclick=(e)=>{ e.preventDefault(); openClienteForm(draft.clienteId); };
+    cobroWireVenta(draft);   // v78 · medio de cobro + cuenta de destino
     const et=document.getElementById("d_envtipo"), em=document.getElementById("d_envmonto");
     et.onchange=()=>{ draft.envio.tipo=et.value; em.disabled=(et.value==="free"); if(et.value==="free"){ draft.envio.monto=0; em.value=0; } refreshTotal(); };
     em.oninput=()=>{ draft.envio.monto=parseNum(em.value); refreshTotal(); };
@@ -247,7 +256,7 @@ function renderCargos(){
     <div class="grid-form" style="grid-template-columns:1fr auto auto;padding:0;gap:8px;align-items:end;margin-bottom:6px">
       <div class="field"><label>${t("md.lbl.concept")}</label><input class="inp" data-cgnota="${i}" value="${esc(c.nota||"")}" placeholder="${t("md.ph.charge")}"></div>
       <div class="field"><label>${t("md.lbl.amount",{cc:esc(cc)})}</label><input class="inp num" data-cgmonto="${i}" value="${c.monto||0}" style="max-width:130px"></div>
-      <button class="btn ghost sm" data-cgdel="${i}" style="color:var(--alert)">✕</button>
+      <button class="btn ghost sm icon-only" data-cgdel="${i}" style="color:var(--alert)" title="${t("md.tt.remove")}" aria-label="${t("md.tt.remove")}">${ICO.x}</button>
     </div>`).join("") : `<p class="hint" style="font-size:12px;margin:0">${t("md.cargos.empty")}</p>`;
   host.querySelectorAll("[data-cgnota]").forEach(inp=> inp.oninput=()=>{ draft.cargosCliente[+inp.dataset.cgnota].nota=inp.value; });
   host.querySelectorAll("[data-cgmonto]").forEach(inp=> inp.oninput=()=>{ draft.cargosCliente[+inp.dataset.cgmonto].monto=parseNum(inp.value); refreshTotal(); });
@@ -273,19 +282,61 @@ function pintarProrateo(){
 function nuevaLineaCosto(){ return { key:uid(), tipo:"envio", nota:"", monto:0, horas:0, valorHora:0 }; }
 /* Total de costos de venta (USD). */
 function costosDraftTotal(){ return (draft.costosExtra||[]).reduce((a,c)=> a + (parseNum(c.monto)||0), 0); }
-function draftGrossMargin(){ return (draft.lineas||[]).reduce((a,l)=> a + ((parseNum(l.precio)||0)-(l.costoRef||0))*(parseNum(l.cantidad)||0), 0); }
+/* v87 · Costo estimado de la línea: en una venta nueva, el FIFO real que consumiría hoy en
+   el depósito elegido (peek, sin mutar); editando (las unidades ya se consumieron) cae al
+   costo de referencia de la línea. */
+function draftCostoLinea(l){
+  const q=parseNum(l.cantidad)||0, p=l.productoId?prodById(l.productoId):null;
+  if(p && q>0 && !draft.editingId && typeof fifoCostoPeek==="function") return fifoCostoPeek(p, draft.storeVenta||STORE_IDS[0], q).unit;
+  return l.costoRef||0;
+}
+function draftGrossMargin(){ return (draft.lineas||[]).reduce((a,l)=> a + ((parseNum(l.precio)||0)-draftCostoLinea(l))*(parseNum(l.cantidad)||0), 0); }
 function draftCommRate(){
+  if(draft.editingId){ const od=db.ventas.find(x=>x.id===draft.editingId); if(od && od.commissionRate!=null) return od.commissionRate; }
   if(draft.vendedorId){ const v=vendedorById(draft.vendedorId); if(v&&v.rate!=null) return v.rate; }
   return 0;   // venta de la casa (sin vendedor) = 0% de comisión
 }
+/* v87 · Tarjeta "Rentabilidad estimada" (sólo admin, ventas). Una barra apilada muestra
+   cómo se reparte lo que se cobra: costo de la mercadería, comisión, costos de venta y lo
+   que queda (margen neto). Mismo criterio que el P&L: neto = margen de productos + envío
+   cobrado + cargos on-top − comisión − costos de venta. */
 function refreshNet(){
-  const box=document.getElementById("netBox"); if(!box) return;
-  const gm=round2(draftGrossMargin()), rate=draftCommRate(), comm=round2(gm*rate), cost=round2(costosDraftTotal()), net=round2(gm-comm-cost);
-  box.innerHTML = `
-    <div class="totrow"><span style="color:var(--muted)">${t("md.net.gross")}</span><span class="num">${money(gm)}</span></div>
-    <div class="totrow"><span style="color:var(--muted)">${t("md.net.comm",{p:nf0.format(rate*100)})}</span><span class="num">${money(comm)}</span></div>
-    <div class="totrow"><span style="color:var(--muted)">${t("md.net.costs")}</span><span class="num">${money(cost)}</span></div>
-    <div class="totrow" style="font-weight:700"><span>${t("md.net.net")}</span><span class="num" style="color:${net<0?'var(--alert)':'var(--up)'}">${money(net)}</span></div>`;
+  const box=document.getElementById("netBox"); if(!box || !draft || draft.tipo!=="venta") return;
+  const gm=round2(draftGrossMargin()), rate=draftCommRate(), comm=round2(gm*rate), cost=round2(costosDraftTotal());
+  const ship=(draft.envio && draft.envio.tipo==="monto") ? (parseNum(draft.envio.monto)||0) : 0, carg=cargosClienteTotal();
+  const prodRev = round2((draft.lineas||[]).reduce((a,l)=> a + (parseNum(l.precio)||0)*(parseNum(l.cantidad)||0), 0));
+  const cogs = round2(prodRev - gm), ingresos = round2(prodRev + ship + carg), net = round2(gm+ship+carg-comm-cost);
+  if(!(ingresos>0) && !(cogs>0)){
+    box.innerHTML = `<div class="netcard empty"><div class="nc-head"><span class="nc-title">${t("md.net.title")}</span></div>
+      <div class="nc-bar"><span class="nc-seg" style="flex:1;background:var(--line)"></span></div>
+      <p class="nc-empty">${t("md.net.empty")}</p></div>`;
+    return;
+  }
+  const segs = [
+    { k:"cogs", v:Math.max(0,cogs), lbl:t("md.net.cogs") },
+    { k:"comm", v:Math.max(0,comm), lbl:t("md.net.comm2",{p:nf0.format(rate*100)}) },
+    { k:"cost", v:Math.max(0,cost), lbl:t("md.net.costs2") },
+    { k:"net",  v:Math.max(0,net),  lbl:t("md.net.net2") },
+  ];
+  const escala = Math.max(ingresos, segs.reduce((x,s)=>x+s.v,0)) || 1;
+  const pct = ingresos>0 ? net/ingresos : null;
+  const pctTxt = pct==null ? "—" : (nfDec(1).format(pct*100)+"%");
+  const bar = segs.filter(s=>s.v>0).map(s=>`<span class="nc-seg nc-${s.k}" style="flex:${s.v/escala}" title="${esc(s.lbl)}: ${money(s.v)}"></span>`).join("")
+            + (net<0 ? `<span class="nc-seg nc-loss" style="flex:${Math.abs(net)/escala}" title="${t("md.net.loss")}: ${money(net)}"></span>` : "");
+  const row = (k, lbl, v, neg)=> `<div class="nc-row"><span class="nc-dot nc-${k}"></span><span class="nc-lbl">${esc(lbl)}</span><span class="num">${neg&&v>0?"−":""}${money(v)}</span></div>`;
+  const incDet = [ship>0?t("md.net.inc.ship",{v:money(ship)}):"", carg>0?t("md.net.inc.ontop",{v:money(carg)}):""].filter(Boolean).join(" · ");
+  box.innerHTML = `<div class="netcard">
+    <div class="nc-head">
+      <span class="nc-title">${t("md.net.title")}</span>
+      <span class="nc-pill ${net<0?"neg":(pct!=null&&pct<0.1?"low":"pos")}">${t("md.net.marginpct",{p:pctTxt})}</span>
+    </div>
+    <div class="nc-income"><span>${t("md.net.income")}${incDet?` <small>(${incDet})</small>`:""}</span><span class="num">${money(ingresos)}</span></div>
+    <div class="nc-bar">${bar}</div>
+    ${row("cogs", segs[0].lbl, cogs, true)}
+    ${row("comm", segs[1].lbl, comm, true)}
+    ${row("cost", segs[2].lbl, cost, true)}
+    <div class="nc-total"><span class="nc-dot ${net<0?"nc-loss":"nc-net"}"></span><span class="nc-lbl">${net<0?t("md.net.loss"):t("md.net.net2")}</span><span class="num ${net<0?"neg":"pos"}">${net<0?"−"+money(-net):money(net)}</span></div>
+  </div>`;
 }
 function renderCostos(){
   const host=document.getElementById("costHost"); if(!host) return;
@@ -301,7 +352,7 @@ function renderCostos(){
     return `<tr>
       <td style="width:150px"><select class="inp" data-ck="tipo" data-ci="${i}">${COSTO_TIPOS.map(t=>`<option value="${t.id}" ${t.id===c.tipo?"selected":""}>${esc(costoTipoLabel(t.id))}</option>`).join("")}</select></td>
       ${midCells}
-      <td style="width:28px"><button class="btn ghost sm" data-cdel="${i}" title="${t("md.tt.remove")}">✕</button></td>
+      <td style="width:28px"><button class="btn ghost sm icon-only" data-cdel="${i}" title="${t("md.tt.remove")}" aria-label="${t("md.tt.remove")}">${ICO.x}</button></td>
     </tr>`;
   }).join("");
   host.innerHTML = draft.costosExtra.length
@@ -333,16 +384,16 @@ function renderCostos(){
 let adjDraft = null;
 function openAjuste(prodId){
   if(!puedeAjustar()){ toast(t("md.err.adminajuste"),"warn"); return; }
-  adjDraft = { productoId: prodId||"", store: effectiveStores()[0]||STORE_IDS[0], modo:"delta", cantidad:"", fecha:hoyISO(), obs:"" };
+  adjDraft = { productoId: prodId||"", store: isEditor() ? EDITOR_STORE : (effectiveStores()[0]||STORE_IDS[0]), modo:"delta", cantidad:"", fecha:hoyISO(), obs:"" };
   renderAjuste();
 }
 function renderAjuste(){
   const p = prodById(adjDraft.productoId);
   const store = adjDraft.store;
   const opts = `<option value="">${t("md.aj.pickprod")}</option>` +
-    db.productos.filter(x=>!soloEnVault(x)||isAdmin()).map(x=>`<option value="${x.id}" ${x.id===adjDraft.productoId?"selected":""}>${esc(x.sku?("["+x.sku+"] "):"")}${esc(x.nombre)}</option>`).join("");
+    db.productos.filter(x=>!soloEnVault(x)||isAdmin()).map(x=>`<option value="${x.id}" ${x.id===adjDraft.productoId?"selected":""}>${esc((x.sku&&verSku())?("["+x.sku+"] "):"")}${esc(x.nombre)}</option>`).join("");
   const stockActual = p ? qty(stockDe(p, store)) : "—";
-  const allowSt = allowedStores();
+  const allowSt = isEditor() ? [EDITOR_STORE] : allowedStores();   // v94: el editor ajusta sólo Argentina
   const storeSel = allowSt.length>1
     ? `<select class="inp" id="aj_store">${allowSt.map(s=>`<option value="${s}" ${s===store?"selected":""}>${esc(storeName(s))}</option>`).join("")}</select>`
     : `<input class="inp" value="${esc(storeName(store))}" disabled>`;
@@ -360,7 +411,7 @@ function renderAjuste(){
         <select class="inp" id="aj_prod">${opts}</select>
       </div>
       <div class="field"><label>${t("md.lbl.society")}</label>${storeSel}
-        ${p?`<div style="font-size:12px;color:var(--muted);margin-top:4px">${t("md.aj.stockline",{n:'<b class="num">'+stockActual+'</b>',cost:money(p.ultimoCosto)})}</div>`:""}
+        ${p?`<div style="font-size:12px;color:var(--muted);margin-top:4px">${verCostos()?t("md.aj.stockline",{n:'<b class="num">'+stockActual+'</b>',cost:money(p.ultimoCosto)}):t("md.aj.stockonly",{n:'<b class="num">'+stockActual+'</b>'})}</div>`:""}
       </div>
       <div class="field"><label>${t("md.aj.type")}</label>
         <select class="inp" id="aj_modo">
@@ -377,7 +428,7 @@ function renderAjuste(){
   `;
   buildModal(t("md.aj.title"), body, [
     {label:t("common.cancel"), cls:"btn", act:()=>{ adjDraft=null; closeModal(); }},
-    {label:t("md.aj.record"), cls:"btn", act:confirmAjuste}
+    {label:t("md.aj.record"), cls:"btn primary", act:confirmAjuste}
   ]);
   const sync=()=>{
     adjDraft.productoId=document.getElementById("aj_prod").value;
@@ -408,10 +459,15 @@ function confirmAjuste(){
   if(!confirm(t("md.aj.confirm",{prod:p.nombre,store:storeName(store),from:qty(cur),to:qty(nuevo),delta:(delta>=0?'+':'−')+qty(Math.abs(delta)),reason:adjDraft.obs.trim()}))) return;
   const ref = t("md.aj.ref",{obs:adjDraft.obs.trim()});
   const fechaISO = new Date(adjDraft.fecha+"T12:00:00").toISOString();
-  // FIFO: positive adjustment adds a layer at last cost; negative consumes layers
-  if(delta>0) fifoEntrada(p, store, delta, p.ultimoCosto||0, ref, null);
-  else fifoConsumir(p, store, -delta);
-  moverStock(p, delta, p.ultimoCosto||0, "ajuste", null, ref, { tipo:"ajuste", obs:adjDraft.obs.trim(), fecha:fechaISO, store });
+  // FIFO: positive adjustment adds a layer at last cost; negative consumes layers.
+  // v103 (igual que Prince): adjId une la capa (refId) con el movimiento, y el negativo guarda
+  // qué capas consumió: así borrar el ajuste lo revierte exacto (ver deleteAjuste).
+  const adjId = "adj_"+uid();
+  let consumedAdj = null;
+  if(delta>0) fifoEntrada(p, store, delta, p.ultimoCosto||0, ref, adjId);
+  else consumedAdj = fifoConsumir(p, store, -delta).consumed || null;
+  moverStock(p, delta, p.ultimoCosto||0, "ajuste", adjId, ref, { tipo:"ajuste", obs:adjDraft.obs.trim(), fecha:fechaISO, store });
+  if(consumedAdj) db.movimientos[db.movimientos.length-1].consumed = consumedAdj;
   adjDraft=null; save(); closeModal();
   toast(t("md.aj.recorded",{delta:(delta>=0?'+':'−')+qty(Math.abs(delta))}), delta>=0?"up":"down");
   render();
@@ -421,7 +477,7 @@ function prodOptions(sel, soloConStock){
   const lista = soloConStock ? db.productos.filter(p=> (p.stock||0) > 0) : db.productos;
   const opts = lista.map(p=>{
     const disp = soloConStock ? t("md.opt.disp",{n:qty(p.stock)}) : "";
-    return `<option value="${p.id}" ${p.id===sel?"selected":""}>${esc(p.sku?("["+p.sku+"] "):"")}${esc(p.nombre)}${disp}</option>`;
+    return `<option value="${p.id}" ${p.id===sel?"selected":""}>${esc((p.sku&&verSku())?("["+p.sku+"] "):"")}${esc(p.nombre)}${disp}</option>`;
   }).join("");
   const nuevo = soloConStock ? "" : `<option value="__new">${t("md.opt.newprod")}</option>`;
   const vacio = soloConStock && !lista.length
@@ -521,7 +577,7 @@ function pickerItemsHTML(i, q){
                   : db.productos.filter(p=> stockDe(p, vstoreVenta)>0 || p.id===cur);
   // orden alfabético SIEMPRE (task 2), por nombre
   lista.sort((a,b)=> String(a.nombre||"").localeCompare(String(b.nombre||""),"en",{numeric:true}));
-  if(q) lista = lista.filter(p=> ((p.nombre||"")+" "+(p.sku||"")).toLowerCase().includes(q));
+  if(q) lista = lista.filter(p=> ((p.nombre||"")+" "+skuHay(p)).toLowerCase().includes(q));
   let html = lista.map(p=>{
     const sku = p.sku ? `<span class="sku">${esc(p.sku)}</span>` : "";
     let disp = "";
@@ -682,7 +738,7 @@ function openClientePicker(anchor){
     let lista = db.clientes.slice().sort((a,b)=>String(a.nombre||"").localeCompare(String(b.nombre||""),"en"));
     if(q) lista = lista.filter(c=> ((c.nombre||"")+" "+(c.empresa||"")+" "+(c.email||"")).toLowerCase().includes(q));
     let html = lista.map(c=>`<button type="button" class="ppick-item${c.id===draft.clienteId?" active":""}" data-pickcli="${c.id}">
-      <span class="pi-name">${esc(c.nombre)}${c.empresa?` · ${esc(c.empresa)}`:""}</span></button>`).join("");
+      <span class="pi-name">${esc(nombreVis(c.nombre))}${c.empresa?` · ${esc(nombreVis(c.empresa))}`:""}</span>${clienteIncompleto(c)?`<span class="cli-inc-dot" title="${t("cl.inc.badge")}">${ICO.warn}</span>`:""}</button>`).join("");
     if(!lista.length) html = `<div class="ppick-empty">${t("md.pick.nocustmatch")}</div>`;
     html += `<button type="button" class="ppick-item new" data-pickcli="__new">${t("md.pick.addcust")}</button>`;
     listEl.innerHTML = html;
@@ -714,7 +770,7 @@ function openDocOwnerPicker(anchor){
     let lista = db.clientes.slice().sort((a,b)=>String(a.nombre||"").localeCompare(String(b.nombre||""),"en"));
     if(q) lista = lista.filter(c=> ((c.nombre||"")+" "+(c.empresa||"")+" "+(c.email||"")).toLowerCase().includes(q));
     let html = lista.map(c=>`<button type="button" class="ppick-item${c.id===draft.terceroId?" active":""}" data-pickowner="${c.id}">
-      <span class="pi-name">${esc(c.nombre)}${c.empresa?` · ${esc(c.empresa)}`:""}</span></button>`).join("");
+      <span class="pi-name">${esc(nombreVis(c.nombre))}${c.empresa?` · ${esc(nombreVis(c.empresa))}`:""}</span></button>`).join("");
     if(!lista.length) html = `<div class="ppick-empty">${t("md.pick.noclimatch")}</div>`;
     html += `<button type="button" class="ppick-item new" data-pickowner="__new">${t("md.pick.addcli")}</button>`;
     listEl.innerHTML = html;
@@ -737,33 +793,17 @@ function openDocOwnerPicker(anchor){
    renderDocModal() (el draft persiste en memoria). */
 function openClienteForm(id, nombrePre){
   const c = id ? clienteById(id) : null;
-  buildModal(c?t("md.cli.edit"):t("md.cli.new"), `
-    <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
-      <div class="field" style="grid-column:1/3"><label>${t("md.cli.name")} <span class="hint" style="font-weight:400">${t("md.req")}</span></label><input class="inp" id="c_nom" value="${c?esc(c.nombre):esc(nombrePre||"")}"></div>
-      <div class="field"><label>${t("md.cli.contact")}</label><input class="inp" id="c_con" value="${c?esc(c.contacto):""}"></div>
-      <div class="field"><label>${t("md.cli.company")}</label><input class="inp" id="c_emp" value="${c?esc(c.empresa):""}"></div>
-      <div class="field"><label>${t("md.cli.phone")}</label><input class="inp" id="c_tel" value="${c?esc(c.telefono):""}"></div>
-      <div class="field"><label>${t("md.cli.email")} <span class="hint" style="font-weight:400">${t("md.req")}</span></label><input class="inp" id="c_mail" value="${c?esc(c.email):""}"></div>
-      <div class="field" style="grid-column:1/3"><label>${t("md.cli.address")} <span class="hint" style="font-weight:400">${t("md.req")}</span></label><input class="inp" id="c_dir" value="${c?esc(c.direccion):""}" placeholder="${t("md.cli.ph.address")}"></div>
-      <div class="field"><label>${t("md.cli.city")}</label><input class="inp" id="c_ciu" value="${c?esc(c.ciudad):""}"></div>
-      <div class="field"><label>${t("md.cli.state")}</label><input class="inp" id="c_est" value="${c?esc(c.estado):""}" placeholder="${t("md.cli.ph.state")}"></div>
-      <div class="field"><label>${t("md.cli.zip")} <span class="hint" style="font-weight:400">${t("md.req")}</span></label><input class="inp" id="c_zip" value="${c?esc(c.zip):""}"></div>
-      <div class="field"><label>${t("md.cli.country")}</label><input class="inp" id="c_pais" value="${c?esc(c.pais):""}" placeholder="${t("md.cli.ph.country")}"></div>
-    </div>
-  `, [
+  buildModal(c?t("md.cli.edit"):t("md.cli.new"), clienteFormHTML("c", c, nombrePre), [
     {label:t("common.cancel"),cls:"btn",act:()=>renderDocModal()},
     {label:t("md.cli.save"),cls:"btn primary",act:()=>saveCliente(id)}
   ], true);
+  wireClienteForm("c", id);
+  if(c && clienteIncompleto(c)) CLI_FIELDS.forEach(([sfx])=> pintarCampoCliente("c", sfx, id));   // v92
   document.getElementById("c_nom").focus();
 }
 function saveCliente(id){
-  const g=x=>document.getElementById(x).value.trim();
-  const nom=g("c_nom"), mail=g("c_mail"), dir=g("c_dir"), zip=g("c_zip");
-  if(!nom){ toast(t("md.cli.errname"),"warn"); return; }
-  if(!mail || !dir || !zip){ toast(t("md.cli.errfields"),"warn"); return; }
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)){ toast(t("md.cli.erremail"),"warn"); return; }
-  const campos={ nombre:nom, contacto:g("c_con"), empresa:g("c_emp"), telefono:g("c_tel"),
-                 email:mail, direccion:dir, ciudad:g("c_ciu"), estado:g("c_est"), zip, pais:g("c_pais") };
+  const campos = readClienteForm("c", id);       // v92: validaciones en vivo + avisos
+  if(!campos) return;
   let cid=id;
   if(id){ Object.assign(clienteById(id), campos); }
   else { const nc=Object.assign({id:uid()}, campos); db.clientes.push(nc); cid=nc.id; }

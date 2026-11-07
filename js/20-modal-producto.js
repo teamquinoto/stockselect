@@ -18,17 +18,22 @@ function openProd(id){
   const catList = CATEGORIAS.includes(catActual) ? CATEGORIAS : [catActual, ...CATEGORIAS];
   const catOpts = catList.map(c=>`<option value="${esc(c)}" ${c===catActual?"selected":""}>${esc(c)}</option>`).join("");
   const nivOpts = NIVELES.map(([v,l])=>`<option value="${v}" ${p&&p.nivel===v?"selected":""}>${esc(t("prod.niv."+v))}</option>`).join("");
+  // v94 · SKU sólo admin; costos/markup/margen sólo admin. Se ocultan (no se borran): al guardar quedan los valores que había.
+  const HS = verSku() ? "" : ' style="display:none"';
+  const HC = verCostos() ? "" : ' style="display:none"';
+  const storesAlta = isEditor() ? [EDITOR_STORE] : allowedStores();
   buildModal(p?t("prod.md.edit"):t("prod.md.new"), `
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
-      <div class="field"><label>${t("prod.l.sku")}</label><input class="inp" id="p_sku" value="${p?esc(p.sku):""}"></div>
-      <div class="field"><label>${t("prod.l.unit")}</label><input class="inp" id="p_uni" value="${p?esc(p.unidad):"u"}" placeholder="${t('prod.ph.unit')}"></div>
+      <div class="field"${HS}><label>${t("prod.l.sku")}</label><input class="inp" id="p_sku" value="${p?esc(p.sku):""}"></div>
+      <div class="field"${verSku()?"":' style="grid-column:1/3"'}><label>${t("prod.l.unit")}</label><input class="inp" id="p_uni" value="${p?esc(p.unidad):"u"}" placeholder="${t('prod.ph.unit')}"></div>
       <div class="field" style="grid-column:1/3"><label>${t("prod.l.name")}</label><input class="inp" id="p_nom" value="${p?esc(p.nombre):""}"></div>
       ${!p ? `<div class="field"><label>${t("prod.l.initstock")}</label><input class="inp num" id="p_stk" value="0"></div>
-      <div class="field"><label>${t("bar.society")}</label><select class="inp" id="p_store">${(allowedStores()).map(s=>`<option value="${s}" ${s===(effectiveStores()[0]||STORE_IDS[0])?"selected":""}>${esc(storeName(s))}</option>`).join("")}</select></div>`
+      <div class="field"><label>${t("bar.society")}</label><select class="inp" id="p_store">${storesAlta.map(s=>`<option value="${s}" ${s===(isEditor()?EDITOR_STORE:(effectiveStores()[0]||STORE_IDS[0]))?"selected":""}>${esc(storeName(s))}</option>`).join("")}</select></div>`
       : `<div class="field"><label>${t("prod.l.totalstock")}</label><input class="inp num" value="${p.stock}" disabled></div>
       <div class="field"><label>${t("prod.l.reorder")}</label><input class="inp num" id="p_rep" value="${p.puntoRepedido}"></div>`}
       ${!p ? `<div class="field"><label>${t("prod.l.reorder")}</label><input class="inp num" id="p_rep" value="0"></div>` : ""}
     </div>
+    ${skuAsocSeccionHTML(p)}
 
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0;margin-top:6px">
       <div class="field"><label>${t("prod.l.language")}</label><select class="inp" id="p_idioma">
@@ -42,6 +47,7 @@ function openProd(id){
     </div>
     ${p&&isAdmin()?`<p class="hint" style="font-size:12px;margin:6px 0 0">${t("prod.hint.invest")}</p>`:""}
 
+    <div${HC}>
     <div class="phead" style="margin:16px 0 6px;padding:0"><h3 style="font-size:13px">${t("prod.h.cost")}</h3>
       <label style="font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center;cursor:pointer">
         <input type="checkbox" id="p_desglosa" ${desglosaInicial?"checked":""}> ${t("prod.l.breakdown")}
@@ -53,13 +59,14 @@ function openProd(id){
       <div class="field" id="p_wrapFlete"><label>${t("prod.l.freight")}</label><input class="inp num" id="p_flete" value="${fle}"></div>
       <div class="field" style="grid-column:1/4"><label>${t("prod.l.totalcost",{ccy:CCY_SYM})}</label><input class="inp num" id="p_cos" value="${total}"></div>
     </div>
+    </div>
 
     <div class="phead" style="margin:16px 0 6px;padding:0"><h3 style="font-size:13px">${t("prod.l.listprice")}</h3></div>
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
-      <div class="field"><label>${t("prod.l.markup")}</label><input class="inp num" id="p_mk" value="${p&&p.ultimoCosto>0?round2((p.precioVenta/p.ultimoCosto-1)*100):0}"></div>
+      <div class="field"${HC}><label>${t("prod.l.markup")}</label><input class="inp num" id="p_mk" value="${p&&p.ultimoCosto>0?round2((p.precioVenta/p.ultimoCosto-1)*100):0}"></div>
       <div class="field"><label>${t("prod.l.listprice")}</label><input class="inp num" id="p_pv" value="${p?p.precioVenta:0}"></div>
     </div>
-    <p class="hint" id="p_mgReal" style="font-size:12px;margin:6px 0 0"></p>
+    <p class="hint" id="p_mgReal" style="font-size:12px;margin:6px 0 0${verCostos()?"":";display:none"}"></p>
 
     <div class="phead" style="margin:16px 0 6px;padding:0"><h3 style="font-size:13px">${t("prod.h.category")}</h3></div>
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
@@ -109,7 +116,8 @@ function openProd(id){
   $("p_pv").oninput=()=>syncMarkup("pv");
   $("p_cat").onchange=()=>{ $("p_bpc").value = boxesCaseDefault($("p_cat").value); };
   syncDesglose(); pintarMargen();
-  $("p_sku").focus();
+  skuAsocWire(id);
+  (verSku() ? $("p_sku") : $("p_nom")).focus();
 }
 function saveProd(id){
   const g=x=>document.getElementById(x).value;
@@ -118,6 +126,8 @@ function saveProd(id){
   const sku=g("p_sku").trim();
   const dup=skuEnUso(sku, id);
   if(dup){ toast(t("prod.tt.dupsku",{sku:sku,name:dup.nombre}),"warn"); return; }
+  const asoc = skuAsocLeer(id, sku);              // v77 · códigos de otros proveedores
+  if(!asoc.ok) return;
   const desglosa = document.getElementById("p_desglosa").checked;
   const neto = parseNum(g("p_neto"));
   const hand = desglosa ? parseNum(g("p_hand")) : 0;
@@ -126,7 +136,7 @@ function saveProd(id){
   const estado = document.getElementById("p_estado") ? g("p_estado") : PRODUCT_STATES.SALE;
   const idioma = document.getElementById("p_idioma") ? g("p_idioma") : "";
   const campos = {
-    sku, unidad:g("p_uni").trim()||"u", nombre:nom,
+    sku, skusAsoc:asoc.lista, unidad:g("p_uni").trim()||"u", nombre:nom,
     costoNeto:neto, costoHandling:hand, costoFlete:flete, ultimoCosto:total,
     precioVenta:parseNum(g("p_pv")), puntoRepedido:parseNum(g("p_rep")),
     categoria:g("p_cat"), nivel:g("p_niv"), estado, idioma,

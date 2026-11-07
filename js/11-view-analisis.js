@@ -16,9 +16,11 @@ function hbars(items, fmt, color){
     const c = i.color || color;
     const chip = i.sku ? `<span class="sku">${esc(i.sku)}</span> ` : "";
     const full = (i.sku?("["+i.sku+"] "):"") + i.label;
-    const attr = i.saga ? ` data-saga="${esc(i.saga)}"` : "";
+    // data-pid: la barra abre la ficha del producto (antes filtraba toda su línea, lo cual sorprendía)
+    // data-drill: tocar la barra abre las ventas que la componen (11e-drill.js)
+    const attr = i.drill ? ` data-drill="${esc(i.drill)}" tabindex="0" role="button" aria-label="${esc(t("dr.aria",{x:full}))}"` : (i.saga ? ` data-saga="${esc(i.saga)}"` : "");
     return `<div class="crow"${attr}>
-      <div class="cl" title="${esc(full)}">${chip}${esc(i.label)}</div>
+      <div class="cl" data-fullname="${esc(full)}">${chip}${esc(i.label)}</div>
       <div class="ct"><div class="cf" style="width:${pct.toFixed(1)}%;background:${c}"></div></div>
       <div class="cv">${fmt(i.value)}</div>
     </div>`;
@@ -122,408 +124,210 @@ if(!window.__donutOutsideWired){
   document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') clearAllDonuts(); });
 }
 
-/* Analysis slicers (point 7). Store comes from the global switcher (activeStore). */
-let anFiltros = { vend:"", saga:"", idioma:"", pais:"", desde:"", hasta:"" };
-let anMetric = "usd";   // "usd" | "units"  (punto 20: toggle de métrica en los gráficos)
-/* Distinct customer countries seen in sales (for the country slicer). */
+/* ============================================================
+   FILTROS COMPARTIDOS DE FINANZAS (Análisis y P&L usan la misma barra)
+   ------------------------------------------------------------
+   Un solo estado (finFiltros, en 05-metrics.js): si filtrás Dragon Ball
+   en Análisis y pasás al P&L, el P&L ya está filtrado igual. El período
+   es un preset (MTD/QTD/YTD/12M/All); tocar las fechas pasa a "custom".
+   ============================================================ */
+let anMetric = "usd";   // "usd" | "units" (toggle de métrica en los rankings)
 function paisesVentas(){
   const set=new Set();
-  db.ventas.forEach(v=>{ const c=(v.cliente&&v.cliente.pais)||""; if(c) set.add(c); });
-  return [...set].sort();
+  (db.ventas||[]).forEach(v=>{ const c=(v.cliente&&v.cliente.pais)||""; if(c) set.add(c); });
+  // ordenados por cómo se LEEN en el idioma actual (el valor guardado es el canónico en inglés)
+  return [...set].sort((a,b)=> paisLabel(a).localeCompare(paisLabel(b), lang()));
 }
-/* Sales filtered by the active store focus + analysis slicers. Returns rows
-   flattened to the line level with product, store, price, COGS and margin. */
-function ventasFiltradas(){
-  const desde = anFiltros.desde ? new Date(anFiltros.desde+"T00:00:00") : null;
-  const hasta = anFiltros.hasta ? new Date(anFiltros.hasta+"T23:59:59") : null;
-  const rows=[];
-  db.ventas.forEach(v=>{
-    // Análisis es admin-only: se ven todas las ventas. Todo está en USD.
-    if(anFiltros.vend && (v.vendedorId||"")!==anFiltros.vend) return;
-    if(!effectiveStores().includes(storeDeVenta(v))) return;   // foco por depósito (Swan / Select)
-    if(anFiltros.pais && ((v.cliente&&v.cliente.pais)||"")!==anFiltros.pais) return;
-    const f=new Date(v.fecha+"T12:00:00");
-    if(desde && f<desde) return;
-    if(hasta && f>hasta) return;
-    v.lineas.forEach(l=>{
-      const p=prodById(l.productoId);
-      if(anFiltros.saga && (p? sagaDe(p): "")!==anFiltros.saga) return;
-      if(anFiltros.idioma && (p? (p.idioma||""):"" )!==anFiltros.idioma) return;
-      const cogs = l.cogs!=null ? l.cogs : (l.costo||0)*l.cantidad;
-      rows.push({ fecha:normISO(v.fecha)||v.fecha, vendedor:saleVendedorNombre(v), vendedorId:v.vendedorId||"", productoId:l.productoId, nombre:l.nombre, sku:l.sku,
-        cantidad:l.cantidad, revenue:round2((l.precio||0)*l.cantidad), cogs:round2(cogs),
-        consumed: (Array.isArray(l.consumed) && l.consumed.length) ? l.consumed : null,
-        store: l.store || null,
-        storeVenta: storeDeVenta(v),
-        pais:(v.cliente&&v.cliente.pais)||"", saga:p?sagaDe(p):"", idioma:p?(p.idioma||""):"" });
-    });
-  });
-  return rows;
-}
-function viewAnalisis(){
-  const rows = ventasFiltradas();
-  const revenue = rows.reduce((a,r)=>a+r.revenue,0);
-  const cogs = rows.reduce((a,r)=>a+r.cogs,0);
-  const margin = round2(revenue-cogs);
-  const marginPct = revenue>0 ? (margin/revenue*100) : 0;
-  const units = rows.reduce((a,r)=>a+r.cantidad,0);
-
-  // --- aggregations ---
-  const by = (keyFn)=>{ const m={}; rows.forEach(r=>{ const k=keyFn(r); if(k==null||k==="") return; (m[k]=m[k]||{revenue:0,cogs:0,units:0}); m[k].revenue+=r.revenue; m[k].cogs+=r.cogs; m[k].units+=r.cantidad; }); return m; };
-  const top = (obj, val, n=10)=> Object.entries(obj).map(([k,v])=>({label:k, value:val(v)})).sort((a,b)=>b.value-a.value).slice(0,n);
-
-  const byProd = by(r=>r.nombre);
-  const topRev = top(byProd, v=>v.revenue);
-  const topMargin = top(byProd, v=>round2(v.revenue-v.cogs));
-  const byVend = by(r=>r.vendedor);
-  const byPais = by(r=>r.pais);
-  const byLang = by(r=>langLabel(r.idioma));
-
-  /* --- Costo y margen POR SOCIEDAD (procedencia del stock vendido) ---
-     La venta sale del pool único, pero el consumo FIFO guarda de qué sociedad
-     salió cada unidad (l.consumed). Con eso reconstruimos, por sociedad:
-     unidades despachadas de su stock, COGS real, costo unitario promedio y el
-     margen (asignando el ingreso de cada línea a prorrata de las unidades que
-     aportó cada sociedad). El precio de venta es común al pool, así que la
-     diferencia de margen entre sociedades es, en esencia, diferencia de costo. */
-  const bySoc = {};
-  const addSoc = (soc, units, cogsv, rev)=>{
-    const k = isDeposito(soc) ? soc : "—";
-    const e = bySoc[k] = bySoc[k] || { units:0, cogs:0, revenue:0 };
-    e.units += units; e.cogs = round2(e.cogs + cogsv); e.revenue = round2(e.revenue + rev);
-  };
-  rows.forEach(r=>{
-    if(r.consumed){
-      const lineUnits = r.cantidad || r.consumed.reduce((a,c)=>a+(c.cantidad||0),0);
-      r.consumed.forEach(c=>{
-        const cCogs = round2((c.costoUnit||0)*(c.cantidad||0));
-        const cRev  = lineUnits>0 ? round2(r.revenue*((c.cantidad||0)/lineUnits)) : 0;
-        addSoc(c.sociedad || r.storeVenta, c.cantidad||0, cCogs, cRev);   // ventas previas al fix: el depósito de la venta
-      });
-    } else {
-      // Ventas legacy sin desglose: caen a la sociedad de la línea si existe, o a "—".
-      addSoc(r.store || r.storeVenta || "—", r.cantidad, r.cogs, r.revenue);
-    }
-  });
-  const socOrder = STORE_IDS.concat(Object.keys(bySoc).filter(k=>!isDeposito(k)));
-  const socRows = socOrder.filter(k=>bySoc[k]).map(k=>{
-    const e = bySoc[k];
-    const mg = round2(e.revenue - e.cogs);
-    return { soc:k, nombre: k==="—"?t("an.soc.nobreakdown"):storeName(k), units:e.units, cogs:e.cogs,
-             avg: e.units>0 ? round2(e.cogs/e.units) : 0, revenue:e.revenue, margin:mg,
-             marginPct: e.revenue>0 ? (mg/e.revenue*100) : 0 };
-  });
-
-  // Punto 20: métrica activa (USD o unidades) para los gráficos comparativos
-  const mval = anMetric==="units" ? (v=>v.units) : (v=>v.revenue);
-  const mfmt = anMetric==="units" ? qty : money;
-
-  // Tendencia mensual (dimensión tiempo que faltaba): revenue por mes en la selección
-  const byMonth = {};
-  rows.forEach(r=>{ const k=(r.fecha||"").slice(0,7); if(!k) return; (byMonth[k]=byMonth[k]||{revenue:0,units:0}); byMonth[k].revenue+=r.revenue; byMonth[k].units+=r.cantidad; });
-  const monthsSorted = Object.keys(byMonth).sort();
-  const trend = monthsSorted.map(k=>{ const [y,m]=k.split("-"); return { label:`${t("cal.mon."+((+m)-1)).slice(0,3)} ${y.slice(2)}`, value: anMetric==="units"?byMonth[k].units:byMonth[k].revenue }; });
-
-  // --- Punto 2/6: rendimiento por vendedor (unidades, revenue, margen FIFO) ---
-  const vendPerf = Object.entries(byVend)
-    .map(([k,v])=>({ nombre:k, units:v.units, revenue:round2(v.revenue), margin:round2(v.revenue-v.cogs),
-                     marginPct: v.revenue>0 ? ((v.revenue-v.cogs)/v.revenue*100) : 0 }))
-    .sort((a,b)=>b.revenue-a.revenue);
-
-  const kpis = `
-  <div class="kpis">
-    <div class="kpi"><div class="lbl">${t("an.kpi.revenue")}</div><div class="val">${money(revenue)}</div><div class="sub">${t("an.kpi.unitssold",{n:qty(units)})}</div></div>
-    <div class="kpi"><div class="lbl">${t("an.kpi.cogs")}</div><div class="val">${money(cogs)}</div><div class="sub">${t("an.kpi.cogssub")}</div></div>
-    <div class="kpi"><div class="lbl">${t("an.kpi.grossmargin")}</div><div class="val">${money(margin)}</div><div class="sub">${t("an.kpi.grosssub")}</div></div>
-    <div class="kpi"><div class="lbl">${t("an.kpi.marginpct")}</div><div class="val">${revenue>0?nf0.format(marginPct)+"%":"—"}</div><div class="sub">${t("an.kpi.onrev")}</div></div>
-  </div>`;
-
-  const sagas=sagasUnicas(), paises=paisesVentas();
-  const slicers = `
-  <div class="slicers">
-    <div class="slicer"><span>${t("an.sl.seller")}</span><select id="an_vend"><option value="">${t("an.sl.all")}</option>${vendedores().map(v=>`<option value="${esc(v.id)}" ${anFiltros.vend===v.id?"selected":""}>${esc(v.nombre)}</option>`).join("")}</select></div>
-    <div class="slicer"><span>${t("an.sl.line")}</span><select id="an_saga"><option value="">${t("an.sl.all")}</option>${sagas.map(s=>`<option value="${esc(s)}" ${anFiltros.saga===s?"selected":""}>${esc(s)}</option>`).join("")}</select></div>
-    <div class="slicer"><span>${t("an.sl.language")}</span><select id="an_idioma"><option value="">${t("an.sl.all")}</option>${LANGS.map(([v,l])=>`<option value="${v}" ${anFiltros.idioma===v?"selected":""}>${esc(l)}</option>`).join("")}</select></div>
-    <div class="slicer"><span>${t("an.sl.country")}</span><select id="an_pais"><option value="">${t("an.sl.all")}</option>${paises.map(c=>`<option value="${esc(c)}" ${anFiltros.pais===c?"selected":""}>${esc(c)}</option>`).join("")}</select></div>
-    <div class="slicer"><span>${t("an.sl.from")}</span><input type="date" id="an_desde" value="${esc(anFiltros.desde)}"></div>
-    <div class="slicer"><span>${t("an.sl.to")}</span><input type="date" id="an_hasta" value="${esc(anFiltros.hasta)}"></div>
-    <button class="slicer-reset" id="an_clear">${t("an.sl.reset")}</button>
-  </div>`;
-
-  const MC = anMetric==="units" ? "var(--metric2)" : "var(--accent)";   // #10: color = métrica (dinero=ámbar, unidades=teal); el margen va siempre en verde
-  const charts = `
-  <div class="chart-grid">
-    <div class="panel chart" style="grid-column:1/-1">
-      <p class="ctitle">${t("an.trend.title")}</p>
-      <p class="csub">${t("an.trend.sub",{metric:anMetric==="units"?t("an.w.units"):t("an.w.revenue")})}</p>
-      ${trend.length ? trendChartSVG(trend, mfmt, MC) : `<div class="cempty">${t("an.nosales")}</div>`}
-    </div>
-    <div class="panel chart">
-      <p class="ctitle">${t("an.top.title",{metric:anMetric==="units"?t("an.w.unitslow"):t("an.w.revenuelow")})}</p>
-      <p class="csub">${t("an.top.sub")}</p>
-      ${rows.length ? hbars(top(byProd, mval).map(t=>({label:t.label,value:t.value,saga:sagaOfName(t.label)})), mfmt, MC) : `<div class="cempty">${t("an.nosales")}</div>`}
-    </div>
-    <div class="panel chart">
-      <p class="ctitle">${t("an.topmargin.title")}</p>
-      <p class="csub">${t("an.topmargin.sub")}</p>
-      ${rows.length ? hbars(topMargin, money, "var(--up)") : `<div class="cempty">${t("an.nosales")}</div>`}
-    </div>
-    <div class="panel chart">
-      <p class="ctitle">${t("an.byseller.title",{metric:anMetric==="units"?t("an.w.units"):t("an.w.revenue")})}</p>
-      <p class="csub">${t("an.byseller.sub",{m:anMetric==="units"?t("an.w.unitslow"):t("an.w.amount")})}</p>
-      ${rows.length ? hbars(top(byVend,mval), mfmt, MC) : `<div class="cempty">${t("an.nosales.short")}</div>`}
-    </div>
-    <div class="panel chart">
-      <p class="ctitle">${t("an.bycountry.title",{metric:anMetric==="units"?t("an.w.units"):t("an.w.revenue")})}</p>
-      <p class="csub">${t("an.bycountry.sub",{m:anMetric==="units"?t("an.w.unitslow"):t("an.w.amount")})}</p>
-      ${Object.keys(byPais).length ? hbars(top(byPais,mval,8), mfmt, MC) : `<div class="cempty">${t("an.bycountry.empty")}</div>`}
-    </div>
-    <div class="panel chart">
-      <p class="ctitle">${t("an.bylang.title",{metric:anMetric==="units"?t("an.w.units"):t("an.w.revenue")})}</p>
-      <p class="csub">${t("an.bylang.sub",{m:anMetric==="units"?t("an.w.unitslow"):t("an.w.amount")})}</p>
-      ${Object.keys(byLang).length ? hbars(top(byLang,mval), mfmt, MC) : `<div class="cempty">${t("an.bylang.empty")}</div>`}
-    </div>
-    <div class="panel chart">
-      <p class="ctitle">${t("an.perf.title")}</p>
-      <p class="csub">${t("an.perf.sub")}</p>
-      ${vendPerf.length ? `<div class="table-scroll"><table>
-        <thead><tr><th>${t("an.th.seller")}</th><th class="r">${t("an.th.units")}</th><th class="r">${t("an.th.revenue")}</th><th class="r">${t("an.th.margin")}</th><th class="r">${t("an.th.marginpct")}</th></tr></thead>
-        <tbody>${vendPerf.map(r=>`<tr><td>${esc(r.nombre)}</td><td class="r num">${qty(r.units)}</td><td class="r num">${money(r.revenue)}</td><td class="r num">${money(r.margin)}</td><td class="r num">${r.revenue>0?nf0.format(r.marginPct)+"%":"—"}</td></tr>`).join("")}</tbody>
-      </table></div>` : `<div class="cempty">${t("an.nosales")}</div>`}
-    </div>
-    ${STORE_IDS.length>1 ? `<div class="panel chart" style="grid-column:1/-1">
-      <p class="ctitle">${t("an.soc.title")}</p>
-      <p class="csub">${t("an.soc.sub")}</p>
-      ${socRows.length ? `<div class="table-scroll"><table>
-        <thead><tr><th>${t("an.soc.society")}</th><th class="r">${t("an.soc.unitssold")}</th><th class="r">${t("an.soc.cogs")}</th><th class="r">${t("an.soc.avgcost")}</th><th class="r">${t("an.soc.revenue")}</th><th class="r">${t("an.soc.margin")}</th><th class="r">${t("an.soc.marginpct")}</th></tr></thead>
-        <tbody>${socRows.map(r=>`<tr><td>${isDeposito(r.soc)?storeBadge(r.soc):esc(r.nombre)}</td><td class="r num">${qty(r.units)}</td><td class="r num">${money(r.cogs)}</td><td class="r num">${money(r.avg)}</td><td class="r num">${money(r.revenue)}</td><td class="r num">${money(r.margin)}</td><td class="r num">${r.revenue>0?nf0.format(r.marginPct)+"%":"—"}</td></tr>`).join("")}</tbody>
-        <tfoot><tr><td><b>${t("an.soc.total")}</b></td><td class="r num"><b>${qty(units)}</b></td><td class="r num"><b>${money(cogs)}</b></td><td class="r num">—</td><td class="r num"><b>${money(revenue)}</b></td><td class="r num"><b>${money(margin)}</b></td><td class="r num"><b>${revenue>0?nf0.format(marginPct)+"%":"—"}</b></td></tr></tfoot>
-      </table></div><p class="csub" style="margin-top:8px">${t("an.soc.foot")}</p>` : `<div class="cempty">${t("an.nosales")}</div>`}
-    </div>` : ""}
-  </div>`;
-
-  return `
-  <div class="head"><div class="title"><h2>${t("an.title")}</h2><p>${t("an.sub")}</p></div>
-    <div class="actions" style="gap:8px">
-      <div class="seg"><button class="seg-btn ${anMetric==="usd"?"on":""}" data-metric="usd">${t("an.metric.usd")}</button><button class="seg-btn ${anMetric==="units"?"on":""}" data-metric="units">${t("an.metric.units")}</button></div>
-      ${isAdmin()?`<button class="btn primary" id="an_pnl">${t("an.exportpnl")}</button>`:""}
-    </div>
-  </div>
-  ${slicers}
-  ${kpis}
-  ${charts}
-  ${isAdmin()?finPanelHTML(pnlAggregate(anFiltros.desde||"", anFiltros.hasta||"", effectiveStores()), anFiltros.desde||"", anFiltros.hasta||""):""}`;
-}
-function wireAnalisis(){
-  const s=document.getElementById("an_saga"); if(!s) return;
-  const upd=(k,el)=>{ anFiltros[k]=el.value; render(); };
-  const vsel=document.getElementById("an_vend"); if(vsel) vsel.onchange=e=>upd("vend",e.target);
-  s.onchange=e=>upd("saga",e.target);
-  document.getElementById("an_idioma").onchange=e=>upd("idioma",e.target);
-  document.getElementById("an_pais").onchange=e=>upd("pais",e.target);
-  document.getElementById("an_desde").onchange=e=>upd("desde",e.target);
-  document.getElementById("an_hasta").onchange=e=>upd("hasta",e.target);
-  document.getElementById("an_clear").onclick=()=>{ anFiltros={vend:"",saga:"",idioma:"",pais:"",desde:"",hasta:""}; render(); };
-  const pnl=document.getElementById("an_pnl"); if(pnl) pnl.onclick=openPnLExport;
-  // Punto 20: toggle USD/Units
-  document.querySelectorAll("[data-metric]").forEach(b=> b.onclick=()=>{ anMetric=b.dataset.metric; render(); });
-  // Punto 20: barras de producto clickeables -> filtran su línea (saga)
-  document.querySelectorAll('#main .crow[data-saga]').forEach(el=>{
-    el.style.cursor="pointer"; el.title=t("an.filterline");
-    el.onclick=()=>{ const sg=el.dataset.saga; anFiltros.saga = (anFiltros.saga===sg?"":sg); render(); };
-  });
-  // Punto 5: donuts interactivos (revenue/units por local, país, idioma)
-  wireDonuts();
-  wireFinPanel();   // resultado + costos financieros
-}
-/* saga (línea/juego) a partir del nombre de producto mostrado en un gráfico */
-function sagaOfName(nombre){
-  const p = db.productos.find(x=> String(x.nombre||"")===String(nombre));
-  return p ? sagaDe(p) : "";
-}
-
-
-/* ============================================================
-   P&L CONSOLIDADO — fuente ÚNICA (la usa el Excel y la pantalla)
-   ------------------------------------------------------------
-   Recorre db.ventas del rango [desde,hasta] y arma el estado de
-   resultados. Dos fixes vs. la versión vieja:
-     · cargosCliente (on-top facturado al cliente) SUMA al ingreso;
-     · todo en USD (moneda única), sin conversiones.
-   `stores` (opcional): foco por depósito; si se omite, consolidado.
-   Además de la contribución, resta los COSTOS FINANCIEROS del período
-   (db.costosFinancieros, no capitalizados) -> A.resultado.
-   Devuelve importes en USD + desgloses (por vendedor, por mes, por depósito).
-   ============================================================ */
-let _pnlCache = { rev:-1, map:{} };   // cache de rollups; se limpia cuando cambian los datos (_pnlRev)
-function pnlAggregate(desde, hasta, stores){
-  stores = (Array.isArray(stores) && stores.length) ? stores : STORE_IDS.slice();
-  // #16: si los datos no cambiaron, reusamos el rollup ya calculado (evita recorrer todas las ventas en cada render).
-  const _rev = (typeof _pnlRev!=="undefined") ? _pnlRev : 0;
-  if(_pnlCache.rev!==_rev) _pnlCache = { rev:_rev, map:{} };
-  const _key = (desde||"")+"|"+(hasta||"")+"|"+stores.join(",");
-  if(_pnlCache.map[_key]) return _pnlCache.map[_key];
-  const d0 = desde ? new Date(desde+"T00:00:00") : null;
-  const d1 = hasta ? new Date(hasta+"T23:59:59") : null;
-  const inRange = v=>{ if(!stores.includes(storeDeVenta(v))) return false; const f=new Date((normISO(v.fecha)||v.fecha)+"T12:00:00"); if(d0&&f<d0) return false; if(d1&&f>d1) return false; return true; };
-  const A = { sales:0, shipping:0, cargos:0, cogs:0, commission:0,
-              costos:{envio:0,labor:0,comision:0,otro:0}, units:0,
-              detail:{}, perVend:{}, byMonth:{}, perStore:{} };
-  (db.ventas||[]).filter(inRange).forEach(v=>{
-    const fecha = normISO(v.fecha)||v.fecha;
-    const vid   = v.vendedorId || "";
-    const st    = storeDeVenta(v);
-    const ps = A.perStore[st] = A.perStore[st] || { sales:0, shipping:0, cargos:0, cogs:0, commission:0, costos:0, units:0, financieros:0 };
-    const pv = A.perVend[vid] = A.perVend[vid] || { nombre:saleVendedorNombre(v), units:0, sales:0, cogs:0, commission:0, cargos:0, shipping:0, costos:0 };
-    let sSales=0, sCogs=0, sCostos=0;
-    (v.lineas||[]).forEach(l=>{
-      const rev = round2((l.precio||0)*l.cantidad);
-      const cg  = round2(l.cogs!=null ? l.cogs : (l.costo||0)*l.cantidad);
-      A.sales+=rev; A.cogs+=cg; A.units+=l.cantidad; sSales+=rev; sCogs+=cg;
-      pv.sales+=rev; pv.cogs+=cg; pv.units+=l.cantidad;
-      const k = l.productoId||l.sku||l.nombre;
-      const e = A.detail[k] = A.detail[k] || { sku:l.sku||"", nombre:l.nombre||"", units:0, revenue:0, cogs:0 };
-      e.units+=l.cantidad; e.revenue+=rev; e.cogs+=cg;
-    });
-    const ship = (v.envio && v.envio.tipo==="monto") ? round2(v.envio.monto||0) : 0;
-    const carg = saleCargosCliente(v);      // FIX #1: on-top que paga el cliente
-    const comm = saleCommission(v);
-    A.shipping+=ship; A.cargos+=carg; A.commission+=comm;
-    ps.sales+=sSales; ps.cogs+=sCogs; ps.shipping+=ship; ps.cargos+=carg; ps.commission+=comm;
-    ps.units+=(v.lineas||[]).reduce((a,l)=>a+(l.cantidad||0),0);
-    pv.shipping+=ship; pv.cargos+=carg; pv.commission+=comm;
-    (v.costosExtra||[]).forEach(c=>{ const k=(c.tipo in A.costos)?c.tipo:"otro"; const m=round2(+c.monto||0); A.costos[k]+=m; pv.costos+=m; sCostos+=m; ps.costos+=m; });
-    const mk = fecha.slice(0,7);
-    const mm = A.byMonth[mk] = A.byMonth[mk] || { net:0, gp:0, contrib:0, sales:0, cogs:0 };
-    mm.sales+=sSales; mm.cogs+=sCogs;
-    mm.net    += sSales+ship+carg;
-    mm.gp     += sSales+ship+carg-sCogs;
-    mm.contrib+= sSales+ship+carg-sCogs-comm-sCostos;
-  });
-  A.sales=round2(A.sales); A.shipping=round2(A.shipping); A.cargos=round2(A.cargos);
-  A.cogs=round2(A.cogs); A.commission=round2(A.commission);
-  Object.keys(A.costos).forEach(k=> A.costos[k]=round2(A.costos[k]));
-  A.sellingTotal = round2(A.commission + A.costos.envio + A.costos.labor + A.costos.comision + A.costos.otro);
-  A.net     = round2(A.sales + A.shipping + A.cargos);
-  A.gp      = round2(A.net - A.cogs);
-  A.contrib = round2(A.gp - A.sellingTotal);
-  A.gpPct       = A.net>0 ? A.gp/A.net : 0;
-  A.contribPct  = A.net>0 ? A.contrib/A.net : 0;
-  // --- Costos financieros del período (no capitalizados) ---
-  const fins = costosFinEnRango(desde||"", hasta||"", stores);
-  A.finList      = fins;
-  A.financieros  = round2(fins.reduce((a,e)=>a+(+e.monto||0),0));
-  A.finSinAsignar= round2(fins.filter(e=>!e.store).reduce((a,e)=>a+(+e.monto||0),0));
-  fins.forEach(e=>{ if(e.store){ const ps=A.perStore[e.store]=A.perStore[e.store]||{ sales:0, shipping:0, cargos:0, cogs:0, commission:0, costos:0, units:0, financieros:0 }; ps.financieros+=(+e.monto||0); } });
-  A.resultado    = round2(A.contrib - A.financieros);
-  A.resultadoPct = A.net>0 ? A.resultado/A.net : 0;
-  // --- Cierre por depósito (Swan vs Select) ---
-  Object.keys(A.perStore).forEach(k=>{
-    const e=A.perStore[k];
-    ["sales","shipping","cargos","cogs","commission","costos","financieros"].forEach(f=> e[f]=round2(e[f]));
-    e.net=round2(e.sales+e.shipping+e.cargos); e.gp=round2(e.net-e.cogs);
-    e.contrib=round2(e.gp-e.commission-e.costos); e.resultado=round2(e.contrib-e.financieros);
-  });
-  _pnlCache.map[_key] = A;   // #16: guardamos para reusar mientras los datos no cambien
-  return A;
-}
-
-/* ============================================================
-   PANEL: RESULTADO + COSTOS FINANCIEROS (+ cierre por depósito)
-   ------------------------------------------------------------
-   Lo usan Análisis y P&L. Muestra contribución − costos financieros =
-   resultado, la apertura Swan vs Select (sólo en consolidado) y el libro
-   de costos financieros del período, con alta manual y baja.
-   `P` = pnlAggregate(desde, hasta, stores). Admin-only.
-   ============================================================ */
-function finPanelHTML(P, desde, hasta){
-  if(!isAdmin()) return "";
-  const consolidado = STORE_IDS.every(s=> effectiveStores().includes(s));
-  const cell = (v, strong)=> `<td class="r num" style="${v<0?"color:var(--alert);":""}${strong?"font-weight:800":""}">${money(v)}</td>`;
-  // --- cierre por depósito ---
-  let porDep = "";
-  if(consolidado && STORE_IDS.length>1){
-    const rows = STORE_IDS.map(sid=>{
-      const e = P.perStore[sid] || { net:0, cogs:0, gp:0, commission:0, costos:0, contrib:0, financieros:0, resultado:0 };
-      return `<tr><td>${storeBadge(sid)}</td>${cell(e.net)}${cell(-e.cogs)}${cell(e.gp)}${cell(-(e.commission+e.costos))}${cell(e.contrib,true)}${cell(-e.financieros)}${cell(e.resultado,true)}</tr>`;
-    }).join("");
-    const sinAsig = P.finSinAsignar>0 ? `<tr><td><span class="hint">${t("fin.unassigned")}</span></td><td></td><td></td><td></td><td></td><td></td>${cell(-P.finSinAsignar)}${cell(-P.finSinAsignar,true)}</tr>` : "";
-    porDep = `<p class="ctitle" style="margin-top:6px">${t("fin.bydep.title")}</p>
-      <p class="csub">${t("fin.bydep.sub")}</p>
-      <div class="table-scroll"><table>
-        <thead><tr><th>${t("fin.th.dep")}</th><th class="r">${t("pnl.kpi.net")}</th><th class="r">${t("fin.th.cogs")}</th><th class="r">${t("pnl.kpi.gross")}</th><th class="r">${t("fin.th.selling")}</th><th class="r">${t("pnl.kpi.contrib")}</th><th class="r">${t("fin.th.fin")}</th><th class="r">${t("fin.th.result")}</th></tr></thead>
-        <tbody>${rows}${sinAsig}</tbody>
-        <tfoot><tr style="border-top:2px solid var(--line-strong);font-weight:800"><td>${t("an.soc.total")}</td>${cell(P.net)}${cell(-P.cogs)}${cell(P.gp)}${cell(-(P.sellingTotal))}${cell(P.contrib,true)}${cell(-P.financieros)}${cell(P.resultado,true)}</tr></tfoot>
-      </table></div>`;
+/* Período: UN solo control. Los presets (Mes, Trim., Año, 12 meses, Todo) muestran
+   al lado el rango exacto que están filtrando, en texto. "Rango" habilita las dos
+   fechas para elegir desde/hasta. Antes las fechas estaban siempre visibles junto a
+   los presets y no se sabía si filtraba por "Año" o por las fechas.
+   v128: "Mes" abre un selector con los 12 meses del año (con flechas para cambiar de
+   año) y filtra el mes elegido COMPLETO. Los meses futuros no se pueden elegir. */
+let finMesPickOpen = false;   // selector de mes abierto
+let finMesPickY = 0;          // año que se está mostrando en el selector
+function finMesLabel(mk){ const [y,m]=mk.split("-"); return `${t("cal.mon."+((+m)-1))} ${y}`; }
+function finMesPickHTML(){
+  const sel = finMesSel(), cur = finMesActual(), yCur = +cur.slice(0,4);
+  const y = finMesPickY || +sel.slice(0,4);
+  const cells = [];
+  for(let i=0;i<12;i++){
+    const mk = `${y}-${String(i+1).padStart(2,"0")}`, fut = mk>cur;
+    cells.push(`<button type="button" class="cal-mcell ${mk===sel?"sel":""} ${mk===cur?"now":""}" data-finm="${mk}" ${fut?"disabled":""} aria-pressed="${mk===sel}">${esc(t("cal.mon."+i).slice(0,3))}</button>`);
   }
-  // --- libro de costos financieros del período ---
-  const list = (P.finList||[]).slice().sort((a,b)=> String(b.fecha).localeCompare(String(a.fecha)));
-  const finRows = list.length ? list.map(e=>`<tr>
-      <td class="num" style="white-space:nowrap">${esc(fmtDate(e.fecha))}</td>
-      <td>${esc(e.concepto||"—")}${e.auto?` <span class="rl-pill">${t("fin.auto")}</span>`:""}</td>
-      <td>${e.store?storeBadge(e.store):`<span class="hint">${t("fin.general")}</span>`}</td>
-      <td class="r num">${money(e.monto)}</td>
-      <td class="r"><button class="btn ghost xs" data-findel="${esc(e.id)}" title="${t("common.delete")}" style="color:var(--alert)">\u2715</button></td>
-    </tr>`).join("") : `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:14px">${t("fin.empty")}</td></tr>`;
-  const today = hoyISO();
-  const depOpts = `<option value="">${t("fin.general")}</option>` + STORE_IDS.map(sid=>`<option value="${sid}" ${(!consolidado && effectiveStores()[0]===sid)?"selected":""}>${esc(storeName(sid))}</option>`).join("");
-  return `<div class="panel chart" style="grid-column:1/-1;margin-top:16px">
-    <p class="ctitle">${t("fin.title")}</p>
-    <p class="csub">${t("fin.sub")}${(desde||hasta)?` · ${desde?fmtDate(desde):"…"} \u2192 ${hasta?fmtDate(hasta):"…"}`:""}</p>
-    <div class="kpis" style="margin:10px 0 14px">
-      <div class="kpi"><div class="lbl">${t("pnl.kpi.contrib")}</div><div class="val">${money(P.contrib)}</div></div>
-      <div class="kpi"><div class="lbl">${t("fin.kpi.fin")}</div><div class="val" style="color:${P.financieros>0?"var(--alert)":"var(--text)"}">\u2212 ${money(P.financieros)}</div><div class="sub">${t("fin.kpi.finsub")}</div></div>
-      <div class="kpi"><div class="lbl">${t("fin.kpi.result")}</div><div class="val" style="color:${P.resultado<0?"var(--alert)":"var(--up)"}">${money(P.resultado)}</div><div class="sub">${P.net>0?nf0.format(P.resultadoPct*100)+"% "+t("fin.kpi.ofnet"):"—"}</div></div>
+  return `<div class="cal-pop fin-mpick-pop" role="dialog" aria-label="${t("fin.mes.pick")}">
+    <div class="cal-head">
+      <button type="button" class="cal-nav" data-finmy="-1" aria-label="${t("fin.mes.prevy")}">‹</button>
+      <div class="cal-title">${y}</div>
+      <button type="button" class="cal-nav" data-finmy="1" aria-label="${t("fin.mes.nexty")}" ${y>=yCur?"disabled":""}>›</button>
     </div>
-    ${porDep}
-    <p class="ctitle" style="margin-top:14px">${t("fin.list.title")}</p>
-    <p class="csub">${t("fin.list.sub")}</p>
-    <div class="grid-form" style="grid-template-columns:130px 1fr 170px 120px auto;align-items:end;padding:0;gap:8px;margin-bottom:10px">
-      <div class="field"><label>${t("common.date")}</label><input class="inp" type="date" id="fin_fecha" value="${today}"></div>
-      <div class="field"><label>${t("fin.l.concept")}</label><input class="inp" id="fin_conc" placeholder="${t("fin.ph.concept")}"></div>
-      <div class="field"><label>${t("fin.th.dep")}</label><select class="inp" id="fin_store">${depOpts}</select></div>
-      <div class="field"><label>${t("fin.l.amount")} <span class="hint" style="font-weight:400">${CCY_SYM}</span></label><input class="inp num" id="fin_monto" inputmode="decimal" placeholder="0"></div>
-      <button class="btn primary" data-finadd style="margin-bottom:2px">${ICO.plus||""}${t("fin.add")}</button>
-    </div>
-    <div class="table-scroll"><table>
-      <thead><tr><th>${t("common.date")}</th><th>${t("fin.l.concept")}</th><th>${t("fin.th.dep")}</th><th class="r">${t("fin.l.amount")}</th><th></th></tr></thead>
-      <tbody>${finRows}</tbody>
-    </table></div>
+    <div class="cal-mgrid">${cells.join("")}</div>
   </div>`;
 }
-/* Cableado del panel financiero (alta manual y baja). Lo llaman wireAnalisis/wirePnL. */
-function wireFinPanel(){
-  const m=document.getElementById("main"); if(!m) return;
-  const add=m.querySelector("[data-finadd]");
-  if(add) add.onclick=()=>{
-    const fecha=(document.getElementById("fin_fecha").value||"").slice(0,10);
-    const conc=(document.getElementById("fin_conc").value||"").trim();
-    const store=document.getElementById("fin_store").value||null;
-    const monto=parseNum(document.getElementById("fin_monto").value)||0;
-    if(!/^\d{4}-\d{2}-\d{2}$/.test(fecha)){ toast(t("fin.tt.baddate"),"warn"); return; }
-    if(!(monto>0)){ toast(t("fin.tt.badamount"),"warn"); return; }
-    registrarCostoFinanciero({ fecha, concepto:conc||t("fin.manual"), store, monto, auto:false });
-    save(); toast(t("fin.tt.added")); render();
-  };
-  m.querySelectorAll("[data-findel]").forEach(b=> b.onclick=()=>{
-    const id=b.dataset.findel; const e=costosFinAll().find(x=>x.id===id); if(!e) return;
-    if(!confirm(t("fin.cf.del",{c:e.concepto||"—",m:money(e.monto)}))) return;
-    withUndo(t("fin.tt.deleted"), ()=>{ db.costosFinancieros = costosFinAll().filter(x=>x.id!==id); save(); });
+function finPeriodHTML(){
+  const f = finFiltros, r = finRange(f), custom = f.periodo==="custom", mtd = f.periodo==="mtd";
+  const segBtn = p=> `<button type="button" class="seg-btn ${f.periodo===p?"on":""}" data-finp="${p}" aria-pressed="${f.periodo===p}">${t("fin.period."+p)}</button>`;
+  const rangeTxt = (r.from||r.to) ? `${r.from?fmtDate(r.from):"…"} – ${r.to?fmtDate(r.to):t("fin.range.today")}` : t("fin.range.all");
+  const mesPick = mtd ? `<div class="fin-mpick">
+      <button type="button" class="fin-mpick-btn ${finMesPickOpen?"open":""}" id="fin_mes_btn" aria-haspopup="dialog" aria-expanded="${finMesPickOpen}" title="${t("fin.mes.tip")}">
+        <span>${esc(finMesLabel(finMesSel(f)))}</span><span class="fin-mpick-caret" aria-hidden="true">▾</span></button>
+      ${finMesPickOpen ? finMesPickHTML() : ""}
+    </div>` : "";
+  return `<div class="slicer fin-period-slicer"><span>${t("fin.period")}</span>
+    <div class="fin-period">
+      <div class="seg" role="group" aria-label="${t("fin.period")}">${FIN_PERIODS.map(segBtn).join("")}${segBtn("custom")}</div>
+      ${mesPick}
+      ${custom
+        ? `<div class="fin-range"><input type="date" id="fin_desde" value="${esc(f.desde||"")}" aria-label="${t("an.sl.from")}"><span class="fin-range-sep">–</span><input type="date" id="fin_hasta" value="${esc(f.hasta||"")}" aria-label="${t("an.sl.to")}"></div>`
+        : `<span class="fin-range-txt" title="${t("fin.range.tip")}">${esc(rangeTxt)}</span>`}
+    </div></div>`;
+}
+/* Cierre del selector de mes al tocar afuera o con Esc. Va en fase de CAPTURA para
+   cerrarlo ANTES de que cualquier otro botón re-renderice. Se excluye el propio botón
+   "Mes" (que abre/cierra con su onclick) y el selector. Se instala una sola vez. */
+function finMesPickClose(){
+  if(!finMesPickOpen) return;
+  finMesPickOpen = false;
+  document.querySelectorAll(".fin-mpick-pop").forEach(x=> x.remove());
+  const b=document.getElementById("fin_mes_btn"); if(b){ b.classList.remove("open"); b.setAttribute("aria-expanded","false"); }
+}
+document.addEventListener("click", (e)=>{
+  if(!finMesPickOpen) return;
+  if(e.target.closest && e.target.closest('.fin-mpick, [data-finp="mtd"]')) return;
+  finMesPickClose();
+}, true);
+document.addEventListener("keydown", (e)=>{ if(e.key==="Escape" && finMesPickOpen) finMesPickClose(); });
+function finFilterBarHTML(){
+  const f = finFiltros, r = finRange(f);
+  const opt = (val, label, cur)=> `<option value="${esc(val)}" ${cur===val?"selected":""}>${esc(label)}</option>`;
+  const note = finDimsActive(f) ? `<div class="finbar-note">${t("fin.showing",{sel:`<b>${esc(finDimsLabel(f))}</b>`})}</div>` : "";
+  // v117: el período se ancla a HOY; si hay ventas fechadas a futuro, se avisa (suele ser un error de tipeo)
+  const fut = finVentasFuturas();
+  const futNote = fut.length ? `<div class="finbar-note warn-ink">${t(fut.length===1?"fin.future1":"fin.future",{n:fut.length, nums:esc(fut.slice(0,5).map(v=> (v.numero||"—")+" ("+fmtDate(v.fecha)+")").join(", "))})}</div>` : "";
+  return `<div class="finbar">
+    ${finPeriodHTML()}
+    <div class="slicer"><span>${t("an.sl.line")}</span><select id="fin_linea">${opt("",t("an.sl.all"),f.linea)}${sagasUnicas().map(s=>opt(s,s,f.linea)).join("")}</select></div>
+    <div class="slicer"><span>${t("an.sl.language")}</span><select id="fin_idioma">${opt("",t("an.sl.all"),f.idioma)}${langOpts().map(([v,l])=>opt(v,l,f.idioma)).join("")}</select></div>
+    <div class="slicer"><span>${t("an.sl.country")}</span><select id="fin_pais">${opt("",t("an.sl.all"),f.pais)}${paisesVentas().map(c=>opt(c,paisLabel(c),f.pais)).join("")}</select></div>
+    <div class="slicer"><span>${t("an.sl.seller")}</span><select id="fin_vend">${opt("",t("an.sl.all"),f.vend)}${vendedores().map(v=>opt(v.id,v.nombre,f.vend)).join("")}</select></div>
+    <button type="button" class="slicer-reset" id="fin_clear">${t("an.sl.reset")}</button>
+    ${note}${futNote}
+  </div>`;
+}
+function wireFinFilterBar(){
+  const m = document.getElementById("main"); if(!m) return;
+  m.querySelectorAll("[data-finp]").forEach(b=> b.onclick=()=>{
+    const p = b.dataset.finp;
+    if(p==="custom"){
+      if(finFiltros.periodo==="custom") return;
+      // "Rango" arranca con el rango que estabas mirando, así no salta nada
+      const cur = finRange(); finFiltros.periodo="custom"; finFiltros.desde=cur.from||""; finFiltros.hasta=cur.to||"";
+      finMesPickOpen = false;
+    } else if(p==="mtd"){
+      // "Mes": si ya estaba en Mes, abre/cierra el selector; si venías de otro preset,
+      // entra al mes en curso y abre el selector para que elijas el que quieras.
+      if(finFiltros.periodo==="mtd"){ finMesPickOpen = !finMesPickOpen; }
+      else { finFiltros.periodo="mtd"; finFiltros.mes=""; finFiltros.desde=""; finFiltros.hasta=""; finMesPickOpen = true; }
+      finMesPickY = +finMesSel().slice(0,4);
+    } else { finFiltros.periodo=p; finFiltros.desde=""; finFiltros.hasta=""; finMesPickOpen = false; }
+    if(typeof pnlDrill!=="undefined") pnlDrill=null;
     render();
   });
+  // v128: selector de mes
+  const mb = document.getElementById("fin_mes_btn");
+  if(mb) mb.onclick=()=>{ finMesPickOpen = !finMesPickOpen; finMesPickY = +finMesSel().slice(0,4); render(); };
+  m.querySelectorAll("[data-finmy]").forEach(b=> b.onclick=()=>{
+    finMesPickY = (finMesPickY || +finMesSel().slice(0,4)) + (+b.dataset.finmy); render();
+  });
+  m.querySelectorAll("[data-finm]").forEach(b=> b.onclick=()=>{
+    const mk = b.dataset.finm;
+    finFiltros.periodo="mtd"; finFiltros.mes = (mk===finMesActual() ? "" : mk);
+    finFiltros.desde=""; finFiltros.hasta=""; finMesPickOpen = false;
+    if(typeof pnlDrill!=="undefined") pnlDrill=null;
+    render();
+  });
+  const dateChg = ()=>{
+    let d0=document.getElementById("fin_desde").value, d1=document.getElementById("fin_hasta").value;
+    if(d0 && d1 && d0>d1){ const x=d0; d0=d1; d1=x; }     // desde > hasta: se invierten
+    finFiltros.periodo="custom"; finFiltros.desde=d0; finFiltros.hasta=d1; finMesPickOpen=false; render();
+  };
+  const d0=document.getElementById("fin_desde"), d1=document.getElementById("fin_hasta");
+  if(d0) d0.onchange=dateChg; if(d1) d1.onchange=dateChg;
+  [["fin_linea","linea"],["fin_idioma","idioma"],["fin_pais","pais"],["fin_vend","vend"]].forEach(([id,k])=>{
+    const el=document.getElementById(id); if(el) el.onchange=()=>{ finFiltros[k]=el.value; render(); };
+  });
+  const c=document.getElementById("fin_clear"); if(c) c.onclick=()=>{ finResetFiltros(); finMesPickOpen=false; render(); };
 }
 
-/* --- Formateo compacto para etiquetas de gráficos (USD) --- */
-function _pnlCompact(n){
-  const a=Math.abs(n), s=n<0?"-":"", sym=CCY_SYM;
-  if(a>=1e6) return s+sym+"\u00A0"+(a/1e6).toFixed(1)+"M";
-  if(a>=1e3) return s+sym+"\u00A0"+(a/1e3).toFixed(1)+"k";
-  return s+sym+"\u00A0"+nf0.format(a);
+/* ============================================================
+   COMPATIBILIDAD: las funciones viejas ahora son vistas de la capa única.
+   ============================================================ */
+/* Ventas a nivel línea con los filtros compartidos (antes duplicaba el prorrateo). */
+function ventasFiltradas(){ return finSaleLines(finQuery()); }
+
+/* P&L CONSOLIDADO — la usan la pestaña P&L y el Excel.
+   dims (opcional): línea/idioma/país/vendedor; por defecto, los filtros compartidos,
+   así el Excel siempre cierra con lo que se ve en pantalla. */
+let _pnlCache = { rev:-1, map:{} };   // vive dentro de un render (router.render lo limpia)
+function pnlAggregate(desde, hasta, soc, dims){
+  dims = dims || finDims(finFiltros);
+  const key = [desde||"",hasta||"",reportCcy(),soc||"all",dims.linea,dims.idioma,dims.pais,dims.vend].join("|");
+  if(_pnlCache.map[key]) return _pnlCache.map[key];
+  const A = finAggregate(finSaleLines(Object.assign({ from:desde||"", to:hasta||"", soc:soc||null }, dims)));
+  _pnlCache.map[key] = A;
+  return A;
+}
+/* Se mantiene por compatibilidad con código viejo: mismo formato que finCompact. */
+function _pnlCompact(n){ return finCompact(n); }
+
+/* ============================================================
+   GRÁFICOS (SVG puro)
+   ============================================================ */
+/* Escala "linda" para ejes: 0, 5k, 10k... en vez de 0, 4.37k, 8.74k */
+function finNiceMax(v){
+  if(!(v>0)) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(v))), n = v/p;
+  const nice = n<=1?1 : n<=2?2 : n<=2.5?2.5 : n<=5?5 : 10;
+  return nice*p;
+}
+/* Combo mensual: columnas de ventas vs compras + fila de margen % por mes.
+   El margen va como fila de números (no como segunda escala en el mismo eje):
+   dos ejes Y en un gráfico confunden más de lo que ayudan. */
+function finComboSVG(months, units){
+  if(!months.length) return `<div class="cempty">${t("an.nosales")}</div>`;
+  const vS = m=> units ? m.units : m.net, vP = m=> units ? m.purchUnits : m.purch;
+  const fmtV = units ? qty : money, fmtAx = units ? qty : finCompactAxis;
+  const max = finNiceMax(Math.max(1, ...months.map(m=>Math.max(vS(m), vP(m)))));
+  const W=1040, padR=8, padT=14, plotH=210, H=padT+plotH+58;
+  const padL = finAxisPad([0,1,2,3,4].map(i=>fmtAx(max*i/4)).concat([t("fin.s.gm")]), 60);
+  const y = v=> padT + plotH - (v/max)*plotH;
+  const n = months.length, gw = (W-padL-padR)/n, bw = Math.max(4, Math.min(30, gw*0.34));
+  let grid="", bars="", labs="";
+  for(let i=0;i<=4;i++){ const v=max*i/4, gy=y(v);
+    grid += `<line x1="${padL}" y1="${gy.toFixed(1)}" x2="${W-padR}" y2="${gy.toFixed(1)}" stroke="var(--line)" stroke-width="1"/>`
+         +  `<text x="${padL-8}" y="${(gy+4).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="var(--mono)">${esc(fmtAx(v))}</text>`; }
+  const every = n>18 ? 3 : n>12 ? 2 : 1;   // con muchos meses, rotulamos uno de cada N
+  months.forEach((m,i)=>{
+    const cx = padL + gw*i + gw/2;
+    const hS = Math.max(vS(m)>0?1.5:0, plotH*vS(m)/max), hP = Math.max(vP(m)>0?1.5:0, plotH*vP(m)/max);
+    bars += `<rect x="${(cx-bw-1).toFixed(1)}" y="${(padT+plotH-hS).toFixed(1)}" width="${bw.toFixed(1)}" height="${hS.toFixed(1)}" rx="2.5" fill="var(--series-sales)"></rect>`
+          + `<rect x="${(cx+1).toFixed(1)}" y="${(padT+plotH-hP).toFixed(1)}" width="${bw.toFixed(1)}" height="${hP.toFixed(1)}" rx="2.5" fill="var(--series-purch)"></rect>`
+          // Zona táctil de TODO el mes (no sólo la barra): en el celu una barra finita no se puede tocar
+          + `<rect class="drill-hit" x="${(padL+gw*i).toFixed(1)}" y="${padT}" width="${gw.toFixed(1)}" height="${plotH+42}" data-drill="m:${m.mk}" tabindex="0" role="button" aria-label="${esc(t("dr.aria",{x:m.label}))}"><title>${esc(m.label)} · ${t("fin.s.sales")}: ${esc(fmtV(vS(m)))} · ${t("fin.s.purch")}: ${esc(fmtV(vP(m)))} — ${t("dr.tap")}</title></rect>`;
+    if(i%every===0){
+      labs += `<text x="${cx.toFixed(1)}" y="${padT+plotH+17}" text-anchor="middle" font-size="11.5" fill="var(--muted)">${esc(m.label)}</text>`;
+      const mp = m.gpPct;
+      labs += `<text x="${cx.toFixed(1)}" y="${padT+plotH+38}" text-anchor="middle" font-size="12" font-weight="700" font-family="var(--mono)" fill="${mp==null?"var(--muted)":(mp<0?"var(--neg)":"var(--pos)")}">${mp==null?"—":esc(fmtPct(mp,0))}</text>`;
+    }
+  });
+  const axis = `<line x1="${padL}" y1="${padT+plotH}" x2="${W-padR}" y2="${padT+plotH}" stroke="var(--text)" stroke-width="1"/>`
+             + `<text x="${padL-8}" y="${padT+plotH+38}" text-anchor="end" font-size="11" fill="var(--pos)" font-weight="700">${t("fin.s.gm")}</text>`;
+  return `<div class="u-scroll-x"><svg viewBox="0 0 ${W} ${H}" style="display:block;min-width:620px;width:100%;height:auto" role="img" aria-label="${t("fin.combo.aria")}">${grid}${bars}${axis}${labs}</svg></div>`;
 }
 
-/* (El panel del P&L vive ahora en su propia pestaña: 11b-view-pnl.js, bilingüe) */
-
-/* --- Waterfall del P&L (SVG puro, con <title> nativo como tooltip) --- */
+/* --- Waterfall del P&L ---
+   Colores con semántica: suma = verde, resta = rojo, subtotal = gris oscuro,
+   resultado final = azul. Antes suma y total eran el mismo azul (--up == --accent). */
 function pnlWaterfallSVG(P){
   const steps=[
     {k:t("pnl.wf.sales"),       v:P.sales,       type:"start"},
@@ -534,64 +338,395 @@ function pnlWaterfallSVG(P){
     {k:t("pnl.wf.gross"),       v:P.gp,          type:"sub"},
     {k:t("pnl.wf.commissions"), v:-P.commission, type:"minus"},
     {k:t("pnl.wf.selling"),     v:-(P.costos.envio+P.costos.labor+P.costos.comision+P.costos.otro), type:"minus"},
-    {k:t("pnl.wf.contrib"),     v:P.contrib,     type:(P.financieros>0?"sub":"total")},
-  ];
-  // Costos financieros (no capitalizados): se restan debajo de la contribución.
-  if(P.financieros>0){
-    steps.push({k:t("pnl.wf.financial"), v:-P.financieros, type:"minus"});
-    steps.push({k:t("pnl.wf.result"),    v:P.resultado,    type:"total"});
-  }
+    {k:t("pnl.wf.contrib"),     v:P.contrib,     type:(P.show?"sub":"total")},
+    ...(P.show ? [ {k:t("gx.wf.opex"), v:-P.opex, type:"minus"}, {k:t("gx.wf.ebit"), v:P.ebit, type:"total"} ] : []),
+  ].filter(s=> !((s.type==="add"||s.type==="minus") && Math.abs(s.v)<0.005));
   let run=0, maxV=0, minV=0;
   const geom=steps.map(s=>{ let lo,hi;
     if(s.type==="start"||s.type==="sub"||s.type==="total"){ lo=Math.min(0,s.v); hi=Math.max(0,s.v); run=s.v; }
     else { const prev=run; run=prev+s.v; lo=Math.min(prev,run); hi=Math.max(prev,run); }
     maxV=Math.max(maxV,hi); minV=Math.min(minV,lo); return {...s,lo,hi};
   });
-  const W=1040,H=300,padT=24,padB=58,padL=6,padR=6,plot=H-padT-padB;
-  const dom=(maxV-minV)||1, y=v=> padT+(maxV-v)/dom*plot;
+  const dom=(maxV-minV)||1;
+  const W=1040,H=300,padT=30,padB=46,padR=6,plot=H-padT-padB;
+  const padL=finAxisPad([0,1,2,3,4].map(i=>finCompactAxis(maxV-dom*(i/4))), 60);
+  const y=v=> padT+(maxV-v)/dom*plot;
   const n=steps.length,gap=12,bw=(W-padL-padR-gap*(n-1))/n;
-  const col=t=> t==="add"?"var(--up)":t==="minus"?"var(--down)":t==="total"?"var(--accent)":"var(--surface-2)";
-  const strk=t=> (t==="sub"||t==="start")?"var(--line-strong)":"none";
+  const col=s=> s.type==="add"?"var(--pos)":s.type==="minus"?"var(--neg)":s.type==="total"?(s.v<0?"var(--neg)":"var(--chart-1)"):"var(--bar-sub)";
   let grid="",bars="",conns="",labs="",vals="";
-  const ticks=4;
-  for(let i=0;i<=ticks;i++){ const gv=maxV-dom*(i/ticks), gy=y(gv);
+  for(let i=0;i<=4;i++){ const gv=maxV-dom*(i/4), gy=y(gv);
     grid+=`<line x1="${padL}" y1="${gy.toFixed(1)}" x2="${W-padR}" y2="${gy.toFixed(1)}" stroke="var(--line)" stroke-width="1"/>`
-        +`<text x="${padL+2}" y="${(gy-3).toFixed(1)}" font-size="8.5" fill="var(--muted)" font-family="monospace">${_pnlCompact(gv)}</text>`;
+        +`<text x="${padL-8}" y="${(gy+4).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="var(--mono)">${esc(finCompactAxis(gv))}</text>`;
   }
   geom.forEach((s,i)=>{
     const x=padL+i*(bw+gap), yTop=y(s.hi), yBot=y(s.lo), h=Math.max(2,yBot-yTop);
-    bars+=`<rect x="${x.toFixed(1)}" y="${yTop.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${col(s.type)}" stroke="${strk(s.type)}" stroke-width="1"><title>${s.k}: ${money(s.v)}</title></rect>`;
+    bars+=`<rect x="${x.toFixed(1)}" y="${yTop.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${col(s)}"><title>${esc(s.k)}: ${esc(money(s.v))}</title></rect>`;
     if(i<geom.length-1 && s.type!=="total"){
       const yEnd = (s.type==="minus") ? y(s.lo) : (s.type==="add") ? y(s.hi) : y(s.v);
       conns+=`<line x1="${x.toFixed(1)}" y1="${yEnd.toFixed(1)}" x2="${(x+bw+gap).toFixed(1)}" y2="${yEnd.toFixed(1)}" stroke="var(--line-strong)" stroke-width="1.1" stroke-dasharray="2.5 2.5"/>`;
     }
-    vals+=`<text x="${(x+bw/2).toFixed(1)}" y="${(yTop-5).toFixed(1)}" text-anchor="middle" font-size="9.5" font-weight="700" font-family="monospace" fill="var(--text)">${_pnlCompact(s.v)}</text>`;
+    vals+=`<text x="${(x+bw/2).toFixed(1)}" y="${(yTop-6).toFixed(1)}" text-anchor="middle" font-size="11.5" font-weight="700" font-family="var(--mono)" fill="var(--text)">${esc(finCompact(s.v))}</text>`;
     const key=(s.type==="sub"||s.type==="total"||s.type==="start");
-    labs+=`<text x="${(x+bw/2).toFixed(1)}" y="${H-padB+15}" text-anchor="middle" font-size="9.5" font-weight="600" fill="${key?'var(--text)':'var(--muted)'}">${s.star?'<tspan fill="var(--accent)">\u2605 </tspan>':''}${s.k}</text>`;
+    /* Si la etiqueta no entra en el ancho de la barra (pasa con 11 pasos, p.ej.
+       "Resultado operativo"), se parte en dos renglones en vez de cortarse. */
+    const cx=(x+bw/2).toFixed(1), fits=(String(s.k).length*6.4+(s.star?12:0)) <= bw+gap;
+    let txt;
+    if(fits || !/\s/.test(String(s.k).trim())) txt = `${s.star?'<tspan fill="var(--accent-ink)">\u2605 </tspan>':''}${esc(s.k)}`;
+    else {
+      const w=String(s.k).trim().split(/\s+/); let best=1, diff=Infinity;
+      for(let j=1;j<w.length;j++){ const d=Math.abs(w.slice(0,j).join(" ").length - w.slice(j).join(" ").length); if(d<diff){ diff=d; best=j; } }
+      txt = `<tspan x="${cx}">${s.star?'\u2605 ':''}${esc(w.slice(0,best).join(" "))}</tspan><tspan x="${cx}" dy="14">${esc(w.slice(best).join(" "))}</tspan>`;
+    }
+    labs+=`<text x="${cx}" y="${H-padB+18}" text-anchor="middle" font-size="11.5" font-weight="${key?700:500}" fill="${key?'var(--text)':'var(--muted)'}">${txt}</text>`;
   });
-  return `<svg viewBox="0 0 ${W} ${H}" style="display:block;min-width:560px;width:100%;height:auto;max-height:380px;margin:0 auto" role="img" aria-label="Waterfall del estado de resultados">${grid}${conns}${bars}${vals}${labs}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="display:block;min-width:620px;width:100%;height:auto;max-height:380px;margin:0 auto" role="img" aria-label="${t("an.aria.waterfall")}">${grid}${conns}${bars}${vals}${labs}</svg>`;
 }
 
-/* --- Tendencia en COLUMNAS verticales (el tiempo se lee izq\u2192der) --- */
-function trendChartSVG(items, fmt, color){
+/* --- Columnas por mes (una serie). Negativos en rojo; eje Y con escala linda. ---
+   v-graf: las etiquetas de valor ya no se pisan. Van sin el símbolo de moneda (el eje ya lo
+   muestra), el tamaño se ajusta al ancho de cada columna y, si igual no entran, se muestra
+   una sí y una no (con el valor completo siempre en el tooltip).
+   opts.foot = { label, values:[...] }: fila extra debajo de los meses DENTRO del gráfico
+   (p. ej. Margen % por semana), así queda alineada con cada barra en cualquier ancho. */
+function trendNumCompact(v){
+  const a=Math.abs(v||0), s=(v||0)<0?"-":"";
+  if(a>=1e6) return s+nfDec(1).format(a/1e6)+"M";
+  if(a>=1e3) return s+nfDec(1).format(a/1e3)+"k";
+  return s+nfDec(0).format(a);
+}
+function trendChartSVG(items, fmt, color, opts){
+  opts = opts || {};
   const data=items||[];
-  const COL = color || "var(--accent)";
+  const COL = color || "var(--chart-1)";
   if(!data.length) return `<div class="cempty">${t("an.nosales")}</div>`;
-  const W=560,H=205,padT=18,padB=28,padL=6,padR=6,plot=H-padT-padB;
+  const isMoney = fmt===money;
   const vs=data.map(d=>d.value);
-  const maxV=Math.max(...vs,1), minV=Math.min(0,...vs);
+  const maxV=finNiceMax(Math.max(...vs,0)), minV=Math.min(0,...vs)<0 ? -finNiceMax(-Math.min(...vs)) : 0;
+  const axFmt = v=> isMoney ? finCompactAxis(v) : qty(v);
+  const foot = opts.foot && Array.isArray(opts.foot.values) ? opts.foot : null;
+  const W=560, padT=20, padR=6, footH = foot ? 20 : 0;
+  const padB=28+footH, H=230+footH;
+  let padL=finAxisPad([maxV,(maxV+minV)/2,minV].map(axFmt), 44)*0.9;
+  if(foot && foot.label) padL=Math.max(padL, String(foot.label).length*10.5*0.6+10);
+  const plot=H-padT-padB;
   const dom=(maxV-minV)||1, y=v=> padT+(maxV-v)/dom*plot;
-  const n=data.length,gap=12,BWMAX=90;
-  let bw=Math.max(6,(W-padL-padR-gap*(n-1))/n); bw=Math.min(bw,BWMAX);
-  const contentW=n*bw+gap*(n-1), startX=Math.max(padL,(W-contentW)/2);
-  let cols="",labs="",vlab="";
+  const n=data.length,gap=10;
+  const bw=Math.min(60,Math.max(5,(W-padL-padR-gap*(n-1))/n));
+  const contentW=n*bw+gap*(n-1), startX=padL+Math.max(0,(W-padL-padR-contentW)/2);
+  // etiquetas de valor: texto, tamaño que entra en la columna y, si no entra, una sí y una no
+  const vtxt = d=> (d.muted?"? ":"") + (isMoney ? trendNumCompact(d.value) : qty(d.value));
+  const slot = bw+gap, CH=0.62;   // ancho aprox. de un carácter mono = 0,62 × tamaño
+  const maxLen = Math.max(...data.map(d=> vtxt(d).length));
+  let vfs = Math.min(10.5, (slot-3)/(maxLen*CH));
+  let vEvery = 1;
+  if(vfs < 8){ vfs = Math.min(10.5, (slot*2-3)/(maxLen*CH)); vEvery = 2; }
+  if(vfs < 7){ vfs = 0; }
+  let grid="",cols="",labs="",vlab="",feet="";
+  [maxV, (maxV+minV)/2, minV].forEach(gv=>{ const gy=y(gv);
+    grid+=`<line x1="${padL}" y1="${gy.toFixed(1)}" x2="${W-padR}" y2="${gy.toFixed(1)}" stroke="var(--line)" stroke-width="1"/>`
+        +`<text x="${padL-6}" y="${(gy+4).toFixed(1)}" text-anchor="end" font-size="10.5" fill="var(--muted)" font-family="var(--mono)">${esc(axFmt(gv))}</text>`; });
+  // etiquetas del eje X: si no entran, una sí y una no
+  const maxLab = Math.max(...data.map(d=> String(d.label||"").length));
+  let every = n>12 ? 2 : 1;
+  let lfs = Math.min(11, (slot*every-3)/(maxLab*0.55));
+  if(lfs < 9){ every = 2; lfs = Math.min(11, (slot*every-3)/(maxLab*0.55)); }
+  lfs = Math.max(8.5, lfs);
+  if(foot && foot.label) feet+=`<text x="${(padL-6).toFixed(1)}" y="${H-6}" text-anchor="end" font-size="10.5" font-weight="700" fill="var(--pos)">${esc(foot.label)}</text>`;
   data.forEach((d,i)=>{
-    const x=startX+i*(bw+gap), yy=y(Math.max(0,d.value)), y0=y(Math.min(0,d.value)), h=Math.max(1,Math.abs(y0-yy));
+    const x=startX+i*(bw+gap), yy=y(Math.max(0,d.value)), y0=y(Math.min(0,d.value)), h=Math.max(d.value?1:0,Math.abs(y0-yy));
     const neg=d.value<0;
-    cols+=`<rect x="${x.toFixed(1)}" y="${yy.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${neg?'var(--down)':COL}"><title>${esc(d.label)}: ${fmt(d.value)}</title></rect>`;
+    // d.muted (v87): el valor no es comparable (p.ej. mes sin gastos de estructura cargados) → gris + rayado
+    const fill = d.muted ? "var(--line-strong)" : (neg?'var(--neg)':COL);
+    cols+=`<rect x="${x.toFixed(1)}" y="${yy.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${fill}"${d.muted?' stroke="var(--muted)" stroke-dasharray="3 3"':''}>${d.drill?"":`<title>${esc(d.label)}: ${esc(fmt(d.value))}${d.muted&&d.note?" — "+esc(d.note):""}</title>`}</rect>`;
+    // Con drill: zona táctil de toda la columna (alto completo), no sólo la barra
+    if(d.drill) cols+=`<rect class="drill-hit" x="${(x-gap/2).toFixed(1)}" y="${padT}" width="${(bw+gap).toFixed(1)}" height="${(plot+20).toFixed(1)}" data-drill="${esc(d.drill)}" tabindex="0" role="button" aria-label="${esc(t("dr.aria",{x:d.label}))}"><title>${esc(d.label)}: ${esc(fmt(d.value))}${d.muted&&d.note?" — "+esc(d.note):""} — ${t("dr.tap")}</title></rect>`;
     const cx=x+bw/2;
-    vlab+=`<text x="${cx.toFixed(1)}" y="${(yy-4).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" font-family="monospace" fill="var(--text)">${(fmt===money)?_pnlCompact(d.value):qty(d.value)}</text>`;
-    labs+=`<text x="${cx.toFixed(1)}" y="${H-padB+14}" text-anchor="middle" font-size="9.5" fill="var(--muted)">${esc(d.label)}</text>`;
+    // con etiquetas salteadas se muestra siempre la última (la más reciente)
+    const showV = vfs>0 && (vEvery===1 || (n-1-i)%2===0);
+    if(showV) vlab+=`<text x="${cx.toFixed(1)}" y="${(neg?y0+12:yy-5).toFixed(1)}" text-anchor="middle" font-size="${vfs.toFixed(1)}" font-weight="700" font-family="var(--mono)" fill="${d.muted?"var(--muted)":"var(--text)"}">${esc(vtxt(d))}</text>`;
+    if((n-1-i)%every===0) labs+=`<text x="${cx.toFixed(1)}" y="${H-padB+16}" text-anchor="middle" font-size="${lfs.toFixed(1)}" fill="var(--muted)">${esc(d.label)}</text>`;
+    if(foot) feet+=`<text x="${cx.toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="10.5" font-weight="600" font-family="var(--mono)" fill="var(--text)">${esc(foot.values[i]==null?"—":foot.values[i])}</text>`;
   });
-  return `<svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:auto;max-height:260px;margin:0 auto" role="img" aria-label="Tendencia mensual">${cols}${vlab}${labs}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:auto;max-height:${280+footH}px;margin:0 auto" role="img" aria-label="${t("an.aria.trend")}">${grid}${cols}${vlab}${labs}${feet}</svg>`;
+}
+
+/* ============================================================
+   VISTA: Análisis → "Ventas y margen"
+   ============================================================ */
+/* ============================================================
+   DÍAS DE STOCK (v87)
+   ------------------------------------------------------------
+   Días = stock valuado / costo de lo vendido por día.
+   Antes el costo diario era SIEMPRE cogs(90 días)/90: con menos de 90 días de
+   historia, los días sin ventas (antes de arrancar) bajaban el ritmo y los días
+   de stock salían inflados (84 en vez de ~50). Ahora el divisor es la ventana
+   REAL: desde la primera venta (con los filtros activos) hasta hoy, con tope 90.
+   Tampoco es "menos es mejor": poco stock = riesgo de quiebre (el Plan avisa
+   "Falta stock"). Se evalúa contra una banda objetivo.
+   ============================================================ */
+const DIAS_STOCK_BANDA = { min:30, max:90 };   // objetivo de cobertura; ajustar acá si cambia la política
+function finRitmoCostoDiario(q, maxDias){
+  const a = finAnchor(), aIso = finIso(a);
+  const lim = new Date(a); lim.setDate(lim.getDate()-(maxDias-1));
+  let desde = finIso(lim);
+  // primera venta con los mismos filtros (juego, idioma, país, vendedor, sociedad)
+  const hist = finSaleLines(Object.assign({}, q, { from:"", to:aIso }));
+  const primera = hist.reduce((m,r)=> (r.fecha && (!m || r.fecha<m)) ? r.fecha : m, "");
+  if(!primera) return { perDay:0, dias:0 };
+  if(primera > desde) desde = primera;
+  const dias = Math.max(1, Math.round((new Date(aIso+"T12:00:00") - new Date(desde+"T12:00:00"))/864e5) + 1);
+  const A = finAggregate(finSaleLines(Object.assign({}, q, { from:desde, to:aIso })));
+  return { perDay: A.cogs/dias, dias };
+}
+/* {dias, ventana, banda:"low"|"ok"|"high"} o null si no hay ventas. */
+function finDiasInventarioInfo(S, q){
+  /* v117: el stock no se asigna por país ni vendedor (es de todos), así que el ritmo de
+     costo tampoco: antes, filtrando un vendedor, dividía el stock ENTERO por lo que vendió
+     ese vendedor y daba 1.100 días en vez de 135. Juego, idioma y sociedad sí aplican. */
+  q = Object.assign({}, q, { pais:"", vend:"" });
+  const R = finRitmoCostoDiario(q, 90);
+  if(!(R.perDay>0)) return null;
+  const dias = Math.round(S.valuation/R.perDay);
+  const banda = dias < DIAS_STOCK_BANDA.min ? "low" : (dias > DIAS_STOCK_BANDA.max ? "high" : "ok");
+  return { dias, ventana:R.dias, banda };
+}
+function finDiasInventario(S, q){ const I = finDiasInventarioInfo(S, q); return I ? I.dias : null; }
+/* Subtítulo de la tarjeta: ventana usada + dónde cae contra la banda objetivo. */
+function finDiasInventarioSub(I){
+  if(!I) return t("fin.kpi.diosub");
+  return t("fin.dio.win",{d:I.ventana}) + " " + t("fin.dio.band."+I.banda,{a:DIAS_STOCK_BANDA.min, b:DIAS_STOCK_BANDA.max});
+}
+function viewAnalisis(){
+  const q = finQuery(), r = { from:q.from, to:q.to };
+  const rows = finSaleLines(q), A = finAggregate(rows);
+  const pr = finPriorRange(r);
+  const Ap = pr ? finAggregate(finSaleLines(Object.assign({}, q, pr))) : null;
+  const P  = finPurchases(q), Pp = pr ? finPurchases(Object.assign({}, q, pr)) : null;
+  const S  = finStock(q);
+  const dioI = finDiasInventarioInfo(S, q), dio = dioI ? dioI.dias : null;
+  const months = finTrimMeses(finMonths(r, A, P), m=> m.net || m.purch || m.units || m.purchUnits);   // v88: sin meses vacíos al principio
+  const units = anMetric==="units";
+  const mfmt = units ? qty : money;
+  // v87: compras (a costo) contra COSTO de lo vendido, no contra ventas (a precio).
+  // Comparar costo con precio daba <1 casi siempre (por el margen) y escondía la sobrecompra.
+  /* v117: las compras no se asignan por país ni vendedor: con esos filtros se comparaban
+     las compras de TODA la empresa contra el costo vendido de un país o un vendedor. El
+     cociente se oculta y se avisa. */
+  const purchDims = !!(q.pais || q.vend);
+  const ratio = (!purchDims && A.cogs>0) ? P.total/A.cogs : null;
+  /* Sin ventas el año anterior, el aviso va UNA vez debajo de los KPIs (antes se repetía en cada tarjeta). */
+  const hasPrior = !!(Ap && (Ap.units>0 || (Pp && Pp.total>0)));
+  const D = (cur, prev, o)=> hasPrior ? finDelta(cur, prev, o) : "";
+
+  /* v88: los KPIs del período viven en el Resumen (antes esta pestaña repetía las 6
+     tarjetas). Acá arranca directo en los gráficos, con un acceso de un toque. */
+  const kpis = `<p class="finbar-note" style="margin:-6px 0 18px">${t("an.kpis.moved")} <button type="button" class="linkbtn" id="an_goresumen">${t("an.kpis.go")}</button></p>`;
+
+  /* --- Serie mensual + tabla mes a mes --- */
+  const combo = `
+  <div class="u-mb5 panel chart">
+    <p class="ctitle">${t("fin.combo.title")}</p>
+    <p class="csub">${t("fin.combo.sub")} ${t("dr.hint.month")}</p>
+    ${purchDims ? `<p class="u-m0 fin-help">${t("fin.purch.nodims")}</p>` : ""}
+    <div class="fin-legend"><span><i class="lg-sales"></i>${units?t("fin.s.unitssold"):t("fin.s.sales")}</span><span><i class="lg-purch"></i>${units?t("fin.s.unitsbought"):t("fin.s.purch")}</span><span><i class="dot"></i>${t("fin.s.gm")}</span></div>
+    ${finComboSVG(months, units)}
+  </div>`;
+  let prevPct = null;
+  const mRows = months.map(m=>{
+    const rt = (!purchDims && m.cogs>0) ? m.purch/m.cogs : null;   // v87: compras / costo vendido · v117: sin país/vendedor
+    const d = (m.gpPct!=null && prevPct!=null) ? (m.gpPct-prevPct)*100 : null;
+    if(m.gpPct!=null) prevPct = m.gpPct;
+    const dTxt = d==null ? "—" : (Math.abs(d)<0.05 ? "= 0 pp" : (d>0?"▲ +":"▼ −")+nfDec(1).format(Math.abs(d))+" pp");
+    const stk = finStockAt(m.mk, { linea:q.linea, idioma:q.idioma, soc:q.soc });   // v117: + sociedad
+    return `<tr class="drillable" data-drill="m:${m.mk}" tabindex="0" title="${t("dr.tap")}"><td>${esc(m.label)}</td><td class="num">${m.net?moneyRound(m.net):"—"}</td><td class="num">${m.purch?moneyRound(m.purch):"—"}</td>
+      <td class="num ${rt!=null&&rt>1.2?"warn":""}">${rt!=null?nfDec(2).format(rt):"—"}</td>
+      <td class="num">${m.net?moneyRound(m.gp):"—"}</td><td class="num"><b>${m.gpPct!=null?fmtPct(m.gpPct):"—"}</b></td>
+      <td class="num ${d==null||Math.abs(d)<0.05?"":(d>0?"pos":"neg")}">${dTxt}</td>
+      <td class="num">${stk?moneyRound(stk.value):"—"}${stk&&stk.source==="live"?` <span class="kpi-tag">${t("fin.today")}</span>`:""}</td></tr>`;
+  }).join("");
+  const monthTable = months.length ? `
+  <div class="u-mb5 panel chart">
+    <p class="ctitle">${t("fin.mtbl.title")}</p>
+    <p class="csub">${t("fin.mtbl.sub")} ${t("dr.hint.rows")}</p>
+    <div class="table-scroll"><table class="fintbl">
+      <thead><tr><th>${t("fin.th.month")}</th><th class="r">${t("an.kpi.netrev")}</th><th class="r">${t("fin.kpi.purch")}</th><th class="r">${t("fin.th.ratio")}</th><th class="r">${t("an.kpi.grossmargin")}</th><th class="r">${t("fin.kpi.gmpct")}</th><th class="r">${t("fin.th.dpp")}</th><th class="r">${t("stk.th.close")}</th></tr></thead>
+      <tbody>${mRows}</tbody>
+      <tfoot><tr><td>${t("common.total")}</td><td class="num">${moneyRound(A.net)}</td><td class="num">${moneyRound(P.total)}</td><td class="num">${ratio!=null?nfDec(2).format(ratio):"—"}</td><td class="num">${moneyRound(A.gp)}</td><td class="num">${A.net>0?fmtPct(A.gpPct):"—"}</td><td></td><td></td></tr></tfoot>
+    </table></div>
+  </div>` : "";
+
+  /* --- Rankings y cortes --- */
+  const detail = Object.values(A.detail);
+  const topBy = (fn, n)=> detail.map(e=>({ label:e.nombre, sku:e.sku, drill:"pid:"+e.productoId, value:fn(e) })).filter(x=>x.value>0).sort((a,b)=>b.value-a.value).slice(0,n||10);
+  const topRev = topBy(e=> units ? e.units : e.revenue);
+  const topMargin = topBy(e=> round2(e.revenue-e.cogs));
+  const byDim = (keyFn, labelFn, dk)=>{ const mm={}; rows.forEach(rw=>{ const k=keyFn(rw); if(!k) return; const e=mm[k]=mm[k]||{units:0,revenue:0}; e.units+=rw.cantidad; e.revenue+=rw.revenue; }); return Object.entries(mm).map(([k,v])=>({label:labelFn?labelFn(k):k, drill:dk+":"+k, value: units?v.units:round2(v.revenue)})).sort((a,b)=>b.value-a.value); };
+  const byPais = byDim(rw=>rw.pais, k=>paisLabel(k), "pais").slice(0,8), byLang = byDim(rw=>rw.idioma, k=>langLabel(k), "idioma");
+
+  const sagaTot = Object.values(A.bySaga).reduce((a,s)=>a+s.net,0);
+  const sagaList = Object.entries(A.bySaga).map(([k,s])=>({ k, net:s.net, share: sagaTot>0?s.net/sagaTot:0, gpPct: s.net>0?(s.net-s.cogs)/s.net:null })).sort((a,b)=>b.net-a.net);
+  const maxShare = Math.max(0.0001, ...sagaList.map(s=>s.share));
+  const mixHTML = sagaList.length ? sagaList.map(s=>`
+    <button type="button" class="mixrow ${finFiltros.linea===s.k?"on":""}" data-mixsaga="${esc(s.k)}" title="${t("fin.mix.tip")}">
+      <span class="ml">${esc(s.k)}</span>
+      <span class="mt"><span class="mf" style="display:block;width:${(s.share/maxShare*100).toFixed(1)}%"></span></span>
+      <span class="ms">${fmtPct(s.share,0)}</span>
+      <span class="mm" style="color:${s.gpPct==null?"var(--muted)":(A.gpPct && s.gpPct<A.gpPct?"var(--neg)":"var(--pos)")}">${fmtPct(s.gpPct)}</span>
+    </button>`).join("") : `<div class="cempty">${t("an.nosales")}</div>`;
+
+  const vendPerf = Object.entries(A.perVend).map(([vid,v])=>({ vid, nombre:v.nombre, units:v.units, revenue:round2(v.sales), margin:round2(v.sales-v.cogs),
+      marginPct: v.sales>0 ? (v.sales-v.cogs)/v.sales : null, contrib: round2(v.sales-v.cogs+v.shipping+v.cargos-v.commission-v.costos) })).sort((a,b)=>b.revenue-a.revenue);
+
+  /* Costo y margen por sociedad (procedencia del stock vendido), desde las mismas filas. */
+  const bySoc = {};
+  const addSoc = (soc, u, cg, rev, contr)=>{ const k=isDeposito(soc)?soc:"—"; const e=bySoc[k]=bySoc[k]||{units:0,cogs:0,revenue:0,contrib:0}; e.units+=u; e.cogs+=cg; e.revenue+=rev; e.contrib+=contr; };
+  rows.forEach(rw=>{
+    if(rw.consumed){
+      const lu = rw.cantidad || rw.consumed.reduce((a,c)=>a+(c.cantidad||0),0);
+      const ct = rw.consumed.reduce((a,c)=>a+(c.costoUnit||0)*(c.cantidad||0),0);
+      rw.consumed.forEach(c=>{
+        const cCogs = ct>0 ? rw.cogs*(((c.costoUnit||0)*(c.cantidad||0))/ct) : rw.cogs*((c.cantidad||0)/(lu||1));
+        const uSh = lu>0 ? (c.cantidad||0)/lu : 0, cRev = rw.revenue*uSh;
+        addSoc(c.sociedad, c.cantidad||0, cCogs, cRev, cRev - cCogs + (rw.ship + rw.cargos - rw.costos)*uSh - (cRev - cCogs)*(rw.rate||0));
+      });
+    } else addSoc(rw.store||"—", rw.cantidad, rw.cogs, rw.revenue, rw.contrib);
+  });
+  const socRows = STORE_IDS.concat(Object.keys(bySoc).filter(k=>!isDeposito(k))).filter(k=>bySoc[k]).map(k=>{ const e=bySoc[k], mg=e.revenue-e.cogs;
+    return { k, nombre:k==="—"?t("an.soc.nobreakdown"):storeName(k), units:e.units, cogs:e.cogs, avg:e.units>0?e.cogs/e.units:0, revenue:e.revenue, margin:mg, marginPct:e.revenue>0?mg/e.revenue:null, contrib:e.contrib }; });
+
+  const metricW = units ? t("an.w.units") : t("an.w.revenue");
+  const charts = `
+  <div class="chart-grid">
+    <div class="panel chart">
+      <p class="ctitle">${t("an.top.title",{metric:units?t("an.w.unitslow"):t("an.w.revenuelow")})}</p>
+      <p class="csub">${t("fin.top.sub.drill")}</p>
+      ${topRev.length ? hbars(topRev, mfmt, "var(--series-sales)") : `<div class="cempty">${t("an.nosales")}</div>`}
+    </div>
+    <div class="panel chart">
+      <p class="ctitle">${t("an.topmargin.title")}</p>
+      <p class="csub">${t("an.topmargin.sub")} ${t("dr.hint.bar")}</p>
+      ${topMargin.length ? hbars(topMargin, money, "var(--pos)") : `<div class="cempty">${t("an.nosales")}</div>`}
+    </div>
+    <div class="panel chart">
+      <p class="ctitle">${t("fin.mix.title")}</p>
+      <p class="csub">${t("fin.mix.sub",{p:A.net>0?fmtPct(A.gpPct):"—"})}</p>
+      ${mixHTML}
+    </div>
+    <div class="panel chart">
+      <p class="ctitle">${t("fin.geo.title")}</p>
+      <p class="csub">${t("fin.geo.sub")} ${t("dr.hint.bar")}</p>
+      <p class="fin-subhead">${t("an.bycountry.title",{metric:metricW})}</p>
+      ${byPais.length ? hbars(byPais, mfmt, "var(--series-sales)") : `<div class="cempty">${t("an.bycountry.empty")}</div>`}
+      <p class="fin-subhead">${t("an.bylang.title",{metric:metricW})}</p>
+      ${byLang.length ? hbars(byLang, mfmt, "var(--series-sales)") : `<div class="cempty">${t("an.bylang.empty")}</div>`}
+    </div>
+    <div class="u-span-all panel chart">
+      <p class="ctitle">${t("an.perf.title")}</p>
+      <p class="csub">${t("an.perf.sub")} ${t("dr.hint.rows")}</p>
+      ${vendPerf.length ? `<div class="table-scroll"><table class="fintbl">
+        <thead><tr><th>${t("an.th.seller")}</th><th class="r">${t("an.th.units")}</th><th class="r">${t("an.th.revenue")}</th><th class="r">${t("an.th.margin")}</th><th class="r">${t("an.th.marginpct")}</th><th class="r">${t("an.kpi.contrib")}</th></tr></thead>
+        <tbody>${vendPerf.map(v=>`<tr class="drillable" data-drill="vend:${esc(v.vid)}" tabindex="0" title="${t("dr.tap")}"><td>${esc(v.nombre)}</td><td class="num">${qty(v.units)}</td><td class="num">${moneyRound(v.revenue)}</td><td class="num">${moneyRound(v.margin)}</td><td class="num">${fmtPct(v.marginPct)}</td><td class="num ${v.contrib<0?"neg":""}">${moneyRound(v.contrib)}</td></tr>`).join("")}</tbody>
+      </table></div>` : `<div class="cempty">${t("an.nosales")}</div>`}
+    </div>
+    ${STORE_IDS.length>1 ? `<div class="u-span-all panel chart">
+      <p class="ctitle">${t("an.soc.title")}</p>
+      <p class="csub">${t("an.soc.sub")}</p>
+      ${socRows.length ? `<div class="table-scroll"><table class="fintbl">
+        <thead><tr><th>${t("an.soc.society")}</th><th class="r">${t("an.soc.unitssold")}</th><th class="r">${t("an.soc.cogs")}</th><th class="r">${t("an.soc.avgcost")}</th><th class="r">${t("an.soc.revenue")}</th><th class="r">${t("an.soc.margin")}</th><th class="r">${t("an.soc.marginpct")}</th><th class="r">${t("an.kpi.contrib")}</th></tr></thead>
+        <tbody>${socRows.map(s=>`<tr ${isDeposito(s.k)?`class="drillable" data-drill="soc:${esc(s.k)}" tabindex="0" title="${t("dr.tap")}"`:""}><td>${esc(s.nombre)}</td><td class="num">${qty(s.units)}</td><td class="num">${moneyRound(s.cogs)}</td><td class="num">${moneyRound(s.avg)}</td><td class="num">${moneyRound(s.revenue)}</td><td class="num">${moneyRound(s.margin)}</td><td class="num">${fmtPct(s.marginPct)}</td><td class="num ${s.contrib<0?"neg":""}">${moneyRound(s.contrib)}</td></tr>`).join("")}</tbody>
+        <tfoot><tr><td>${t("an.soc.total")}</td><td class="num">${qty(A.units)}</td><td class="num">${moneyRound(A.cogs)}</td><td class="num">—</td><td class="num">${moneyRound(A.sales)}</td><td class="num">${moneyRound(A.sales-A.cogs)}</td><td class="num">${A.sales>0?fmtPct((A.sales-A.cogs)/A.sales):"—"}</td><td class="num">${moneyRound(A.contrib)}</td></tr></tfoot>
+      </table></div><p class="u-mt2 csub">${t("an.soc.foot")}</p>` : `<div class="cempty">${t("an.nosales")}</div>`}
+    </div>` : ""}
+  </div>`;
+
+  const soc = socFocoActual();
+  return `
+  <div class="head"><div class="title"><h2>${t("fin.an.title")}</h2><p>${t("fin.an.sub")}</p></div>
+    <div class="u-gap2 actions">
+      <div class="seg" role="group" aria-label="${t("fin.metric")}"><button type="button" class="seg-btn ${!units?"on":""}" data-metric="usd">${t("an.metric.usd")}</button><button type="button" class="seg-btn ${units?"on":""}" data-metric="units">${t("an.metric.units")}</button></div>
+    </div>
+  </div>
+  ${finFilterBarHTML()}
+  ${soc ? `<div class="u-mb3 banner">${t("an.socfocus",{soc:`<b>${esc(storeName(soc))}</b>`})}</div>` : ""}
+  ${kpis}
+  ${combo}
+  ${semanasPanel(q)}
+  ${monthTable}
+  ${finStockHistoryPanel(q, r)}
+  ${charts}`;
+}
+function wireAnalisis(){
+  if(view!=="analisis") return;
+  wireFinFilterBar();
+  /* v86: el export a Excel vive sólo en P&L (antes también había un botón acá). */
+  document.querySelectorAll("[data-metric]").forEach(b=> b.onclick=()=>{ anMetric=b.dataset.metric; render(); });
+  // Barras, meses y filas -> detalle de ventas (11e-drill.js)
+  wireDrills();
+  const gr=document.getElementById("an_goresumen"); if(gr) gr.onclick=()=> setView("resumen");
+  const rs=document.getElementById("stk_refreeze"); if(rs) rs.onclick=()=>{ if(confirm(t("stk.refreeze.confirm"))){ const n=finFreezeStockSnaps(true); toast(t("stk.refreeze.done",{n})); render(); } };
+  // Mix por línea -> filtra (o desfiltra) esa línea en toda la sección
+  document.querySelectorAll('#main [data-mixsaga]').forEach(b=> b.onclick=()=>{ const sg=b.dataset.mixsaga; finFiltros.linea = (finFiltros.linea===sg?"":sg); render(); });
+  hideNameTip(); wireNameTips(document.getElementById("main"));
+  wireDonuts();
+}
+
+/* ============================================================
+   STOCK AL CIERRE DE CADA MES (fotos mensuales, 05-metrics.js)
+   ============================================================ */
+function finStockHistoryPanel(q, r){
+  const d = { linea:q.linea, idioma:q.idioma, soc:q.soc||null };   // v117: también filtra por sociedad
+  // Últimos 12 meses hasta el fin del período (o hasta hoy)
+  const end = r.to ? r.to.slice(0,7) : finCurMonth();
+  const [ey,em] = end.split("-").map(Number);
+  const pts = [];
+  /* v117: el gráfico NO depende del período (son siempre 12 meses), así que cada barra
+     abre el mes calendario completo ("mes:"). Antes usaba "m:", que recortaba el mes al
+     período elegido: con "Mes" (octubre) tocar septiembre daba 01/10 – 30/09 y vacío. */
+  for(let i=11;i>=0;i--){ const dt=new Date(ey, em-1-i, 1), mk=finIso(dt).slice(0,7); const st=finStockAt(mk, d); if(st) pts.push({ mk, label:finMonthLabel(mk), value:st.value, units:st.units, source:st.source, drill:"mes:"+mk }); }
+  if(!pts.length) return "";
+  const snaps = pts.filter(p=>p.source==="snap").length;
+  // Fotos congeladas antes de v117 no traen el corte por sociedad: se avisa y se ofrece recalcular
+  const oldSnaps = d.soc ? pts.filter(p=> p.source==="calc" && db.stockSnaps && db.stockSnaps[p.mk] && !db.stockSnaps[p.mk].socSeg).length : 0;
+  return `
+  <div class="u-mb5 panel chart">
+    <div class="u-flex u-between u-items-start u-gap3 u-wrap">
+      <div><p class="ctitle">${t("stk.title")}${d.soc?` · ${esc(storeName(d.soc))}`:""}</p><p class="csub">${t("stk.sub")}</p></div>
+      ${isAdmin()?`<button type="button" class="btn ghost sm" id="stk_refreeze">${ICO.sync}${t("stk.refreeze")}</button>`:""}
+    </div>
+    ${trendChartSVG(pts.map(p=>({ label:p.label, value:p.value, drill:p.drill })), money, "var(--series-purch)")}
+    <p class="fin-help">${t(snaps===1?"stk.legend1":"stk.legend",{n:snaps})}${oldSnaps?" "+t("stk.socnote"):""}</p>
+  </div>`;
+}
+
+/* ============================================================
+   v89 — ÚLTIMAS 12 SEMANAS (lunes a domingo)
+   Con pocos meses de historia, la semana muestra la tendencia que el mes
+   todavía no deja ver. Respeta los filtros de juego/idioma/país/vendedor/
+   sociedad; el período del filtro no aplica (siempre son las últimas 12).
+   ============================================================ */
+function finLunes(d){ const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); const w = (x.getDay()+6)%7; x.setDate(x.getDate()-w); return x; }
+function semanasPanel(q){
+  const a = finAnchor(), l0 = finLunes(a); l0.setDate(l0.getDate()-7*11);
+  const rows = finSaleLines(Object.assign({}, q, { from:finIso(l0), to:finIso(a) }));
+  if(!rows.length) return "";
+  const wk = [];
+  for(let i=0;i<12;i++){ const d = new Date(l0); d.setDate(d.getDate()+7*i); wk.push({ k:finIso(d), d, net:0, gp:0, units:0 }); }
+  const idx = {}; wk.forEach((w,i)=> idx[w.k]=i);
+  rows.forEach(r=>{ const k = finIso(finLunes(new Date(r.fecha+"T12:00:00"))); const i = idx[k]; if(i==null) return;
+    wk[i].net += r.net; wk[i].gp += r.net - r.cogs; wk[i].units += r.cantidad; });
+  const W = finTrimMeses(wk, w=> w.net || w.units);   // sin semanas vacías al principio
+  const lab = w=> w.d.toLocaleDateString(lang()==="es"?"es-AR":"en-US",{day:"numeric",month:"short"});
+  const money_ = anMetric==="units";
+  const items = W.map(w=>({ label:lab(w), value: money_ ? w.units : round2(w.net) }));
+  const curW = W[W.length-1], prevW = W[W.length-2];
+  const wow = (curW && prevW && prevW.net>0) ? (curW.net/prevW.net-1) : null;
+  const cmp = (()=>{   // semana en curso: comparar a igual cantidad de días
+    const dias = ((a.getDay()+6)%7)+1; return dias<7 ? t("wk.partial",{d:dias}) : "";
+  })();
+  const gpVals = W.map(w=> w.net>0 ? fmtPct(w.gp/w.net,0) : "—");   // v-graf: Margen % dentro del gráfico, alineado con cada semana
+  return `<div class="u-mb5 panel chart">
+    <p class="ctitle">${t("wk.title")}</p>
+    <p class="csub">${t("wk.sub")} ${cmp}${wow!=null?" "+t("wk.wow",{p:(wow>=0?"+":"")+fmtPct(wow,0)}):""}</p>
+    ${trendChartSVG(items, money_ ? qty : money, null, { foot:{ label:t("fin.s.gm"), values:gpVals } })}
+  </div>`;
 }

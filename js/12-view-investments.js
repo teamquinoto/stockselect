@@ -22,7 +22,7 @@ function viewInversiones(){
       <td class="r num">${qty(un)}</td>
       <td class="r num">${money(un>0?cost/un:0)}</td>
       <td class="r num">${money(cost)}</td>
-      <td class="r"><button class="btn ghost sm" data-invret="${p.id}">${t("inv.ret")}</button></td>
+      <td class="r"><button class="btn ghost sm" data-invret="${p.id}">${ICO.vault}${t("inv.ret")}</button></td>
     </tr>`;
   }).join("");
   return `

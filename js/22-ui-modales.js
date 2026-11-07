@@ -56,7 +56,10 @@ function buildModal(title, bodyHTML, buttons=[], wide=false, extraFoot=""){
   return root;
 }
 function mkBtn(b){
-  const el=document.createElement("button"); el.className=b.cls; el.textContent=b.label; el.onclick=b.act; return el;
+  const el=document.createElement("button"); el.className=b.cls;
+  // b.icon: SVG de la biblioteca ICO (constante propia, no dato del usuario); el texto va como texto (igual que Prince)
+  if(b.icon){ el.innerHTML=b.icon; el.appendChild(document.createTextNode(b.label)); } else el.textContent=b.label;
+  el.onclick=b.act; return el;
 }
 function escClose(e){ if(e.key==="Escape") closeModal(); }
 /* Enter dispara el botón primario del modal. Guardas: no pisa pickers, calendarios,
@@ -401,15 +404,15 @@ function openCmdK(){
     q = (q||"").trim().toLowerCase();
     results = [];
     if(q){
-      db.productos.filter(p=> ((p.nombre||"")+" "+(p.sku||"")).toLowerCase().includes(q)).slice(0,6)
-        .forEach(p=> results.push({ kind:t("cmdk.kind.product"), label:p.nombre||"—", sub:p.sku||"", action:()=>{ close(); if(typeof openFicha==="function") openFicha(p.id); } }));
+      db.productos.filter(p=> ((p.nombre||"")+" "+skuHay(p)).toLowerCase().includes(q)).slice(0,6)
+        .forEach(p=> results.push({ kind:t("cmdk.kind.product"), label:p.nombre||"—", sub:(verSku()?(p.sku||""):""), action:()=>{ close(); if(typeof openFicha==="function") openFicha(p.id); } }));
       db.clientes.filter(c=> ((c.nombre||"")+" "+(c.empresa||"")).toLowerCase().includes(q)).slice(0,5)
-        .forEach(c=> results.push({ kind:t("cmdk.kind.customer"), label:c.nombre||"—", sub:c.empresa||"", action:()=>{ close(); if(typeof cliFiltro!=="undefined") cliFiltro=c.nombre||""; setView("clientes"); } }));
+        .forEach(c=> results.push({ kind:t("cmdk.kind.customer"), label:nombreVis(c.nombre)||"—", sub:nombreVis(c.empresa)||"", action:()=>{ close(); if(typeof cliFiltro!=="undefined") cliFiltro=c.nombre||""; setView("clientes"); } }));
       const docs = [];
       (db.ventas||[]).forEach(d=> docs.push(["venta",d]));
       (db.compras||[]).forEach(d=> docs.push(["compra",d]));
       docs.filter(([dt,d])=> ((d.numero||"")+" "+((d.cliente&&d.cliente.nombre)||d.contraparte||"")).toLowerCase().includes(q)).slice(0,6)
-        .forEach(([dt,d])=> results.push({ kind: dt==="venta"?t("cmdk.kind.sale"):t("cmdk.kind.purchase"), label:(d.numero||"—")+" · "+((d.cliente&&d.cliente.nombre)||d.contraparte||"—"), sub: fmtDate(d.fecha), action:()=>{ close(); verDoc(dt, d.id); } }));
+        .forEach(([dt,d])=> results.push({ kind: dt==="venta"?t("cmdk.kind.sale"):t("cmdk.kind.purchase"), label:(d.numero||"—")+" · "+(nombreVis((d.cliente&&d.cliente.nombre)||d.contraparte||"")||"—"), sub: fmtDate(d.fecha), action:()=>{ close(); verDoc(dt, d.id); } }));
     }
     active = 0; paint();
   };

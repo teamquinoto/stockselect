@@ -1,35 +1,67 @@
 /* ============================================================
-   gestordestock — 32-importar-pdf.js
-   Parte de la app. Se carga como <script> en el ORDEN del index.html.
-   Todo vive en scope global (sin módulos), igual que antes.
+   gestordestock — 32-importar-pdf.js (Select)
+   v103 · Mismo lector y misma pantalla que Prince (barra del archivo, datos de la factura,
+   cuadre, "Leída al instante" / "Leída con IA", Continuar en el pie) + lo propio de Select:
+   factura Propia / Terceros con dueño. Lector automático de Devir Americas (sin IA).
    ============================================================ */
 /* ============================================================
    IMPORTAR PDF
    ============================================================ */
 let pdfLines = [];   // líneas de texto reconstruidas
-let importOrigen = "propia";   // PUNTO 1: propia (todo a stock) | terceros (parte nuestra + parte al dueño)
+/* v121: modal rediseñado. Antes de elegir: texto + zona para soltar el PDF.
+   Con la factura cargada: la zona se achica a una barra (archivo · estado · Cambiar),
+   arriba los datos de la factura y el cuadre, y "Continuar" pasa al pie del modal. */
+/* Textos de la pantalla de importación (iguales a Prince) */
+(function(){ try{
+  Object.assign(I18N.en, {"imp.st.local": "Read instantly", "imp.st.ai": "Read with AI", "imp.st.reading": "Reading…", "imp.change": "Change", "imp.m.supplier": "Supplier", "imp.m.num": "No.", "imp.m.date": "Date", "imp.m.lines": "Lines", "imp.hint": "Supplier PDF · up to 10 MB", "imp.intro": "Upload the invoice PDF. If the format is known it's read instantly; if not, the AI reads it. You'll review everything before confirming.", "imp.freight": "<b>Freight/handling {amount}.</b> It's spread across the units when you confirm (it doesn't add stock).", "imp.reading.ai": "Reading <b>{file}</b> with AI… (may take a few seconds)", "imp.cuadra": "<b>Adds up</b> to the invoice total: {total}", "imp.nocuadra": "<b>Doesn't add up:</b> what was read totals {sum} and the invoice says {total} (difference {diff}). Check the lines before confirming.", "imp.nocuadra.sintotal": "<b>Couldn't verify:</b> the invoice total wasn't found. Check the lines before confirming.", "imp.btn.ai": "Read with AI"});
+  Object.assign(I18N.es, {"imp.st.local": "Leída al instante", "imp.st.ai": "Leída con IA", "imp.st.reading": "Leyendo…", "imp.change": "Cambiar", "imp.m.supplier": "Proveedor", "imp.m.num": "N°", "imp.m.date": "Fecha", "imp.m.lines": "Líneas", "imp.hint": "PDF del proveedor · hasta 10 MB", "imp.intro": "Subí el PDF de la factura. Si el formato es conocido se lee al instante; si no, la lee la IA. Vas a poder revisar todo antes de confirmar.", "imp.freight": "<b>Flete/handling {amount}.</b> Se prorratea entre las unidades al confirmar (no suma stock).", "imp.reading.ai": "Leyendo <b>{file}</b> con IA… (puede tardar unos segundos)", "imp.cuadra": "<b>Cuadra</b> con el total de la factura: {total}", "imp.nocuadra": "<b>No cuadra:</b> lo leído suma {sum} y la factura dice {total} (diferencia {diff}). Revisá las líneas antes de confirmar.", "imp.nocuadra.sintotal": "<b>No se pudo verificar:</b> no encontré el total de la factura. Revisá las líneas antes de confirmar.", "imp.btn.ai": "Leer con IA"});
+}catch(e){} })();
+let importOrigen = "propia";   // propia (todo a stock) | terceros (parte nuestra + parte al dueño)
 let importOwner = "";          // clienteId dueño, cuando es de terceros
 function openImport(){
   importOrigen = "propia"; importOwner = "";
   buildModal(t("imp.title"), `
-    <div class="banner">
-      ${t("imp.intro")}
-    </div>
-    <div class="drop" id="drop">
-      <div class="di">✨</div>
+    <p class="imp-intro">${t("imp.intro")}</p>
+    <div class="drop" id="drop" role="button" tabindex="0">
+      <div class="di">${ICO.importpdf}</div>
       <p><span class="fn">${t("imp.choosepdf")}</span> ${t("imp.ordrag")}</p>
-      <p style="font-size:12px">${t("imp.serverhint")}</p>
-      <input type="file" id="iaInput" accept="application/pdf" hidden>
+      <p class="u-fs-xs">${t("imp.hint")}</p>
     </div>
+    <input type="file" id="iaInput" accept="application/pdf" hidden>
+    <div class="imp-fbar" id="impFile" hidden></div>
     <div id="importOut"></div>
   `,[{label:t("common.close"),cls:"btn",act:closeModal}], "import");
 
   const drop=document.getElementById("drop"), input=document.getElementById("iaInput");
+  const elegir=f=>{ if(f) handlePdfIA(f); };
   drop.onclick=()=>input.click();
-  input.onchange=()=>{ if(input.files[0]) handlePdfIA(input.files[0]); };
+  drop.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); input.click(); } };
+  input.onchange=()=>{ elegir(input.files[0]); input.value=""; };   // value="" → se puede volver a elegir el mismo
   ["dragover","dragenter"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over");}));
   ["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("over");}));
-  drop.addEventListener("drop",e=>{ const f=e.dataTransfer.files[0]; if(f) handlePdfIA(f); });
+  drop.addEventListener("drop",e=>{ elegir(e.dataTransfer.files[0]); });
+}
+/* Barra del archivo elegido. estado: "reading" | "local" | "ai" | "" */
+function impArchivo(file, estado){
+  const bar=document.getElementById("impFile"), drop=document.getElementById("drop");
+  if(!bar) return;
+  drop.hidden=true; bar.hidden=false;
+  const pill = estado==="local" ? `<span class="imp-pill pos">${t("imp.st.local")}</span>`
+             : estado==="ai"    ? `<span class="imp-pill ai">${t("imp.st.ai")}</span>`
+             : estado==="reading" ? `<span class="imp-pill">${t("imp.st.reading")}</span>` : "";
+  bar.innerHTML=`${ICO.pdf}<span class="imp-fname" title="${esc(file.name)}">${esc(file.name)}</span>${pill}`+
+    `<button type="button" class="btn ghost sm" id="impCambiar">${t("imp.change")}</button>`;
+  document.getElementById("impCambiar").onclick=()=> document.getElementById("iaInput").click();
+}
+/* "Continuar" vive en el pie del modal (al lado de Cerrar). */
+function impContinuar(onClick){
+  const viejo=document.getElementById("toDraft"); if(viejo) viejo.remove();
+  if(!onClick) return;
+  const foot=document.getElementById("mfoot"); if(!foot) return;
+  const der=foot.lastElementChild || foot;
+  const b=document.createElement("button");
+  b.type="button"; b.className="btn primary"; b.id="toDraft"; b.textContent=t("imp.continue");
+  b.onclick=onClick; der.appendChild(b);
 }
 
 /* Leer factura con Gemini (vía el Worker). Reusa el mismo editor de revisión que la detección local. */
@@ -41,14 +73,12 @@ function fileToBase64(file){
     r.readAsDataURL(file);
   });
 }
-/* Lectura en 2 pasos (portado de Prince Collections v119-v120):
-   1) LOCAL (~1 s): pdf.js saca el texto y el parser estructurado (formato Coqui Hobby)
-      arma las líneas. Se CUADRA como lo haría un auditor: cada línea cantidad × precio =
-      importe, y la suma (+ flete + cargos) = total impreso en la factura.
-      Si el formato se reconoce, se muestra AL INSTANTE: en verde si cuadra, en ámbar con
-      la diferencia y el botón "Leer con IA" si no.
-   2) IA sólo si el formato no se reconoce o el PDF no tiene texto (escaneado). Si hay
-      texto se manda el TEXTO (mucho más liviano); si así no salen líneas, se manda el PDF. */
+/* v119 · Lectura en 2 pasos (antes: siempre IA, 30-45 s por factura).
+   1) LOCAL (~1 s): pdf.js saca el texto y el parser estructurado arma las líneas. Si la
+      lectura CUADRA (cada línea: cantidad × precio = importe, y la suma + flete = total de
+      la factura), se usa directo, sin IA. Es el mismo control que haría un auditor.
+   2) IA sólo si no cuadra o el PDF no tiene texto (escaneado). Si hay texto, se manda el
+      TEXTO (mucho más liviano que el PDF); si la IA no saca líneas, se reintenta con el PDF. */
 async function extraerLineasPdf(file){
   if(!window.pdfjsLib) throw new Error(t("imp.err.noreader"));
   const buf=await file.arrayBuffer();
@@ -67,7 +97,7 @@ function totalesDelTexto(blob){
   while((m=re.exec(blob))){ const n=parseNum(m[1]); if(n>0) out.push(n); }
   return out;
 }
-/* { ok, suma, total }. suma = líneas + flete + handling (cargos). */
+/* v120: devuelve { ok, suma, total }. suma = líneas + flete + handling (cargos). */
 function cuadreLectura(parsed, lines){
   const r={ ok:false, suma:0, total:0 };
   if(!parsed || !parsed.items.length) return r;
@@ -81,15 +111,17 @@ function cuadreLectura(parsed, lines){
   r.ok = lineasOk && tots.some(T=> Math.abs(T-r.suma)<=0.02 || Math.abs(T-lineas)<=0.02);
   return r;
 }
-/* Banner del cuadre: verde si cierra contra el total; ámbar con la diferencia si no. */
+function lecturaLocalCuadra(parsed, lines){
+  return !!parsed && parsed.mode==="estructurado" && cuadreLectura(parsed, lines).ok;
+}
+/* Cuadre de la lectura: verde si cierra contra el total; ámbar con la diferencia si no. */
 function htmlCuadre(c, conBotonIA){
   if(!c) return "";
-  if(c.ok) return `<div class="banner ok">✓ ${t("imp.cuadra",{total:money(c.total||c.suma)})}</div>`;
+  if(c.ok) return `<div class="banner pos">${ICO.check}<span>${t("imp.cuadra",{total:money(c.total||c.suma)})}</span></div>`;
   const dif = Math.round(((c.total||0)-(c.suma||0))*100)/100;
   const txt = c.total ? t("imp.nocuadra",{sum:money(c.suma), total:money(c.total), diff:money(dif)}) : t("imp.nocuadra.sintotal");
-  return `<div class="banner warn" style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap">`+
-    `<span>${txt}</span>`+
-    (conBotonIA ? `<button type="button" class="btn" id="impLeerIA">✨ ${t("imp.btn.ai")}</button>` : "")+`</div>`;
+  return `<div class="banner warn imp-nocuadra">${ICO.warn}<span>${txt}</span>`+
+    (conBotonIA ? `<button type="button" class="btn sm" id="impLeerIA">${ICO.sparkle}${t("imp.btn.ai")}</button>` : "")+`</div>`;
 }
 function textoParaIA(lines){
   const txt=(lines||[]).join("\n");
@@ -102,18 +134,23 @@ async function pedirIA(cuerpo){
 }
 async function handlePdfIA(file, forzarIA){
   const out=document.getElementById("importOut");
+  impContinuar(null);
   if(!session){ out.innerHTML=`<div class="banner warn">${t("imp.needlogin")}</div>`; return; }
 
   // ---- 1) Lectura local ----
-  out.innerHTML=`<p style="color:var(--muted);padding:14px 0">${t("imp.reading.local",{file:esc(file.name)})}</p>`;
+  impArchivo(file, "reading");
+  out.innerHTML=`<p class="ai-reading">${ICO.sparkle}<span>${t("imp.reading.local",{file:esc(file.name)})}</span></p>`;
   let lines=null;
   try{
     lines = await extraerLineasPdf(file);
     const parsed = parseInvoice(lines);
     if(!forzarIA && parsed.mode==="estructurado" && parsed.items.length){
+      // v120: formato reconocido. Si cuadra, listo; si no, se muestra igual AL INSTANTE con la
+      // diferencia a la vista y la opción de leerla con IA (antes: 30 s de espera sin explicación).
       pdfLines = lines;
       parsed.cuadre = cuadreLectura(parsed, lines);
       parsed.leerConIA = ()=> handlePdfIA(file, true);
+      impArchivo(file, "local");
       showImportEditor(file.name, parsed);
       return;
     }
@@ -121,7 +158,7 @@ async function handlePdfIA(file, forzarIA){
 
   // ---- 2) IA (con contador de segundos para que se vea que avanza) ----
   const t0=Date.now();
-  out.innerHTML=`<p style="color:var(--muted);padding:14px 0">${t("imp.reading.ai",{file:esc(file.name)})}<span id="iaSecs"></span></p>`;
+  out.innerHTML=`<p class="ai-reading">${ICO.sparkle}<span>${t("imp.reading.ai",{file:esc(file.name)})}</span><span class="u-muted" id="iaSecs"></span></p>`;
   const reloj=setInterval(()=>{
     const el=document.getElementById("iaSecs");
     if(el) el.textContent=" · "+Math.round((Date.now()-t0)/1000)+" s"; else clearInterval(reloj);
@@ -142,12 +179,14 @@ async function handlePdfIA(file, forzarIA){
     const { res, j }=r;
     if(!res.ok || !j.ok){
       const det = j && (j.detalle||j.error||j.raw) ? esc(j.detalle||j.error||j.raw) : ("HTTP "+res.status);
+      impArchivo(file,"");
       out.innerHTML=`<div class="banner warn">${t("imp.err.ai",{det})}</div>`;
       return;
     }
     const d=j.data||{};
     const lineas=Array.isArray(d.lineas)?d.lineas:[];
     if(!lineas.length){
+      impArchivo(file,"");
       out.innerHTML=`<div class="banner warn">${t("imp.err.nolines")}</div>`;
       return;
     }
@@ -168,15 +207,18 @@ async function handlePdfIA(file, forzarIA){
     };
     pdfLines = (lines && lines.length) ? lines : [t("imp.rawai")];
     if(j.cuadra===true || j.cuadra===false) parsed.cuadre = { ok:j.cuadra, suma:j.suma||0, total:j.total||0 };
+    impArchivo(file, "ai");
     showImportEditor(file.name, parsed);
   }catch(e){
     console.error(e);
+    impArchivo(file,"");
     out.innerHTML=`<div class="banner warn">${t("imp.err.aifail",{err:esc(e.message||"error")})}</div>`;
   }finally{
     clearInterval(reloj);
   }
 }
 /* Normaliza fecha devuelta por la IA a YYYY-MM-DD si viene en otro formato reconocible */
+/* La IA devuelve YYYY-MM-DD; si igual manda otro formato, se lee como americano (MM/DD/YYYY). */
 function normFechaIA(f){
   if(!f) return "";
   f=String(f).trim();
@@ -225,12 +267,65 @@ function reconstructLines(items){
     .map(([,arr])=> arr.sort((a,b)=>a.x-b.x).map(o=>o.s).join(" ").replace(/\s+/g," ").trim());
 }
 
+/* ---------- Proveedor Devir Americas (lectura automática, sin IA) ----------
+   Renglón: [Bin] Qty Descripción  FechaLanzamiento  MPN  UPC  Idioma  Origen  HTS  Kgs  Precio  Importe
+     ej: "01N1 3 Pokémon TCG: Poke Ball Tin 2025 Master Case 6ct. - December 5, 2025 10-10113-142
+          10196214130453 English USA 9504.40.0000 1.77 54.87 164.61"
+   - El nombre puede seguir en el renglón de abajo ("Master Case 6ct. - ENGLISH"): se suma.
+   - La fecha de lanzamiento a veces viene cortada ("September 16, 2..."): igual se reconoce.
+   - SKU = MPN (código del fabricante). Costo = Price. El UPC queda en el detalle.
+   - "Credit or debit card convenience fee" no es mercadería: va como cargo (se prorratea en el costo).
+   - Fecha de la factura en formato americano (10/1/2026 = 1 de octubre). */
+function esFacturaDevir(blob){
+  return /Devir\s+Americas/i.test(blob) && /\bBin\s+Qty\s+Description\b/i.test(blob);
+}
+function _devirFecha(s){
+  const m = String(s||"").match(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/); if(!m) return "";
+  return m[3]+"-"+String(m[1]).padStart(2,"0")+"-"+String(m[2]).padStart(2,"0");
+}
+function parseDevir(lines, blob){
+  if(!esFacturaDevir(blob)) return null;
+  const MES = "(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\\.?";
+  const reItem = new RegExp("^(?:([A-Z0-9][A-Z0-9\\-]{0,9})\\s+)?(\\d+)\\s+(.+?)\\s+"+MES+"\\s+\\d{1,2},\\s*\\S+\\s+(\\S+)\\s+(\\d{8,14})\\s+([A-Za-z]+)\\s+([A-Za-z]{2,})\\s+(\\d{4}\\.\\d{2}\\.\\d{2,4})\\s+([\\d.,]+)\\s+([\\d.,]+)\\s+([\\d.,]+)\\s*$");
+  /* Por si falta la fecha de lanzamiento (preventas sin fecha): mismo renglón sin ese dato */
+  const reItemSinFecha = new RegExp("^(?:([A-Z0-9][A-Z0-9\\-]{0,9})\\s+)?(\\d+)\\s+(.+?)\\s+(\\S+)\\s+(\\d{8,14})\\s+([A-Za-z]+)\\s+([A-Za-z]{2,})\\s+(\\d{4}\\.\\d{2}\\.\\d{2,4})\\s+([\\d.,]+)\\s+([\\d.,]+)\\s+([\\d.,]+)\\s*$");
+  const reCargo = /^(?:[A-Z0-9][A-Z0-9\-]{0,9}\s+)?(\d+)\s+(.*?(?:fee|cargo|recargo|shipping|freight|handling)[^\d]*?.*?)\s+([\d.,]+)\s+([\d.,]+)\s*$/i;
+  const corte = /^(INCOTERM|FCA|GND|All products|Total\b|Bin\s+Qty|Total de cajas|www\.|warehouse|permanent|products are|within the)/i;
+  const items=[]; items.cargos=0; let ultimo=null, extra=0;
+  for(const raw of lines){
+    const l = raw.replace(/\s+/g," ").trim(); if(!l) continue;
+    const m = l.match(reItem) || l.match(reItemSinFecha);
+    if(m){
+      const cantidad=parseNum(m[2]), costo=parseNum(m[10]), ext=parseNum(m[11]);
+      ultimo=null; extra=0;
+      if(!(cantidad>0)) continue;
+      ultimo={ sku:m[4], desc:m[3].trim(), cantidad, costo, msrp:0, ext, upc:m[5], idioma:m[6],
+               raw:l };
+      items.push(ultimo); continue;
+    }
+    const c = l.match(reCargo);
+    if(c && !/\d{8,}/.test(l)){ items.cargos += parseNum(c[4]); ultimo=null; continue; }
+    if(ultimo && extra<3 && /[A-Za-z]/.test(l) && !corte.test(l)){
+      ultimo.desc = (ultimo.desc+" "+l).replace(/\s+-\s*$/,"").replace(/\s+/g," ").trim(); extra++; continue;
+    }
+    ultimo=null;
+  }
+  if(!items.length) return null;
+  items.forEach(it=>{ it.desc = it.desc.replace(/\s*-\s*$/,"").trim(); });
+  const num = blob.match(/Invoice\s*#\s*([A-Z]{2,5}-?\d+)/i);
+  const ord = blob.match(/Order\s*#\s*([A-Z]{2,5}-?\d+)/i);
+  const meta = { numero: num?num[1]:"", fecha: _devirFecha(blob), proveedor:"Devir Americas, LLC", flete:0,
+                 handling: Math.round(items.cargos*100)/100, orden: ord?ord[1]:"" };
+  return { meta, items, mode:"estructurado", formato:"devir" };
+}
+
 /* ---------- Parser de factura ----------
    1) Intento estructurado: renglones "SKU: descripción ... QTY UOM MSRP NET EXT"
       (formato tipo Coqui Hobby). Costo = NET PRICE, precio venta sugerido = MSRP.
    2) Si no encuentra nada, cae a la heurística genérica línea por línea.        */
 function parseInvoice(lines){
   const blob = lines.join("\n");
+  const devir = parseDevir(lines, blob); if(devir) return devir;   // proveedor Devir: formato propio
   const meta = extractMeta(lines, blob);
   let items = parseStructured(blob);
   let mode = "estructurado";
@@ -243,7 +338,7 @@ function parseInvoice(lines){
   // detectar flete/handling para avisar (no se agrega como stock)
   const fre = blob.match(/(freight[^\n]*?|flete[^\n]*?)\s([\d.,]+)\s*$/im) || blob.match(/freight[^\d]*([\d.,]+)/i);
   meta.flete = fre ? parseNum(fre[fre.length-1]) : 0;
-  meta.handling = Math.round(((items && items.cargos) || 0)*100)/100;   // fees/cargos sin producto (ZZZFEES)
+  meta.handling = Math.round(((items && items.cargos) || 0)*100)/100;   // v120: fees/cargos sin producto
   return { meta, items, mode };
 }
 
@@ -307,7 +402,7 @@ function parseStructuredBlob(blob){
   return out;
 }
 
-/* Metadata: N° de comprobante, fecha, proveedor */
+/* Metadata: N° de comprobante, fecha, proveedor (criterio de Select: fechas numéricas día/mes) */
 function extractMeta(lines, blob){
   const meta = { numero:"", fecha:"", proveedor:"", flete:0 };
   const ref = blob.match(/Reference\s*No\.?:?\s*([A-Z0-9\-]+)/i)
@@ -365,53 +460,49 @@ function showImportEditor(fname, parsed){
   // mapear cada ítem a un producto existente por SKU (o por nombre)
   items.forEach(c=>{
     const bySku = c.sku ? findProdBySku(c.sku) : null;
-    const byName = bySku ? null : db.productos.find(p=> p.nombre && c.desc.toLowerCase().includes(p.nombre.toLowerCase()));
+    const byName = bySku ? null : db.productos.find(p=> p.nombre && c.desc.toLowerCase().includes(p.nombre.toLowerCase()) && (typeof _saMismoIdioma!=="function" || _saMismoIdioma(c.desc,p)));
     const match = bySku || byName;
     c.productoId = match ? match.id : "";
     c.crear = !match;
     c.nombre = match ? match.nombre : c.desc;
     c.sel = true;
   });
+  skuAsocPrepararItems(items);          // v132 · códigos asociados / desconocidos
   window._cands = items;
 
   const rows=items.map((c,i)=>`<tr>
     <td class="c"><input type="checkbox" data-sel="${i}" ${c.sel?"checked":""}></td>
-    <td class="c">${c.sku?`<span class="sku">${esc(c.sku)}</span>`:'<span style="color:var(--muted)">—</span>'}</td>
-    <td class="imp-desc">${esc(c.desc)}</td>
+    <td class="c">${c.sku?`<span class="sku">${esc(c.sku)}</span>`:'<span class="u-muted">—</span>'}</td>
+    <td class="imp-desc">${esc(c.desc)}${skuAsocCeldaExtra(c,i)}</td>
     <td style="width:74px"><input class="inp num" data-imp="cantidad" data-i="${i}" value="${c.cantidad}"></td>
     <td style="width:104px"><input class="inp num" data-imp="costo" data-i="${i}" value="${c.costo}"></td>
     <td style="width:104px"><input class="inp num" data-imp="msrp" data-i="${i}" value="${c.msrp||0}"></td>
     <td class="col-target" style="min-width:170px"><select class="inp" data-imp="prod" data-i="${i}">${prodOptions(c.productoId)}</select></td>
   </tr>`).join("");
 
-  const metaBits = [
-    meta.numero ? t("imp.meta.num",{v:esc(meta.numero)}) : "",
-    meta.fecha ? t("imp.meta.date",{v:esc(meta.fecha)}) : "",
-    meta.proveedor ? t("imp.meta.supplier",{v:esc(meta.proveedor)}) : ""
-  ].filter(Boolean).join(" · ");
+  const dato=(k,v)=>`<div><p class="k">${t(k)}</p><p class="v">${v?esc(v):'<span class="u-muted">—</span>'}</p></div>`;
+  const extra=(meta.flete||0)+(meta.handling||0);
 
   out.innerHTML=`
-    <div class="banner ok">
-      ${t("imp.detected",{n:items.length,file:esc(fname),meta:metaBits?` \u00B7 <span style="font-weight:400">${metaBits}</span>`:""})}
+    <div class="imp-meta">
+      ${dato("imp.m.supplier", meta.proveedor)}${dato("imp.m.num", meta.numero)}
+      ${dato("imp.m.date", meta.fecha ? fmtDate(meta.fecha) : "")}${dato("imp.m.lines", String(items.length))}
     </div>
     ${htmlCuadre(parsed.cuadre, !!parsed.leerConIA)}
-    ${meta.handling? `<div class="banner" style="white-space:normal">${t("imp.handling",{amount:money(meta.handling)})}</div>`:""}
     <div id="importOrigenBar"></div>
-    ${meta.flete? `<div class="banner" style="white-space:normal">${t("imp.freight",{amount:money(meta.flete)})}</div>`:""}
-    <p style="font-size:12px;color:var(--muted);margin:0 0 8px">
+    ${extra ? `<div class="banner info">${ICO.truck}<span>${t("imp.freight",{amount:money(extra)})}</span></div>` : ""}
+    <p class="u-fs-xs u-muted u-m0 u-mb2">
       ${t("imp.costhint")}
     </p>
     <div class="table-scroll"><table class="line-tbl${SHOW_TARGET_PRODUCT_COL?'':' hide-target'}">
       <thead><tr><th class="c">✓</th><th class="c">SKU</th><th>${t("imp.th.desc")}</th><th class="r">${t("imp.th.qty")}</th><th class="r">${t("imp.th.cost")}</th><th class="r">${t("imp.th.listprice")}</th><th class="col-target">${t("imp.th.target")}</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
-    <details><summary>${t("imp.viewraw")}</summary><div class="rawbox">${esc(pdfLines.join("\n"))}</div></details>
-    <div style="display:flex;justify-content:flex-end;margin-top:16px">
-      <button class="btn up" id="toDraft">${t("imp.continue")}</button>
-    </div>`;
-
+    <details><summary>${t("imp.viewraw")}</summary><div class="rawbox">${esc(pdfLines.join("\n"))}</div></details>`;
   paintImportOrigen();
   const bIA=document.getElementById("impLeerIA"); if(bIA && parsed.leerConIA) bIA.onclick=parsed.leerConIA;
+
   out.querySelectorAll("[data-sel]").forEach(cb=> cb.onchange=()=> items[+cb.dataset.sel].sel=cb.checked);
+  skuAsocWireImport(out, items);
   out.querySelectorAll("[data-imp]").forEach(inp=>{
     const i=+inp.dataset.i, k=inp.dataset.imp;
     inp.oninput=()=>{
@@ -425,17 +516,19 @@ function showImportEditor(fname, parsed){
       }
     };
   });
-  document.getElementById("toDraft").onclick=()=>{
+  impContinuar(()=>{
     const chosen=items.filter(c=>c.sel && c.cantidad>0);
     if(!chosen.length){ toast(t("imp.tt.tickone"),"warn"); return; }
     const terc = importOrigen==="terceros";
     if(terc && !clienteById(importOwner)){ toast(t("imp.tt.pickowner"),"warn"); return; }
+    skuAsocAplicar(chosen, meta.proveedor);
     const lineas=chosen.map(c=>({
       key:uid(),
       productoId: c.crear?"":c.productoId,
       crear: c.crear,
       sku: c.crear?(c.sku||""):"",
       nombre: c.crear?c.nombre:"",
+      idioma: c.crear ? (c.idioma!==undefined ? c.idioma : undefined) : undefined,   // nov 2026: idioma real del producto nuevo
       precioVentaSugerido: c.msrp||0,
       cantidad:c.cantidad, precio:c.costo,
       aNuestro: terc ? 0 : (c.cantidad)   // terceros: por defecto nada nuestro (lo marcás por línea); propia: todo
@@ -443,13 +536,14 @@ function showImportEditor(fname, parsed){
     openDoc("compra", { tipo:"compra", origen:importOrigen, terceroId: terc?importOwner:"", origenLocked:true,
       contraparte:meta.proveedor||"", fecha:meta.fecha||hoyISO(),
       numero:meta.numero||"", handling:meta.handling||0, flete:meta.flete||0, lineas });
-  };
+  });
 }
 
 /* Barra "Invoice type" (propia/terceros) + dueño, arriba de la tabla del import.
    Se re-pinta sola al togglear, sin re-mapear la tabla (no se pierden ediciones). */
 function paintImportOrigen(){
   const host=document.getElementById("importOrigenBar"); if(!host) return;
+  if(isEditor()){ importOrigen="propia"; importOwner=""; host.innerHTML=""; return; }   // v94: el editor sólo carga compras propias de Argentina
   const terc = importOrigen==="terceros";
   const owner = importOwner ? clienteById(importOwner) : null;
   host.innerHTML = `
@@ -489,7 +583,7 @@ function openImportOwnerPicker(anchor){
     let lista=db.clientes.slice().sort((a,b)=>String(a.nombre||"").localeCompare(String(b.nombre||""),"en"));
     if(q) lista=lista.filter(c=> ((c.nombre||"")+" "+(c.empresa||"")).toLowerCase().includes(q));
     let html=lista.map(c=>`<button type="button" class="ppick-item${c.id===importOwner?" active":""}" data-pio="${c.id}">
-      <span class="pi-name">${esc(c.nombre)}${c.empresa?` · ${esc(c.empresa)}`:""}</span></button>`).join("");
+      <span class="pi-name">${esc(nombreVis(c.nombre))}${c.empresa?` · ${esc(nombreVis(c.empresa))}`:""}</span></button>`).join("");
     if(!lista.length) html=`<div class="ppick-empty">${t("imp.noclients")}</div>`;
     // + Crear al vuelo: un owner (cliente/local) sólo necesita nombre. Se enriquece luego en Customers.
     const q2=(search.value||"").trim();

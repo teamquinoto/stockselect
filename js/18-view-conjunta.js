@@ -29,11 +29,13 @@ let conjDraft = null;
    costoUnit is a REFERENCE COST (to split courier/financial cost),
    never a COGS. Every state change leaves a trace in `historial` (audit).
    ============================================================ */
-const CONSIGN_ESTADOS = { TRANSITO:"en_transito", AR:"en_ar", ENTREGADO:"entregado" };
-const CONSIGN_ORDEN = [CONSIGN_ESTADOS.TRANSITO, CONSIGN_ESTADOS.AR, CONSIGN_ESTADOS.ENTREGADO];
+/* v80: + DESPACHADO (despachado a courier) entre "en AR" y "entregado" (ver 38-courier.js). */
+const CONSIGN_ESTADOS = { TRANSITO:"en_transito", AR:"en_ar", DESPACHADO:"despachado", ENTREGADO:"entregado" };
+const CONSIGN_ORDEN = [CONSIGN_ESTADOS.TRANSITO, CONSIGN_ESTADOS.AR, CONSIGN_ESTADOS.DESPACHADO, CONSIGN_ESTADOS.ENTREGADO];
 function consignLabel(e){
   return e===CONSIGN_ESTADOS.TRANSITO ? t("conj.cs.transit")
        : e===CONSIGN_ESTADOS.AR       ? t("conj.cs.ar")
+       : e===CONSIGN_ESTADOS.DESPACHADO ? t("cr.cs.dispatched")
        : e===CONSIGN_ESTADOS.ENTREGADO? t("conj.cs.delivered")
        : (e||"—");
 }
@@ -43,7 +45,7 @@ function consignAll(){ return db.consignaciones || (db.consignaciones=[]); }
    sigue existiendo, su nombre actual. */
 function terceroNombre(cs){
   const c = cs.terceroId ? clienteById(cs.terceroId) : null;
-  return (c && (c.nombre + (c.empresa?` · ${c.empresa}`:""))) || cs.terceroNombre || "—";
+  return (c && (nombreVis(c.nombre) + (c.empresa?` · ${nombreVis(c.empresa)}`:""))) || nombreVis(cs.terceroNombre) || "—";   // v87: mayúsculas al mostrar
 }
 /* Create a consignment (born in transit). */
 function crearConsignacion(o){
@@ -81,6 +83,9 @@ function avanzarConsignacion(id, opts){
   const sig = consignSiguiente(cs.estado); if(!sig) return null;
   if(sig===CONSIGN_ESTADOS.AR && opts.costoCourierUnit!=null) cs.costoCourierUnit = Math.max(0, +opts.costoCourierUnit||0);
   if(sig===CONSIGN_ESTADOS.AR && opts.costoFinUnit!=null)     cs.costoFinUnit     = Math.max(0, +opts.costoFinUnit||0);   // financiero: se refactura al dueño
+  // v80 · despacho a courier (courier + seguimiento) y fecha de entrega
+  if(sig===CONSIGN_ESTADOS.DESPACHADO) cs.despacho = Object.assign({ carrier:"", tracking:"", fecha:hoyISO() }, opts.despacho||{});
+  if(sig===CONSIGN_ESTADOS.ENTREGADO && cs.despacho) cs.despacho.entregado = opts.fechaEntrega || hoyISO();
   cs.estado = sig;
   cs.historial.push({ estado:sig, fecha:new Date().toISOString(), obs:opts.obs||"" });
   save();
@@ -95,7 +100,7 @@ function consignResumenPorTercero(){
   const map = {};
   consignAll().forEach(cs=>{
     const k = cs.terceroId || "__sin";
-    const row = map[k] || (map[k] = { terceroId:cs.terceroId, nombre:terceroNombre(cs), en_transito:0, en_ar:0, entregado:0, total:0 });
+    const row = map[k] || (map[k] = { terceroId:cs.terceroId, nombre:terceroNombre(cs), en_transito:0, en_ar:0, despachado:0, entregado:0, total:0 });
     row[cs.estado] = (row[cs.estado]||0) + cs.cantidad;
     row.total += cs.cantidad;
   });
@@ -141,8 +146,10 @@ function remitosActivos(){
     g.enAr       = g.lineas.filter(l=>l.estado===CONSIGN_ESTADOS.AR);
     g.uTransito  = g.enTransito.reduce((a,l)=>a+l.cantidad,0);
     g.uAr        = g.enAr.reduce((a,l)=>a+l.cantidad,0);
-    g.uTotal     = g.uTransito + g.uAr;
-    g.ownerNames = [...g.owners].map(id=> (clienteById(id)||{}).nombre || "—");
+    g.enDesp     = g.lineas.filter(l=>l.estado===CONSIGN_ESTADOS.DESPACHADO);   // v80
+    g.uDesp      = g.enDesp.reduce((a,l)=>a+l.cantidad,0);
+    g.uTotal     = g.uTransito + g.uAr + g.uDesp;
+    g.ownerNames = [...g.owners].map(id=> nombreVis((clienteById(id)||{}).nombre) || "—");   // v97: con mayúscula
     return g;
   }).sort((a,b)=> String(b.fecha).localeCompare(String(a.fecha)) || String(a.codigo||a.ref).localeCompare(String(b.codigo||b.ref),"en"));
 }
@@ -236,7 +243,7 @@ function wireLegPreview(inputId, totalUnits){
   inp.oninput=upd; upd();
 }
 function estadoPillMini(e){
-  const col = e===CONSIGN_ESTADOS.TRANSITO ? "var(--muted)" : e===CONSIGN_ESTADOS.AR ? "var(--accent)" : "var(--up)";
+  const col = e===CONSIGN_ESTADOS.TRANSITO ? "var(--muted)" : e===CONSIGN_ESTADOS.AR ? "var(--accent)" : e===CONSIGN_ESTADOS.DESPACHADO ? "var(--warn, #b45309)" : "var(--up)";
   return `<span class="rm-pill" style="border-color:${col};color:${col}">${esc(consignLabel(e))}</span>`;
 }
 
@@ -270,12 +277,12 @@ function renderConjModal(){
       <div class="field"><label>${t("conj.l.totalunits")} <span class="hint" style="font-weight:400">${t("conj.l.totalunits.hint")}</span></label><input class="inp num" id="cj_tot" value="${esc(conjDraft.totalEnvio)}" placeholder="${t("conj.ph.eg24")}"></div>
     </div>
     <div id="cjLineHost"></div>
-    <button class="btn sm" id="cjAddLine" style="margin-top:10px">${t("conj.b.addline")}</button>
+    <button class="btn sm" id="cjAddLine" style="margin-top:10px">${ICO.plus}${t("conj.b.addline")}</button>
     <div class="field" style="margin-top:12px"><label>${t("conj.l.notes")}</label><input class="inp" id="cj_obs" value="${esc(conjDraft.obs)}"></div>
   `;
   buildModal(t("conj.md.newjoint"), body, [
     {label:t("common.cancel"),cls:"btn",act:()=>{ conjDraft=null; closeModal(); }},
-    {label:t("conj.b.confirmintake"),cls:"btn up",act:confirmConjunta}
+    {label:t("conj.b.confirmintake"),cls:"btn primary",act:confirmConjunta}
   ], "wide doc",
   `<div class="totrow"><span style="color:var(--muted)">${t("conj.jb.wekeep")}</span><span class="num" id="cjTot">${qty(conjUnidadesNuestras())}</span></div><div class="totrow"><span style="color:var(--muted)">${t("conj.jb.thirdtracked")}</span><span class="num" id="cjTotAj">${qty(conjUnidadesAjenas())}</span></div>`);
   renderConjLines();
@@ -300,7 +307,7 @@ function openConjClientePicker(anchor){
     let lista = db.clientes.slice().sort((a,b)=>String(a.nombre||"").localeCompare(String(b.nombre||""),"en"));
     if(q) lista = lista.filter(c=> ((c.nombre||"")+" "+(c.empresa||"")).toLowerCase().includes(q));
     let html = lista.map(c=>`<button type="button" class="ppick-item${c.id===conjDraft.clienteId?" active":""}" data-pickcli="${c.id}">
-      <span class="pi-name">${esc(c.nombre)}${c.empresa?` · ${esc(c.empresa)}`:""}</span></button>`).join("");
+      <span class="pi-name">${esc(nombreVis(c.nombre))}${c.empresa?` · ${esc(nombreVis(c.empresa))}`:""}</span></button>`).join("");
     if(!lista.length) html = `<div class="ppick-empty">${t("conj.pk.noclients")}</div>`;
     listEl.innerHTML = html;
     listEl.querySelectorAll("[data-pickcli]").forEach(it=> it.onclick=()=>{ conjDraft.clienteId=it.dataset.pickcli; closeProductPicker(); renderConjModal(); });
@@ -328,7 +335,7 @@ function openConjOwnerPicker(i, anchor){
     let lista = db.clientes.slice().sort((a,b)=>String(a.nombre||"").localeCompare(String(b.nombre||""),"en"));
     if(q) lista = lista.filter(c=> ((c.nombre||"")+" "+(c.empresa||"")).toLowerCase().includes(q));
     let html = lista.map(c=>`<button type="button" class="ppick-item${c.id===cur?" active":""}" data-pickowner="${c.id}">
-      <span class="pi-name">${esc(c.nombre)}${c.empresa?` · ${esc(c.empresa)}`:""}</span></button>`).join("");
+      <span class="pi-name">${esc(nombreVis(c.nombre))}${c.empresa?` · ${esc(nombreVis(c.empresa))}`:""}</span></button>`).join("");
     if(!lista.length) html = `<div class="ppick-empty">${t("conj.pk.noowners")}</div>`;
     listEl.innerHTML = html;
     listEl.querySelectorAll("[data-pickowner]").forEach(it=> it.onclick=()=>{ conjDraft.lineas[i].terceroId=it.dataset.pickowner; closeProductPicker(); renderConjLines(); });
@@ -417,7 +424,7 @@ function openConjProductPicker(i, anchor){
   const paint=(q)=>{
     q=(q||"").trim().toLowerCase();
     let lista = db.productos.slice().sort((a,b)=> String(a.nombre||"").localeCompare(String(b.nombre||""),"en",{numeric:true}));
-    if(q) lista = lista.filter(p=> ((p.nombre||"")+" "+(p.sku||"")).toLowerCase().includes(q));
+    if(q) lista = lista.filter(p=> ((p.nombre||"")+" "+skuHay(p)).toLowerCase().includes(q));
     let html = lista.map(p=>{
       const sku = p.sku ? `<span class="sku">${esc(p.sku)}</span>` : "";
       return `<button type="button" class="ppick-item${p.id===cur?" active":""}" data-cjp="${p.id}">${sku}<span class="pi-name">${esc(p.nombre)}</span></button>`;
@@ -555,7 +562,7 @@ function openRecibirTransito(prodId){
     </div>`;
   buildModal(t("conj.md.deliverar",{store:esc(storeName(destino))}), body, [
     {label:t("common.cancel"),cls:"btn",act:closeModal},
-    {label:t("conj.b.markdeliv",{store:storeName(destino)}),cls:"btn up",act:()=>{
+    {label:t("conj.b.markdeliv",{store:storeName(destino)}),cls:"btn primary",act:()=>{
       const q=Math.min(Math.max(0,parseNum(document.getElementById("rt_q").value)||0), transUnitsSueltas(p));
       const cTot=legCostRead("rt_c");   // arg freight + local costs (total), in USD
       const c = q>0 ? round2(cTot/q) : 0;                                           // prorrateo por unidad
@@ -608,7 +615,7 @@ function openEnviarTransito(){
   const renderList = ()=>{
     const host = document.getElementById("et_list"); if(!host) return;
     const qq = q.trim().toLowerCase();
-    const prods = db.productos.filter(p=> stockDe(p,st)>0 && (!qq || ((p.nombre||"")+" "+(p.sku||"")).toLowerCase().includes(qq)))
+    const prods = db.productos.filter(p=> stockDe(p,st)>0 && (!qq || ((p.nombre||"")+" "+skuHay(p)).toLowerCase().includes(qq)))
       .sort((a,b)=> String(a.nombre||"").localeCompare(String(b.nombre||""),"en"));
     host.innerHTML = prods.length ? `<table class="rm-tbl">
       <thead><tr><th>${t("common.product")}</th><th class="r">${t("conj.et.avail")}</th><th style="width:96px">${t("conj.et.send")}</th><th style="width:44px"></th></tr></thead>
@@ -703,7 +710,7 @@ function openMermaTransito(prodId){
         const { unit } = fifoConsumir(p, TRANSITO_STORE, q, esCapaSuelta);   // consume transit FIFO (sólo lo suelto)
         // write-off movement in the bucket (the product card shows it but doesn't add it to the sellable balance).
         // OJO: moverStock YA descuenta stockPorTienda[TRANSITO]; antes se descontaba también a mano (doble baja).
-        moverStock(p, -q, unit, "merma", null, t("conj.obs.woreason",{reason:motivo}), { store:TRANSITO_STORE, tipo:"merma", obs });
+        moverStock(p, -q, unit, "merma", null, t("conj.obs.woreason",{reason:t("conj.mm."+motivo)}), { store:TRANSITO_STORE, tipo:"merma", obs });
         if(p.stockPorTienda[TRANSITO_STORE]<0) p.stockPorTienda[TRANSITO_STORE]=0;
         save();
       });
@@ -724,16 +731,20 @@ function deleteConjunta(id){
   withUndo(t("conj.tt.jointdeleted"), ()=>{
   d.lineas.forEach(l=>{
     const p = prodById(l.productoId); if(!p) return;
-    // revert Swan: remove this joint buy's FIFO layer and reduce stock (clamp to 0)
+    // v103: se revierte SÓLO lo que todavía queda de esta compra (sus capas FIFO). Antes se
+    // restaba la cantidad original entera y, si parte ya se había vendido o recibido en AR,
+    // se comía unidades de otras compras (stock ≠ capas).
+    const quedan = sid=> fifoLayers(p, sid).filter(L=> L.refId===id).reduce((a,L)=> a+(+L.cantidad||0), 0);
     if(l.aSwan>0){
+      const q = quedan(STORE_IDS[0]);
       fifoQuitarCompra(p, STORE_IDS[0], id);
-      p.stockPorTienda[STORE_IDS[0]] = round4(Math.max(0, stockDe(p,STORE_IDS[0]) - l.aSwan));
+      p.stockPorTienda[STORE_IDS[0]] = round4(Math.max(0, stockDe(p,STORE_IDS[0]) - q));
       recalcStockMirror(p);
     }
-    // revert Transit: only what's still in the bucket
     if(l.aTransito>0){
+      const q = quedan(TRANSITO_STORE);
       fifoQuitarCompra(p, TRANSITO_STORE, id);
-      p.stockPorTienda[TRANSITO_STORE] = round4(Math.max(0, transUnits(p) - l.aTransito));
+      p.stockPorTienda[TRANSITO_STORE] = round4(Math.max(0, transUnits(p) - q));
     }
     if(typeof recomputeUltimoCosto==="function") recomputeUltimoCosto(p);
   });
@@ -756,6 +767,7 @@ function deleteConjunta(id){
    "third-party" lane (per remito, only tracked, ends in the split).
    ============================================================ */
 var RL_ICONS = {
+  truck:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>',
   usa:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 8.35V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8.35a2 2 0 0 1 1.26-1.86l8-3.2a2 2 0 0 1 1.48 0l8 3.2A2 2 0 0 1 22 8.35Z"/><path d="M6 18h12M6 14h12M6 10h12"/></svg>',
   plane:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg>',
   store:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9 4.5 4.5A2 2 0 0 1 6.4 3h11.2a2 2 0 0 1 1.9 1.5L21 9"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M3 9h18M9 20v-5h6v5"/></svg>',
@@ -829,7 +841,7 @@ function ourTransitCardHTML(p){
     <div class="rl-foot">
       <span class="rl-next">${t("conj.ours.next")}</span>
       <button class="btn ghost sm" data-merma="${p.id}" style="color:var(--alert)">${t("conj.writeoff")}</button>
-      <button class="btn up sm" data-recib="${p.id}">${ICO.deliver}${t("conj.deliverar")} \u25be</button>
+      <button class="btn primary sm" data-recib="${p.id}">${ICO.deliver}${t("conj.deliverar")} \u25be</button>
     </div>
   </div>`;
 }
@@ -850,6 +862,7 @@ function viewConjunta(){
   const remitos = remitosActivos();
   const remTransito = remitos.filter(g=> g.uTransito>0).length;
   const remAr       = remitos.filter(g=> g.uAr>0).length;
+  const remDesp     = remitos.filter(g=> g.uDesp>0).length;   // v80
   const remitoCards = remitos.map(remitoCardHTML).join("")
     || `<div class="rl-empty">${t("conj.third.empty")}</div>`;
 
@@ -860,6 +873,7 @@ function viewConjunta(){
       <div class="rl-chip${(enTransito.length||envios.length)?" hot":""}" data-scroll="rl-nuestra"><span class="n">${qty(uNuestraTransito)}</span><span class="l">${t("conj.chip.ours")}</span></div>
       <div class="rl-chip${remTransito?" hot":""}" data-scroll="rl-terceros"><span class="n">${remTransito}</span><span class="l">${t("conj.chip.recv")}</span></div>
       <div class="rl-chip${remAr?" hot":""}" data-scroll="rl-terceros"><span class="n">${remAr}</span><span class="l">${t("conj.chip.resolve")}</span></div>
+      <div class="rl-chip${remDesp?" hot":""}" data-scroll="rl-terceros"><span class="n">${remDesp}</span><span class="l">${t("cr.chip")}</span></div>
     </div>`;
 
   // --- Summary by owner ---
@@ -868,9 +882,10 @@ function viewConjunta(){
       <td>${esc(r.nombre)}</td>
       <td class="r num">${qty(r.en_transito||0)}</td>
       <td class="r num">${qty(r.en_ar||0)}</td>
+      <td class="r num">${qty(r.despachado||0)}</td>
       <td class="r num">${qty(r.entregado||0)}</td>
       <td class="r num"><b>${qty(r.total||0)}</b></td>
-    </tr>`).join("") || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px">${t("conj.empty.owner")}</td></tr>`;
+    </tr>`).join("") || `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:18px">${t("conj.empty.owner")}</td></tr>`;
 
   // --- Recent movements between deposits ---
   const tipos = { "transfer-out":t("conj.mv.sent"), "transfer-in":t("conj.mv.recv"), "conjunta":t("conj.mv.comm"), "tercero-keep":t("conj.mv.kept"), "merma":t("conj.mv.wo") };
@@ -907,7 +922,7 @@ function viewConjunta(){
 
   return `
   <div class="head"><div class="title"><h2>${t("conj.title")}</h2><p>${t("conj.sub")}</p></div>
-    <div class="actions">${isAdmin()?`<button class="btn danger" data-emergencia title="${t("emg.md.title")}" aria-label="${t("emg.md.title")}">${ICO.warn}</button>`:""}<button class="btn" data-enviar-transito title="${t("conj.sendtransit.tip")}">${ICO.plane}${t("conj.sendtransit")}</button><button class="btn up" data-new-conj>${ICO.plus}${t("conj.newjoint")}</button></div>
+    <div class="actions">${isAdmin()?`<button class="btn danger" data-emergencia title="${t("emg.md.title")}" aria-label="${t("emg.md.title")}">${ICO.warn}</button>`:""}<button class="btn" data-enviar-transito title="${t("conj.sendtransit.tip")}">${ICO.plane}${t("conj.sendtransit")}</button><button class="btn primary" data-new-conj>${ICO.plus}${t("conj.newjoint")}</button></div>
   </div>
 
   ${chips}
@@ -934,7 +949,7 @@ function viewConjunta(){
   <div class="panel" style="margin-bottom:18px">
     <div class="phead"><h3>${t("conj.byowner")}</h3><span class="hint">${t("conj.byowner.hint")}</span></div>
     <div class="table-scroll"><table>
-      <thead><tr><th>${t("common.owner")}</th><th class="r">${t("conj.h.transit")}</th><th class="r">${t("conj.h.inar")}</th><th class="r">${t("conj.h.delivered")}</th><th class="r">${t("common.total")}</th></tr></thead>
+      <thead><tr><th>${t("common.owner")}</th><th class="r">${t("conj.h.transit")}</th><th class="r">${t("conj.h.inar")}</th><th class="r">${t("cr.h.col")}</th><th class="r">${t("conj.h.delivered")}</th><th class="r">${t("common.total")}</th></tr></thead>
       <tbody>${resRows}</tbody></table></div>
   </div>
 
@@ -993,7 +1008,7 @@ function openDeliverAllOurs(){
     </div>`;
   buildModal(t("conj.md.deliverall",{store:esc(storeName(destino))}), body, [
     {label:t("common.cancel"),cls:"btn",act:closeModal},
-    {label:t("conj.b.deliverall",{n:qty(totalU)}),cls:"btn up",act:()=>{
+    {label:t("conj.b.deliverall",{n:qty(totalU)}),cls:"btn primary",act:()=>{
       const costTot=legCostRead("da_cost");
       const perU = totalU>0 ? round2(costTot/totalU) : 0;
       const obs=(document.getElementById("da_obs").value||"").trim();
@@ -1020,7 +1035,7 @@ function openRecibirConsignacion(id){
     </div>`;
   buildModal(t("conj.md.recvthird"), body, [
     {label:t("common.cancel"),cls:"btn",act:closeModal},
-    {label:t("conj.b.markrecvar"),cls:"btn up",act:()=>{
+    {label:t("conj.b.markrecvar"),cls:"btn primary",act:()=>{
       const c=legCostRead("csc_c"), f=legCostRead("csc_f");
       const obs=(document.getElementById("csc_obs").value||"").trim();
       avanzarConsignacion(id, { costoCourierUnit:c, costoFinUnit:f, obs });
@@ -1097,10 +1112,11 @@ function openEditarTracking(remitoId){
 function remitoCardHTML(g){
   const open   = !!remitoOpen[g.key];
   const owners = g.ownerNames.length ? g.ownerNames.join(", ") : "\u2014";
-  const cur    = g.uTransito>0 ? 0 : 1;   // in transit -> step 1 (idx 0); already in AR -> step 2 (idx 1)
+  const cur    = g.uTransito>0 ? 0 : (g.uAr>0 ? 1 : 2);   // tránsito 0 · en AR 1 · con courier 2 (v80)
   const pills  = [
     g.uTransito>0 ? `<span class="rl-pill">${qty(g.uTransito)} ${t("conj.pill.transit")}</span>` : "",
-    g.uAr>0       ? `<span class="rl-pill ar">${qty(g.uAr)} ${t("conj.pill.ar")}</span>` : ""
+    g.uAr>0       ? `<span class="rl-pill ar">${qty(g.uAr)} ${t("conj.pill.ar")}</span>` : "",
+    g.uDesp>0     ? `<span class="rl-pill">${qty(g.uDesp)} ${t("cr.pill")}</span>` : ""
   ].filter(Boolean).join(" ");
   const head = `<div class="rl-rhead" data-remito-toggle="${esc(g.key)}" role="button" tabindex="0" aria-expanded="${open?'true':'false'}">
       <span class="rl-caret ${open?'open':''}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
@@ -1108,6 +1124,7 @@ function remitoCardHTML(g){
         <div class="rl-code">${g.codigo?esc(g.codigo):esc(g.ref||t("conj.noref"))}</div>
         <div class="rl-meta">${g.codigo&&g.ref?esc(g.ref)+" \u00b7 ":""}${esc(fmtDate(g.fecha))} \u00b7 ${g.lineas.length} ${t("conj.products")} \u00b7 ${qty(g.uTotal)} u</div>
         ${g.remitoId?`<div class="rl-meta" style="margin-top:3px">${trackingHTML(remitoById(g.remitoId))}</div>`:""}
+        ${(g.uDesp>0 && despachoInner(g.enDesp[0]))?`<div class="rl-meta" style="margin-top:3px">${t("cr.gate.courier")}: ${despachoInner(g.enDesp[0])}</div>`:""}
       </div>
       <span class="rl-badge third">${t("conj.badge.third")}${esc(owners)}</span>
     </div>`;
@@ -1117,7 +1134,7 @@ function remitoCardHTML(g){
       <td><span class="sku">${esc(cs.sku||"\u2014")}</span></td>
       <td>${esc(cs.nombre)}</td>
       <td>${esc(terceroNombre(cs))}</td>
-      <td class="c">${estadoPillMini(cs.estado)}</td>
+      <td class="c">${estadoPillMini(cs.estado)}${cs.estado===CONSIGN_ESTADOS.DESPACHADO?despachoHTML(cs):""}</td>
       <td class="r num">${qty(cs.cantidad)}</td>
       <td class="r"><button class="btn ghost xs" data-cs-del="${cs.id}" title="${t("conj.untrack")}" style="color:var(--alert)">\u2715</button></td>
     </tr>`).join("");
@@ -1129,17 +1146,19 @@ function remitoCardHTML(g){
   const scopeLines  = selHere.length ? selHere : g.lineas;
   const hasTransito = scopeLines.some(l=> l.estado===CONSIGN_ESTADOS.TRANSITO);
   const hasAr       = scopeLines.some(l=> l.estado===CONSIGN_ESTADOS.AR);
+  const hasDesp     = scopeLines.some(l=> l.estado===CONSIGN_ESTADOS.DESPACHADO);   // v80
   const foot = `<div class="rl-foot">
       <span class="rl-next">${selHere.length?`${selHere.length} ${t("conj.selected")}`:t("conj.wholeremito")}${hasAr?` \u00b7 <span class="rl-warn">${t("conj.warnresolve")}</span>`:""}</span>
       ${g.remitoId?`<button class="btn ghost sm" data-rm-track="${esc(g.remitoId)}" title="${t("trk.edit")}">${ICO.plane||""}${t("trk.btn")}</button>`:""}
       ${g.remitoId?`<button class="btn ghost sm" data-rm-pdf="${esc(g.remitoId)}" title="${t("conj.dlremito")} ${esc(g.codigo||"")}">${ICO.pdf}${esc(g.codigo||"remito")}</button>`:""}
-      ${hasTransito?`<button class="btn up sm" data-rm-receive="${esc(g.key)}" title="${t("conj.gate2tip")}">${ICO.receive}${t("conj.recvar")} \u25be</button>`:""}
-      ${hasAr?`<button class="btn up sm" data-rm-resolve="${esc(g.key)}" title="${t("conj.resolvetip")}">${ICO.resolve}${t("conj.resolvear")} \u25be</button>`:""}
+      ${hasTransito?`<button class="btn primary sm" data-rm-receive="${esc(g.key)}" title="${t("conj.gate2tip")}">${ICO.receive}${t("conj.recvar")} \u25be</button>`:""}
+      ${hasAr?`<button class="btn primary sm" data-rm-resolve="${esc(g.key)}" title="${t("conj.resolvetip")}">${ICO.resolve}${t("conj.resolvear")} \u25be</button>`:""}
+      ${hasDesp?`<button class="btn primary sm" data-rm-deliver="${esc(g.key)}">${ICO.receive||""}${t("cr.b.deliver")} \u25be</button>`:""}
     </div>`;
 
   return `<div class="rl-card">
     ${head}
-    ${rielHTML([{icon:"plane",label:t("conj.gate.transit")},{icon:"pin",label:t("conj.gate.arhands")},{icon:"split",label:t("conj.gate.resolved")}], cur)}
+    ${rielHTML([{icon:"plane",label:t("conj.gate.transit")},{icon:"pin",label:t("conj.gate.arhands")},{icon:"truck",label:t("cr.gate.courier")},{icon:"split",label:t("conj.gate.resolved")}], cur)}
     ${pills?`<div style="margin:0 2px 10px;display:flex;gap:6px;flex-wrap:wrap">${pills}</div>`:""}
     ${tabla}
     ${foot}
@@ -1170,7 +1189,7 @@ function openRecibirRemito(key){
     </div>`;
   buildModal(t("conj.md.recvar"), body, [
     {label:t("common.cancel"),cls:"btn",act:closeModal},
-    {label:t("conj.b.recv",{n:qty(totalU)}),cls:"btn up",act:()=>{
+    {label:t("conj.b.recv",{n:qty(totalU)}),cls:"btn primary",act:()=>{
       const tot = legCostRead("rr_c"), fTot = legCostRead("rr_f");
       const perU  = totalU>0 ? round2(tot/totalU) : 0;
       const finPU = totalU>0 ? round2(fTot/totalU) : 0;
@@ -1213,11 +1232,12 @@ function openResolverAR(key){
     <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
       ${legCostFieldHTML("res_extra",t("conj.leg.extrasel"),t("conj.leg.hint.spread"))}
       <div class="field"><label>${t("conj.l.ownermk")} <span class="hint" style="font-weight:400">${t("conj.l.ownermk.hint")}</span></label><input class="inp num" id="res_mk" value="0" inputmode="decimal"><div class="leg-pu hint" id="res_mk_pu">${t("conj.mk.none")}</div></div>
+      ${courierResolverFieldsHTML()}
       <div class="field" style="grid-column:1/-1"><label>${t("conj.l.notes")}</label><input class="inp" id="res_obs" placeholder="${t("conj.ph.egsplit")}"></div>
     </div>`;
   buildModal(t("conj.md.resolve",{store:esc(store===STORE_IDS[1]?storeName(store):"AR")}), body, [
     {label:t("common.cancel"),cls:"btn",act:closeModal},
-    {label:t("conj.b.resolve"),cls:"btn up",act:()=>{
+    {label:t("conj.b.resolve"),cls:"btn primary",act:()=>{
       // U context (before mutating)
       const remId  = lines[0] && lines[0].remitoId || null;
       const conjId = lines[0] && lines[0].conjuntaId || null;
@@ -1225,6 +1245,7 @@ function openResolverAR(key){
       const uCodigo = uRemito ? uRemito.codigo : ((lines[0]&&lines[0].remitoCodigo)||"U");
       const mkPct = Math.max(0, parseNum(document.getElementById("res_mk").value)||0);
       const obs   = (document.getElementById("res_obs").value||"").trim();
+      const entrega = courierResolverLeer();   // v80: courier o en mano
       // total to Select to prorate the extra
       let totalSelU=0;
       lines.forEach((cs,i)=>{ totalSelU += Math.min(Math.max(0,parseNum(document.getElementById("rq_"+i).value)||0), cs.cantidad); });
@@ -1252,7 +1273,10 @@ function openResolverAR(key){
           if(kept>0){ selLines.push({ productoId:cs.productoId, sku:cs.sku, nombre:cs.nombre, cantidad:kept, rol:"select", owner:terceroNombre(cs), costoUnit:cost }); selU += kept; }
         }
         // 3) deliver to the owner what remains of the consignment (the non-kept part)
-        if(ter>0){ avanzarConsignacion(cs.id, { obs:t("conj.obs.delivresolve") }); }
+        if(ter>0){
+          avanzarConsignacion(cs.id, { obs:t("conj.obs.delivresolve"), despacho:entrega.despacho });   // → despachado a courier
+          if(entrega.mano) avanzarConsignacion(cs.id, { obs:t("cr.obs.hand") });                  // → entregado en mano
+        }
         delete remitoSel[cs.id];
       });
 
@@ -1275,11 +1299,13 @@ function openResolverAR(key){
       } else if(selU>0){
         toast(t("conj.tt.kept",{n:qty(selU),store:storeName(store)}),"up");
       } else {
-        toast(t("conj.tt.deliveredowner",{n:qty(terU),mk:mkPct>0?t("conj.frag.markup",{p:mkPct}):""}),"up");
+        toast(entrega.mano ? t("conj.tt.deliveredowner",{n:qty(terU),mk:mkPct>0?t("conj.frag.markup",{p:mkPct}):""})
+                           : t("cr.tt.dispatched",{n:qty(terU)}),"up");   // v80
       }
       render();
     }}
   ], "wide");
+  courierResolverWire();   // v80
   // live previews: "→ Owner" per row, prorated extra and markup
   const recalc=()=>{
     let t=0;
@@ -1360,7 +1386,7 @@ function envioPropioCardHTML(r){
       <span class="rl-next">${R.estado===ENVIO_ESTADOS.PARCIAL ? t("env.next.partial",{n:qty(R.tot.pendiente)}) : t("env.next.way",{store:esc(storeName(dest))})}</span>
       <button class="btn ghost sm" data-rm-track="${esc(r.id)}" title="${t("trk.edit")}">${ICO.plane||""}${t("trk.btn")}</button>
       <button class="btn ghost sm" data-rm-pdf="${esc(r.id)}" title="${t("conj.dlremito")} ${esc(r.codigo)}">${ICO.pdf}${esc(r.codigo)}</button>
-      ${isAdmin()?`<button class="btn up sm" data-env-recv="${esc(r.id)}">${ICO.receive}${t("env.b.receive")} \u25be</button>`:""}
+      ${isAdmin()?`<button class="btn primary sm" data-env-recv="${esc(r.id)}">${ICO.receive}${t("env.b.receive")} \u25be</button>`:""}
     </div>`;
   return `<div class="rl-card">
     ${head}
@@ -1409,7 +1435,7 @@ function openRecibirEnvio(remitoId){
   });
   buildModal(t("env.md.receive",{code:esc(r.codigo)}), body, [
     {label:t("common.cancel"),cls:"btn",act:closeModal},
-    {label:t("env.b.confirm"),cls:"btn up",act:()=>{
+    {label:t("env.b.confirm"),cls:"btn primary",act:()=>{
       const fecha = envioFechaLeer("ev_fecha", r.fecha);
       if(!fecha){ toast(t("env.tt.baddaterecv",{date:fmtDate(r.fecha)}),"warn"); return; }
       const L = leer();

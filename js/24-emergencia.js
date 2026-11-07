@@ -152,7 +152,11 @@ function consignAnterior(e) { const i = CONSIGN_ORDEN.indexOf(e); return i > 0 ?
 function retrocederConsignacion(id, motivo, obs) {
   const cs = consignAll().find(x => x.id === id); if (!cs) return null;
   if ((cs.keptForSelect || 0) > 0) { toast(t("emg.tt.keptblock"), "warn"); return null; }   // ya ingresó a Select
-  const prev = consignAnterior(cs.estado); if (!prev) { toast(t("emg.tt.atorigin"), "warn"); return null; }
+  let prev = consignAnterior(cs.estado); if (!prev) { toast(t("emg.tt.atorigin"), "warn"); return null; }
+  // v80: una entrega anterior a la puerta "courier" (sin despacho) vuelve directo a "en AR"
+  if (cs.estado === CONSIGN_ESTADOS.ENTREGADO && prev === CONSIGN_ESTADOS.DESPACHADO && !cs.despacho) prev = CONSIGN_ESTADOS.AR;
+  if (prev === CONSIGN_ESTADOS.DESPACHADO && cs.despacho) delete cs.despacho.entregado;
+  if (cs.estado === CONSIGN_ESTADOS.DESPACHADO && prev === CONSIGN_ESTADOS.AR) delete cs.despacho;
   // si vuelve de AR al barco, el courier cargado en la recepción ya no aplica
   if (cs.estado === CONSIGN_ESTADOS.AR && prev === CONSIGN_ESTADOS.TRANSITO) { cs.costoCourierUnit = 0; cs.costoFinUnit = 0; }
   cs.estado = prev;
@@ -267,6 +271,7 @@ function openEmergenciaTercero() {
   const cands = consignAll().filter(cs =>
     (cs.keptForSelect || 0) <= 0 &&
     ((cs.estado === CONSIGN_ESTADOS.AR && (cs.cantidad || 0) > 0) ||
+     (cs.estado === CONSIGN_ESTADOS.DESPACHADO && (cs.cantidad || 0) > 0) ||
      (cs.estado === CONSIGN_ESTADOS.ENTREGADO && (cs.cantidad || 0) > 0)));
   if (!cands.length) { toast(t("emg.tt.nothingter"), "warn"); return; }
 

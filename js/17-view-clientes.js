@@ -10,20 +10,23 @@
    cuántas ventas tiene asociadas antes de borrar.
    ============================================================ */
 let cliFiltro = "";
+let cliSoloInc = false;   // v87 · filtro "Datos a completar"
 let cliSort = { sortKey:"", sortDir:"" };   // ordenamiento de la tabla de clientes
 function ventasDeCliente(id){ return (db.ventas||[]).filter(v=>v.clienteId===id); }
 function viewClientes(){
   const q = cliFiltro.trim().toLowerCase();
   let list = (db.clientes||[]).slice();
-  if(q) list = list.filter(c=> ((c.nombre||"")+" "+(c.empresa||"")+" "+(c.email||"")+" "+(c.ciudad||"")+" "+(c.pais||"")).toLowerCase().includes(q));
+  const nInc = list.filter(clienteIncompleto).length;
+  if(cliSoloInc) list = list.filter(clienteIncompleto);
+  if(q) list = list.filter(c=> ((c.nombre||"")+" "+(c.empresa||"")+" "+(c.email||"")+" "+(c.ciudad||"")+" "+(c.pais||"")+" "+paisVis(c.pais)).toLowerCase().includes(q));
   // Orden por columna. Sin columna activa: nombre ascendente (A→Z).
   const key = cliSort.sortKey || "nombre";
   const dir = cliSort.sortKey ? (cliSort.sortDir==="asc"?1:-1) : 1;
   const valOf = c => {
     switch(key){
       case "email":   return String(c.email||"");
-      case "ciudad":  return String([c.ciudad,c.estado].filter(Boolean).join(", "));
-      case "pais":    return String(c.pais||"");
+      case "ciudad":  return String([nombreVis(c.ciudad||""),nombreVis(c.estado||"")].filter(Boolean).join(", "));
+      case "pais":    return String(paisVis(c.pais)||"");
       case "ventas":  return ventasDeCliente(c.id).length;
       case "nombre":
       default:        return String(c.nombre||"");
@@ -33,16 +36,16 @@ function viewClientes(){
   const rows = list.map(c=>{
     const nv = ventasDeCliente(c.id).length;
     return `<tr>
-      <td><b>${esc(c.nombre||"—")}</b>${c.empresa?`<div class="hint" style="font-size:12px">${esc(c.empresa)}</div>`:""}</td>
+      <td><b>${esc(nombreVis(c.nombre)||"—")}</b>${clienteIncompleto(c)?` <span class="pill cli-inc" title="${esc(validarCliente(c,c.id).errs.map(e=>t(e.key,e.vars)).join(" · "))}">${t("cl.inc.badge")}</span>`:""}${c.empresa?`<div class="hint" style="font-size:12px">${esc(nombreVis(c.empresa))}</div>`:""}</td>
       <td>${esc(c.email||"—")}${c.telefono?`<div class="hint" style="font-size:12px">${esc(c.telefono)}</div>`:""}</td>
-      <td>${esc([c.ciudad,c.estado].filter(Boolean).join(", ")||"—")}</td>
-      <td>${esc(c.pais||"—")}</td>
+      <td>${esc([nombreVis(c.ciudad||""),nombreVis(c.estado||"")].filter(Boolean).join(", ")||"—")}</td>
+      <td>${esc(paisVis(c.pais)||"—")}</td>
       <td class="r num">${nv}</td>
       <td class="r" style="white-space:nowrap">
-        <div style="display:inline-flex;gap:6px;justify-content:flex-end">
-          <button class="btn ghost sm" data-cliedit="${c.id}">${ICO.edit}${t("common.edit")}</button>
-          <button class="btn ghost sm" data-clidel="${c.id}" style="color:var(--alert)" title="${t("common.delete")}" aria-label="${t("common.delete")}">${ICO.trash}${t("common.delete")}</button>
-        </div>
+        <span class="rowacts">
+          ${iconBtn(`data-cliedit="${c.id}"`, ICO.edit, t("common.edit"))}
+          ${iconBtn(`data-clidel="${c.id}"`, ICO.trash, t("common.delete"), true)}
+        </span>
       </td>
     </tr>`;
   }).join("");
@@ -53,11 +56,12 @@ function viewClientes(){
     : emptyState(t("cl.empty.title"),t("cl.empty.sub"),{label:t("cl.btn.new"),onclick:"openClienteStandalone(null)"});
   return `
   <div class="head"><div class="title"><h2>${t("cl.title")}</h2><p>${t("cl.sub",{n:db.clientes.length})}</p></div>
-    <div class="actions"><button class="btn primary" data-clinew>${ICO.adduser}${t("cl.btn.new")}</button></div>
+    <div class="actions"><button class="btn primary" data-clinew>${ICO.plus}${t("cl.btn.new")}</button></div>
   </div>
   <div class="panel">
     <div class="phead" style="gap:10px"><input class="inp" id="cliSearch" placeholder="${t("cl.ph.search")}" value="${esc(cliFiltro)}" style="max-width:420px">
-      ${cliFiltro?`<button class="btn sm" data-cliclear>${t("cl.btn.clear")}</button>`:""}</div>
+      ${cliFiltro?`<button class="btn sm" data-cliclear>${t("cl.btn.clear")}</button>`:""}
+      ${(nInc||cliSoloInc)?`<button type="button" class="chip-inc${cliSoloInc?" on":""}" data-cliinc>${ICO.warn||"⚠"}${t("cl.inc.filter",{n:nInc})}</button>`:""}</div>
     ${body}
   </div>`;
 }
@@ -69,6 +73,7 @@ function wireClientes(){
   if(!m.querySelector("#cliSearch")) return;   // sólo cablear en la vista de Clientes
   wireSortHeaders(cliSort);
   const s=m.querySelector("#cliSearch"); if(s){ s.oninput=()=>{ cliFiltro=s.value; const b=m.querySelector(".table-scroll"); render(); const s2=document.getElementById("cliSearch"); if(s2){ s2.focus(); s2.setSelectionRange(s2.value.length,s2.value.length); } }; }
+  const ci=m.querySelector("[data-cliinc]"); if(ci) ci.onclick=()=>{ cliSoloInc=!cliSoloInc; render(); };
   const cc=m.querySelector("[data-cliclear]"); if(cc) cc.onclick=()=>{ cliFiltro=""; render(); };
   const nw=m.querySelector("[data-clinew]"); if(nw) nw.onclick=()=> openClienteStandalone(null);
   m.querySelectorAll("[data-cliedit]").forEach(a=> a.onclick=e=>{ e.preventDefault(); openClienteStandalone(a.dataset.cliedit); });
@@ -77,33 +82,18 @@ function wireClientes(){
 /* Form de cliente independiente de la venta (no toca draft). */
 function openClienteStandalone(id){
   const c = id ? clienteById(id) : null;
-  buildModal(c?t("md.cli.edit"):t("md.cli.new"), `
-    <div class="grid-form" style="grid-template-columns:1fr 1fr;padding:0">
-      <div class="field" style="grid-column:1/3"><label>${t("md.cli.name")} <span class="hint" style="font-weight:400">${t("md.req")}</span></label><input class="inp" id="cs_nom" value="${c?esc(c.nombre):""}"></div>
-      <div class="field"><label>${t("md.cli.contact")}</label><input class="inp" id="cs_con" value="${c?esc(c.contacto):""}"></div>
-      <div class="field"><label>${t("md.cli.company")}</label><input class="inp" id="cs_emp" value="${c?esc(c.empresa):""}"></div>
-      <div class="field"><label>${t("md.cli.phone")}</label><input class="inp" id="cs_tel" value="${c?esc(c.telefono):""}"></div>
-      <div class="field"><label>${t("md.cli.email")}</label><input class="inp" id="cs_mail" value="${c?esc(c.email):""}"></div>
-      <div class="field" style="grid-column:1/3"><label>${t("md.cli.address")}</label><input class="inp" id="cs_dir" value="${c?esc(c.direccion):""}" placeholder="${t("md.cli.ph.address")}"></div>
-      <div class="field"><label>${t("md.cli.city")}</label><input class="inp" id="cs_ciu" value="${c?esc(c.ciudad):""}"></div>
-      <div class="field"><label>${t("md.cli.state")}</label><input class="inp" id="cs_est" value="${c?esc(c.estado):""}" placeholder="${t("md.cli.ph.state")}"></div>
-      <div class="field"><label>${t("md.cli.zip")}</label><input class="inp" id="cs_zip" value="${c?esc(c.zip):""}"></div>
-      <div class="field"><label>${t("md.cli.country")}</label><input class="inp" id="cs_pais" value="${c?esc(c.pais):""}" placeholder="${t("md.cli.ph.country")}"></div>
-    </div>
-  `, [
+  buildModal(c?t("md.cli.edit"):t("md.cli.new"), clienteFormHTML("cs", c, ""), [
     {label:t("common.cancel"),cls:"btn",act:closeModal},
     {label:t("md.cli.save"),cls:"btn primary",act:()=>saveClienteStandalone(id)}
   ], true);
+  wireClienteForm("cs", id);
+  // v92: al abrir un cliente viejo incompleto, se marca de entrada qué le falta
+  if(c && clienteIncompleto(c)) CLI_FIELDS.forEach(([sfx])=> pintarCampoCliente("cs", sfx, id));
   document.getElementById("cs_nom").focus();
 }
 function saveClienteStandalone(id){
-  const g=x=>document.getElementById(x).value.trim();
-  const nom=g("cs_nom");
-  if(!nom){ toast(t("md.cli.errname"),"warn"); return; }
-  const mail=g("cs_mail");
-  if(mail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)){ toast(t("md.cli.erremail"),"warn"); return; }
-  const campos={ nombre:nom, contacto:g("cs_con"), empresa:g("cs_emp"), telefono:g("cs_tel"),
-                 email:mail, direccion:g("cs_dir"), ciudad:g("cs_ciu"), estado:g("cs_est"), zip:g("cs_zip"), pais:g("cs_pais") };
+  const campos = readClienteForm("cs", id);      // v92: mismas validaciones que la otra app
+  if(!campos) return;
   if(id){ Object.assign(clienteById(id), campos); }
   else { db.clientes.push(Object.assign({id:uid()}, campos)); }
   save(); toast(t("md.cli.saved")); closeModal(); render();
@@ -131,12 +121,13 @@ function renderLines(){
   const isC = draft.tipo==="compra";
   const terc = isC && draft.origen==="terceros";   // PUNTO 1: factura de terceros -> columna "Ours" por línea
   const host = document.getElementById("lineHost");
+  const sinMargen = !isC && !verMargenVenta();   // v94: el editor (Argentina) no ve costo ni margen de la venta
   const rows = draft.lineas.map((l,i)=>{
     const p = prodById(l.productoId);
     if(isC){
       const newFields = l.crear ? `
         <div style="display:flex;gap:6px;margin-top:6px">
-          <input class="inp" placeholder="${t("cl.ph.sku")}" value="${esc(l.sku)}" data-k="sku" data-i="${i}" style="max-width:110px">
+          ${verSku()?`<input class="inp" placeholder="${t("cl.ph.sku")}" value="${esc(l.sku)}" data-k="sku" data-i="${i}" style="max-width:110px">`:""}
           <input class="inp" placeholder="${t("cl.ph.newprod")}" value="${esc(l.nombre)}" data-k="nombre" data-i="${i}">
         </div>` : "";
       if(terc){
@@ -153,7 +144,7 @@ function renderLines(){
           <td class="r num" style="width:66px;color:var(--muted)" data-terc="${i}" title="${t("cl.tt.toowner")}">${qty(aTerc)}</td>
           <td style="width:104px"><input class="inp num" data-k="precio" data-i="${i}" value="${l.precio}" title="${t("cl.tt.unitcost")}"></td>
           <td class="r num sub-cell" style="width:110px">${money(ours*l.precio)}</td>
-          <td style="width:34px"><button class="btn ghost sm" data-del="${i}" title="${t("md.tt.remove")}">✕</button></td>
+          <td style="width:34px"><button class="btn ghost sm" data-del="${i}" title="${t("md.tt.remove")}" aria-label="${t("md.tt.remove")}">${ICO.x}</button></td>
         </tr>`;
       }
       return `<tr>
@@ -164,7 +155,7 @@ function renderLines(){
         <td style="width:90px"><input class="inp num" data-k="cantidad" data-i="${i}" value="${l.cantidad}"></td>
         <td style="width:120px"><input class="inp num" data-k="precio" data-i="${i}" value="${l.precio}"></td>
         <td class="r num sub-cell" style="width:120px">${money(l.cantidad*l.precio)}</td>
-        <td style="width:34px"><button class="btn ghost sm" data-del="${i}" title="${t("md.tt.remove")}">✕</button></td>
+        <td style="width:34px"><button class="btn ghost sm" data-del="${i}" title="${t("md.tt.remove")}" aria-label="${t("md.tt.remove")}">${ICO.x}</button></td>
       </tr>`;
     }
     // ---- VENTA ----
@@ -180,12 +171,12 @@ function renderLines(){
         ${dispInfo}
       </td>
       <td style="width:58px"><input class="inp num" data-k="cantidad" data-i="${i}" value="${l.cantidad}"></td>
-      <td class="r num" style="width:74px;color:var(--muted)">${p?money(l.costoRef):"—"}</td>
-      <td style="width:60px"><input class="inp num" data-k="margen" data-i="${i}" value="${l.margen||0}" placeholder="%"></td>
+      ${sinMargen?"":`<td class="r num" style="width:74px;color:var(--muted)">${p?money(l.costoRef):"—"}</td>
+      <td style="width:60px"><input class="inp num" data-k="margen" data-i="${i}" value="${l.margen||0}" placeholder="%"></td>`}
       <td style="width:86px"><input class="inp num" data-k="precio" data-i="${i}" value="${l.precio}"></td>
-      <td class="r num" style="width:44px;color:var(--muted)" data-mg="${i}">${p&&l.precio>0?nf0.format((l.precio-l.costoRef)/l.precio*100)+"%":"—"}</td>
+      ${sinMargen?"":`<td class="r num" style="width:44px;color:var(--muted)" data-mg="${i}">${p&&l.precio>0?nf0.format((l.precio-l.costoRef)/l.precio*100)+"%":"—"}</td>`}
       <td class="r num sub-cell" style="width:88px">${money(l.cantidad*l.precio)}</td>
-      <td style="width:30px"><button class="btn ghost sm" data-del="${i}" title="${t("md.tt.remove")}">✕</button></td>
+      <td style="width:30px"><button class="btn ghost sm" data-del="${i}" title="${t("md.tt.remove")}" aria-label="${t("md.tt.remove")}">${ICO.x}</button></td>
     </tr>`;
   }).join("");
 
@@ -195,11 +186,15 @@ function renderLines(){
     ? `<colgroup><col><col style="width:82px"><col style="width:88px"><col style="width:70px"><col style="width:112px"><col style="width:118px"><col style="width:46px"></colgroup>`
     : isC
     ? `<colgroup><col><col style="width:92px"><col style="width:134px"><col style="width:134px"><col style="width:46px"></colgroup>`
+    : sinMargen
+    ? `<colgroup><col><col style="width:92px"><col style="width:134px"><col style="width:134px"><col style="width:46px"></colgroup>`
     : `<colgroup><col><col style="width:78px"><col style="width:96px"><col style="width:86px"><col style="width:94px"><col style="width:80px"><col style="width:112px"><col style="width:46px"></colgroup>`;
   const thead = terc
     ? `<tr><th style="white-space:nowrap">${t("common.product")}</th><th class="r" style="white-space:nowrap" title="${t("cl.tt.qtyinv")}">${t("cl.th.qty")}</th><th class="r" style="white-space:nowrap" title="${t("cl.tt.ourskeep2")}">${t("cl.th.ours")}</th><th class="r" style="white-space:nowrap" title="${t("cl.tt.toowner2")}">${t("cl.th.toowner")}</th><th class="r" style="white-space:nowrap">${t("cl.th.unitcost")}</th><th class="r" style="white-space:nowrap" title="${t("cl.tt.subself")}">${t("pdf.subtotal")}</th><th></th></tr>`
     : isC
     ? `<tr><th>${t("common.product")}</th><th class="r">${t("cl.th.qty")}</th><th class="r">${t("cl.th.unitcost")}</th><th class="r">${t("pdf.subtotal")}</th><th></th></tr>`
+    : sinMargen
+    ? `<tr><th>${t("common.product")}</th><th class="r">${t("cl.th.qty")}</th><th class="r" title="${t("cl.tt.unitprice")}">${t("cl.th.price")}</th><th class="r">${t("pdf.subtotal")}</th><th></th></tr>`
     : `<tr><th>${t("common.product")}</th><th class="r">${t("cl.th.qty")}</th><th class="r">${t("cl.th.cost")}</th><th class="r" title="${t("cl.tt.markuppct")}">${t("cl.th.mkpct")}</th><th class="r" title="${t("cl.tt.unitprice")}">${t("cl.th.price")}</th><th class="r" title="${t("cl.tt.realmargin")}">${t("cl.th.mrgpct")}</th><th class="r">${t("pdf.subtotal")}</th><th></th></tr>`;
   host.innerHTML = `<div class="table-scroll"><table class="line-tbl doc-tbl">
     ${colgroup}
@@ -289,6 +284,7 @@ function refreshTercLinea(i, host){
 function refreshTotal(){
   const foot=document.getElementById("docTotal") || document.querySelector(".modal .mextra .num");
   if(foot) foot.textContent = money(docTotal());
+  if(typeof refreshNet==="function") refreshNet();   // v87 · rentabilidad estimada en vivo
   const h=document.getElementById("d_proHint");
   if(h && draft.tipo==="compra"){
     const u=unidadesDoc(), extra=(draft.handling||0)+(draft.flete||0);
@@ -324,6 +320,29 @@ function confirmDoc(){
   if(!isC && !clienteById(draft.clienteId)){
     toast(t("cl.err.pickcust"),"warn"); return;
   }
+  // ---- v92 · Validaciones duras (bloquean), igual que la otra app ----
+  const fechaIso = normISO(draft.fecha);
+  const hoyIso = isoLocal(new Date());
+  if(!fechaIso){ toast(t("md.err.date"),"warn"); const e=document.getElementById("d_fe"); if(e) e.focus(); return; }
+  if(fechaIso > hoyIso){ toast(t("md.err.datefuture"),"warn"); const e=document.getElementById("d_fe"); if(e) e.focus(); return; }
+  if(!isC && !cobroValidar(draft)) return;            // v78 · medio de cobro + cuenta de destino
+  if(draft.lineas.some(l=> (l.productoId||l.crear) && !((parseNum(l.cantidad)||0) > 0))){ toast(t("md.err.qty"),"warn"); return; }
+  // ---- Avisos (se confirman y se sigue) ----
+  if(!isC){
+    const avisos = [];
+    const cliV = clienteById(draft.clienteId);
+    if(clienteIncompleto(cliV)) avisos.push(t("md.warn.cliinc",{name:nombreVis(cliV.nombre)}));
+    const dias = Math.round((new Date(hoyIso) - new Date(fechaIso)) / 86400000);
+    if(dias > 60) avisos.push(t("md.warn.olddate",{d:dias}));
+    draft.lineas.forEach(l=>{
+      const p = prodById(l.productoId); if(!p || !((parseNum(l.cantidad)||0) > 0)) return;
+      const pr = parseNum(l.precio)||0, co = (typeof draftCostoLinea==="function") ? draftCostoLinea(l) : (l.costoRef||0);
+      if(pr<=0) avisos.push(t("md.warn.free",{name:p.nombre}));
+      else if(co>0 && pr<co && verMargenVenta()) avisos.push(   // v103: el editor no ve costos (este aviso mostraba el costo)
+        t("md.warn.belowcost",{name:p.nombre, price:money(pr), cost:money(co)}));
+    });
+    if(avisos.length && !confirm(t("md.warn.confirm",{list:avisos.map(x=>"• "+x).join("\n")}))) return;
+  }
   // Punto 1: alerta de compra DUPLICADA (mismo proveedor + fecha + N° de factura).
   // Sólo en compras NUEVAS (al editar no aplica). Avisa y deja decidir (no bloquea).
   if(isC && !draft.editingId){
@@ -357,6 +376,7 @@ function confirmDoc(){
       } else {
         if(!l.nombre.trim()){ toast(t("cl.err.newprodname"),"warn"); return; }
         p = nuevoProductoBase(l.sku, l.nombre, isC?(l.precioVentaSugerido||0):l.precio);
+        if(typeof l.idioma==="string") p.idioma = l.idioma;   // nov 2026: idioma elegido al importar ("" = inglés / sin marcar)
         db.productos.push(p);
       }
     } else {
@@ -388,6 +408,8 @@ function confirmDoc(){
   if(editing){
     const list0 = isC?db.compras:db.ventas;
     oldDoc = list0.find(x=>x.id===draft.editingId) || null;
+    // v103: segunda barrera (por si la compra se usó mientras el editor estaba abierto)
+    if(isC && oldDoc && trabaCompraUsada(oldDoc)) return;
     if(oldDoc){
       oldDoc.lineas.forEach(l=>{
         const d = isC ? -l.cantidad : +l.cantidad;   // deshacer el efecto original
@@ -457,6 +479,7 @@ function confirmDoc(){
     doc.clienteId = draft.clienteId;
     doc.cliente = cli ? { nombre:cli.nombre, contacto:cli.contacto, empresa:cli.empresa, telefono:cli.telefono, email:cli.email, direccion:cli.direccion, ciudad:cli.ciudad, estado:cli.estado, zip:cli.zip, pais:cli.pais||"" } : null;  // snapshot for the invoice + country slicer
     doc.envio = { tipo:draft.envio.tipo, monto:envioMonto };
+    cobroAplicarDoc(doc, draft);            // v78 · medio de cobro, referencia y cuenta
     doc.cargosCliente = cargosClienteArr;   // Task 5
     doc.contraparte = cli ? clienteLinea(cli) : draft.contraparte.trim();
     // Vendedor: un seller queda fijado a sí mismo; el admin usa el que eligió (o ninguno).
@@ -473,6 +496,16 @@ function confirmDoc(){
   }
   const refTxt = (isC?t("cl.ref.purchase"):t("cl.ref.sale")) + (doc.numero?(" "+doc.numero):"") + (doc.contraparte?(" · "+doc.contraparte):"");
 
+  // v103 (igual que Prince v117): al editar una compra ya recibida, la capa nueva entra con
+  // la fecha de la capa original (antes pasaba al final de la cola FIFO).
+  const fechaCapa = {};
+  if(isC && oldDoc && oldDoc.status===INVOICE_STATUS.RECEIVED){
+    const sOld = oldDoc.store || STORE_IDS[0];
+    (oldDoc.lineas||[]).forEach(l=>{
+      const p = prodById(l.productoId); if(!p) return;
+      fifoLayers(p, sOld).forEach(L=>{ if(L.refId===oldDoc.id && L.fecha && (!fechaCapa[p.id] || L.fecha<fechaCapa[p.id])) fechaCapa[p.id] = L.fecha; });
+    });
+  }
   // Recién ahora mutamos: primero revertimos el documento original (si estábamos editando)
   if(oldDoc) revertDoc(oldDoc);
 
@@ -483,7 +516,7 @@ function confirmDoc(){
       // la mercadería recién entra cuando se marca recibida.
       if(doc.status===INVOICE_STATUS.RECEIVED){
         const landed = round2(r.precio + handPU + fletePU);
-        fifoEntrada(r.prod, store, r.cantidad, landed, refTxt, doc.id);  // FIFO purchase layer
+        fifoEntrada(r.prod, store, r.cantidad, landed, refTxt, doc.id, null, fechaCapa[r.prod.id]);  // FIFO purchase layer (v103: misma fecha si se editó)
         moverStock(r.prod, +r.cantidad, landed, "compra", doc.id, refTxt, { store });
         r.prod.costoNeto = r.precio; r.prod.costoHandling = round2(handPU); r.prod.costoFlete = round2(fletePU);
         r.prod.ultimoCosto = landed;        // last landed cost (reference only; COGS is FIFO)
@@ -500,6 +533,9 @@ function confirmDoc(){
     }
   });
 
+  // nov 2026 · quién lo cargó: se conserva al editar; uno nuevo queda a nombre de quien lo carga (el servidor lo confirma)
+  if(editing && oldDoc){ if(oldDoc.cargadoPor) doc.cargadoPor = oldDoc.cargadoPor; }
+  else if(session && session.user) doc.cargadoPor = session.user;
   (isC?db.compras:db.ventas).push(doc);
   if(!isC) rememberVenta(storeVenta, doc.vendedorId||"");   // pre-cargar contexto en la próxima venta
   draft.editingId=null;
@@ -536,6 +572,7 @@ function confirmCompraTerceros(){
     if(prev){
       const remPrev = prev.remitoId ? (db.remitos||[]).find(r=> r.id===prev.remitoId) : null;
       if(remPrev && remPrev.fecha) fechaRemito = remPrev.fecha;
+      if(trabaCompraUsada(prev)) return;   // v103: la parte nuestra ya se usó (vendida/ajustada/despachada)
       const cons = (db.consignaciones||[]).filter(cs=> cs.conjuntaId===prev.id);
       if(cons.some(cs=> cs.estado!==CONSIGN_ESTADOS.TRANSITO)){
         toast(t("cl.err.editmoved"),"warn"); return;
@@ -563,6 +600,7 @@ function confirmCompraTerceros(){
       else {
         if(!(l.nombre||"").trim()){ toast(t("cl.err.newprodname"),"warn"); return; }
         p = nuevoProductoBase(l.sku, l.nombre, l.precioVentaSugerido||0);
+        if(typeof l.idioma==="string") p.idioma = l.idioma;   // nov 2026: idioma elegido al importar
         db.productos.push(p);
       }
     } else {
@@ -576,7 +614,7 @@ function confirmCompraTerceros(){
   if(hayTercero && !clienteById(draft.terceroId)){ toast(t("cl.err.pickowner"),"warn"); return; }
 
   const ownerId   = draft.terceroId || null;
-  const ownerName = ownerId ? ((clienteById(ownerId)||{}).nombre || "") : "";
+  const ownerName = ownerId ? (nombreVis((clienteById(ownerId)||{}).nombre) || "") : "";
   const numero    = (draft.numero||"").trim();
   const fechaISO  = normISO(draft.fecha) || hoyISO();
 
@@ -603,6 +641,7 @@ function confirmCompraTerceros(){
       })),
       subtotal, total: round2(subtotal + (draft.handling||0) + (draft.flete||0))
     };
+    if(session && session.user) compraDoc.cargadoPor = session.user;   // nov 2026 · quién la cargó
     db.compras.push(compraDoc);
   }
 
@@ -697,6 +736,35 @@ function unreceiveInvoice(doc){
   db.movimientos = db.movimientos.filter(m=> m.refId!==doc.id);
   [...new Set(doc.lineas.map(l=>l.productoId))].forEach(id=>{ const p=prodById(id); if(p) recomputeUltimoCosto(p); });
 }
+/* ---- v103 · Traba de integridad de compras (igual que Prince) ----
+   Unidades de una compra RECIBIDA que ya salieron de su capa FIFO (vendidas,
+   ajustadas, despachadas a tránsito, enviadas a bóveda). Si hay alguna, la compra no
+   se puede borrar, editar ni volver a "en tránsito": revertirla dejaba stock NEGATIVO y
+   capas FIFO descuadradas. Al deshacer lo que las consumió (p. ej. borrar la venta) las
+   unidades vuelven con el refId de la compra y la traba se libera sola.
+   Devuelve [{nombre, compradas, usadas}]. */
+function compraUsada(doc){
+  if(!doc || doc.status===INVOICE_STATUS.IN_TRANSIT) return [];
+  const store = doc.store || STORE_IDS[0];
+  const porProd = {};
+  (doc.lineas||[]).forEach(l=>{ (porProd[l.productoId] = porProd[l.productoId] || { nombre:l.nombre, cant:0 }).cant += (l.cantidad||0); });
+  const out = [];
+  Object.keys(porProd).forEach(id=>{
+    const p = prodById(id); if(!p) return;
+    const quedan = fifoLayers(p, store).filter(L=> L.refId===doc.id).reduce((a,L)=>a+(L.cantidad||0),0);
+    const libres = Math.min(quedan, stockDe(p, store));
+    const usadas = round4(porProd[id].cant - libres);
+    if(usadas > 0.0001) out.push({ nombre:porProd[id].nombre, compradas:porProd[id].cant, usadas });
+  });
+  return out;
+}
+/* true = bloqueado (y ya avisó al usuario). */
+function trabaCompraUsada(doc){
+  const u = compraUsada(doc); if(!u.length) return false;
+  toast(t("doc.lock.tt"),"warn");
+  alert(t("doc.lock.used",{list:u.map(x=>t("doc.lock.line",{name:x.nombre, used:qty(x.usadas), total:qty(x.compradas)})).join("\n")}));
+  return true;
+}
 function revertDoc(doc){
   const isC = doc.tipo==="compra";
   const store = doc.store || STORE_IDS[0];
@@ -734,8 +802,10 @@ function revertDoc(doc){
   }
 }
 function deleteDoc(tipo,id){
+  if(isEditor()){ toast(t("ed.err.nodelete"),"warn"); return; }   // v79: el editor no borra
   const list = tipo==="compra"?db.compras:db.ventas;
   const d=list.find(x=>x.id===id); if(!d) return;
+  if(tipo==="compra" && trabaCompraUsada(d)) return;   // v103
   const items=d.lineas.reduce((a,l)=>a+l.cantidad,0);
   const msg = tipo==="compra"
     ? t("cl.del.purchase",{u:qty(items),store:storeName(d.store)})
@@ -748,6 +818,8 @@ function deleteDoc(tipo,id){
 function editDoc(tipo,id){
   const list = tipo==="compra"?db.compras:db.ventas;
   const d=list.find(x=>x.id===id); if(!d) return;
+  if(typeof puedeEditarDocDe==="function" && !puedeEditarDocDe(d)){ avisoDocAjeno(d); return; }   // nov 2026: el editor sólo edita lo suyo
+  if(tipo==="compra" && trabaCompraUsada(d)) return;   // v103
   // ---- Task 3: edición de COMPRA DE TERCEROS ----
   // La compra sólo guarda lo NUESTRO; lo de terceros vive como consignaciones
   // (conjuntaId = id de la compra). Reconstruimos el draft juntando ambas por
@@ -792,6 +864,7 @@ function editDoc(tipo,id){
     contraparte:d.contraparte||"", fecha:normISO(d.fecha), numero:d.numero||"",
     clienteId:d.clienteId||"", envio: d.envio ? {tipo:d.envio.tipo, monto:d.envio.monto||0} : {tipo:"free",monto:0},
     handling:d.handling||0, flete:d.flete||0,
+    ...(tipo==="venta" ? cobroDraftDesde(d) : {}),
     lineas: d.lineas.map(l=>({ key:uid(), productoId:l.productoId, sku:l.sku, nombre:l.nombre, cantidad:l.cantidad, precio:l.precio,
       costoRef: prodById(l.productoId) ? (prodById(l.productoId).ultimoCosto||0) : (l.costo||0),
       margen: (l.costo>0)? round2((l.precio/l.costo-1)*100) : 0, precioVentaSugerido:0, crear:false }))
@@ -817,6 +890,7 @@ function copyDoc(tipo,id){
     clienteId: tipo==="venta"?(d.clienteId||""):"",
     envio: (tipo==="venta" && d.envio) ? {tipo:d.envio.tipo, monto:d.envio.monto||0} : {tipo:"free",monto:0},
     handling:0, flete:0,
+    ...(tipo==="venta" ? { medioPago:d.medioPago||"", refPago:"", cuentaCobro:d.cuentaCobro||"" } : {}),
     lineas: d.lineas.map(l=>{
       const p=prodById(l.productoId);
       return { key:uid(), productoId:l.productoId, sku:l.sku, nombre:l.nombre, cantidad:l.cantidad, precio:l.precio,
@@ -838,65 +912,87 @@ function copyDoc(tipo,id){
 }
 
 /* Ver documento existente (solo lectura) */
+/* v87 · Detalle de venta / compra reordenado (como la otra app del grupo):
+   ficha de datos arriba, líneas en el medio y dos cajas abajo: Totales y
+   Rentabilidad (sólo admin). Ningún botón queda seleccionado al abrir
+   (antes quedaba "Eliminar" y un Enter de más borraba la venta). */
 function verDoc(tipo,id){
   const list = tipo==="compra"?db.compras:db.ventas;
   const d=list.find(x=>x.id===id); if(!d) return;
   const isC=tipo==="compra";
+  const fila = (lbl, val, cls="") => `<div class="vd-row ${cls}"><span>${lbl}</span><span class="num">${val}</span></div>`;
+  // ---- Ficha de datos ----
+  const cli = d.cliente || (d.clienteId?clienteById(d.clienteId):null);
+  let quien;
+  if(!isC && cli){
+    quien = `<b>${esc(nombreVis(cli.nombre)||cli.nombre||"—")}</b>${clienteEmpresaExtra(cli)?` · ${esc(nombreVis(clienteEmpresaExtra(cli)))}`:""}
+      ${clienteDireccion(cli)?`<br>${esc(clienteDireccion(cli))}`:""}
+      ${(cli.email||cli.telefono)?`<br>${esc(cli.email||"")}${cli.email&&cli.telefono?" · ":""}${esc(cli.telefono||"")}`:""}`;
+  } else quien = `<b>${esc(nombreVis(d.contraparte)||"—")}</b>`;
+  const datos = [
+    `<div class="vd-f vd-f-wide"><span class="vd-lbl">${isC?t("vd.supplier"):t("vd.customer")}</span><div>${quien}</div></div>`,
+    `<div class="vd-f"><span class="vd-lbl">${t("common.date")}</span><div>${esc(fmtDate(d.fecha))}</div></div>`,
+    (()=>{ const st = isC ? (d.store||STORE_IDS[0]) : storeDeVenta(d);   // v93: texto con punto de color (antes, pastilla suelta)
+      return `<div class="vd-f"><span class="vd-lbl">${t("vd.dep")}</span><div class="vd-dep st-${esc(st)}"><i aria-hidden="true"></i>${esc(storeName(st))}</div></div>`; })()
+  ];
+  if(!isC && d.medioPago) datos.push(`<div class="vd-f"><span class="vd-lbl">${t("cob.l.method")}</span><div>${esc(cobroLabel(d.medioPago))}${d.refPago?` · ${esc(d.refPago)}`:""}</div></div>`);
+  // v94 · cobro pendiente (consignación): se completa desde acá
+  if(!isC && !d.medioPago) datos.push(`<div class="vd-f"><span class="vd-lbl">${t("cob.l.method")}</span><div><span class="pill cob-pend">${t("cob.pend")}</span>${cobroPuedeRegistrar(d)?` <button type="button" class="btn sm" data-cob-reg="${esc(d.id)}" style="margin-left:6px">${t("cob.reg")}</button>`:""}</div></div>`);
+  if(!isC && cuentaCobroNombre(d)) datos.push(cobroVerHTML(d,false));
+  if(!isC && isAdmin()) datos.push(`<div class="vd-f"><span class="vd-lbl">${t("cl.v.soldby")}</span><div>${esc(saleVendedorNombre(d))}</div></div>`);
+  // nov 2026 · quién lo cargó (los documentos anteriores a este registro no lo tienen)
+  if(d.cargadoPor && (isAdmin()||isEditor())) datos.push(`<div class="vd-f"><span class="vd-lbl">${t("doc.by",{u:""}).replace(/[:\s]+$/,"")}</span><div>${esc(d.cargadoPor)}</div></div>`);
+  const received = d.status===INVOICE_STATUS.RECEIVED;
+  if(isC) datos.push(`<div class="vd-f vd-f-wide"><span class="vd-lbl">${t("cl.v.shipstatus")}</span>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <span class="inv-badge ${received?'received':'transit'}">${received?t('cl.v.received'):t('cl.v.intransit')}</span>
+        ${puedeComprar()?`<button class="btn ghost sm" data-invstatus-modal="${d.id}">${received?ICO.plane+t('cl.v.markintransit'):ICO.receive+t('cl.v.markreceived')}</button>`:""}
+      </div></div>`);
+  // ---- Líneas ----
   const rows=d.lineas.map(l=>`<tr>
-    <td><span class="sku">${esc(l.sku||"—")}</span> ${esc(l.nombre)}</td>
+    <td>${(l.sku&&verSku())?`<span class="sku">${esc(l.sku)}</span> `:""}${esc(l.nombre)}</td>
     <td class="r num">${qty(l.cantidad)}</td>
     <td class="r num">${money(l.precio)}</td>
     <td class="r num">${money(l.cantidad*l.precio)}</td></tr>`).join("");
-  const cli = d.cliente || (d.clienteId?clienteById(d.clienteId):null);
+  // ---- Totales ----
   const sub = (d.subtotal!=null) ? d.subtotal : totalLineas(d.lineas);
-  const extras = isC
-    ? ((d.handling||d.flete) ? `<div class="totrow"><span style="color:var(--muted)">${t("cl.v.handfreight")}</span><span class="num">${money((d.handling||0)+(d.flete||0))}</span></div>` : "")
-    : `<div class="totrow"><span style="color:var(--muted)">${t("cl.v.shipping")}</span><span class="num">${d.envio&&d.envio.tipo==="monto"?money(d.envio.monto):t("md.ship.free")}</span></div>`;
-  const cliBlock = (!isC && cli) ? `<p style="margin:0 0 14px;color:var(--muted);font-size:13px">
-      <b>${esc(cli.nombre)}</b>${cli.empresa?` · ${esc(cli.empresa)}`:""}<br>
-      ${esc(clienteDireccion(cli)||"")}${cli.email?`<br>${esc(cli.email)}`:""}${cli.telefono?` · ${esc(cli.telefono)}`:""}</p>` : "";
-  // Punto 1: bloque de estado de envío (sólo compras)
-  const received = d.status===INVOICE_STATUS.RECEIVED;
-  const statusBlock = isC ? `<div class="totrow" style="align-items:center">
-      <span style="color:var(--muted)">${t("cl.v.shipstatus")}</span>
-      <span style="display:flex;gap:10px;align-items:center">
-        <span class="inv-badge ${received?'received':'transit'}">${received?t("cl.v.received"):t("cl.v.intransit")}</span>
-        <button class="btn ghost sm" data-invstatus-modal="${d.id}">${received?ICO.plane+t("cl.v.markintransit"):ICO.receive+t("cl.v.markreceived")}</button>
-      </span></div>` : "";
-  // Punto 6: quién vendió (sólo ventas, sólo admin)
-  const vendBlock = (!isC && isAdmin()) ? `<div class="totrow"><span style="color:var(--muted)">${t("cl.v.soldby")}</span><span class="num">${esc(saleVendedorNombre(d))}</span></div>` : "";
-  // Punto 4: comisión (sólo ventas y sólo admin/master) + costos de venta -> margen neto
-  const costLines = (!isC && isAdmin()) ? (d.costosExtra||[]).map(c=>{
-    const detalle = c.tipo==="labor" && c.horas ? ` <span style="color:var(--muted)">(${nf0.format(c.horas)}h × ${money(c.valorHora||0)})</span>` : (c.nota?` <span style="color:var(--muted)">· ${esc(c.nota)}</span>`:"");
-    return `<div class="totrow"><span style="color:var(--muted)">− ${esc(costoTipoLabel(c.tipo))}${detalle}</span><span class="num">${money(c.monto)}</span></div>`;
-  }).join("") : "";
-  const commBlock = (!isC && isAdmin()) ? `
-    <div class="totrow"><span style="color:var(--muted)">${t("cl.v.marginfifo")}</span><span class="num">${money(saleMargin(d))}</span></div>
-    <div class="totrow"><span style="color:var(--muted)">${t("cl.v.commission",{p:nf0.format(saleCommissionRate(d)*100)})}</span><span class="num">${money(saleCommission(d))}</span></div>
-    ${costLines}
-    ${saleCargosCliente(d)>0?`<div class="totrow"><span style="color:var(--muted)">${t("cl.v.chargesbilled")}</span><span class="num">${money(saleCargosCliente(d))}</span></div>`:""}
-    <div class="totrow" style="font-weight:700;border-top:1px solid var(--line);margin-top:2px;padding-top:6px"><span>${t("cl.v.netmargin")}</span><span class="num" style="color:${saleNetMargin(d)<0?'var(--alert)':'var(--up)'}">${money(saleNetMargin(d))}</span></div>` : "";
-  buildModal(`${isC?t("cl.v.purchase"):t("cl.v.invoice")} ${esc(d.numero||"")}`.trim(), `
-    <p style="margin:0 0 6px;color:var(--muted);font-size:14px">${esc(d.contraparte||"—")} · ${esc(fmtDate(d.fecha))}</p>
-    ${cliBlock}
-    <div class="table-scroll"><table>
+  let tot = fila(t("pdf.subtotal"), money(sub));
+  if(isC){ if(d.handling||d.flete) tot += fila(t("cl.v.handfreight"), money((d.handling||0)+(d.flete||0))); }
+  else tot += fila(t("cl.v.shipping"), d.envio&&d.envio.tipo==="monto"?money(d.envio.monto):`<span class="vd-free">${t("md.ship.free")}</span>`);
+  if(!isC) (d.cargosCliente||[]).forEach(c=>{ tot += fila("+ "+esc(capFirst(c.nota)||t("pdf.charge")), money(c.monto)); });
+  tot += fila(t("common.total"), money(d.total), "vd-total");
+  // ---- Rentabilidad (sólo admin, sólo ventas) ----
+  let rent = "";
+  if(!isC && isAdmin()){
+    rent += fila(t("cl.v.marginfifo"), money(saleMargin(d)));
+    if(saleEnvioCobrado(d)>0) rent += fila(t("md.net.ship"), money(saleEnvioCobrado(d)));
+    if(saleCargosCliente(d)>0) rent += fila(t("cl.v.chargesbilled"), money(saleCargosCliente(d)));
+    rent += fila(t("cl.v.commission",{p:nf0.format(saleCommissionRate(d)*100)}), money(saleCommission(d)));
+    (d.costosExtra||[]).forEach(c=>{
+      const detalle = c.tipo==="labor" && c.horas ? ` (${nf0.format(c.horas)}h × ${money(c.valorHora||0)})` : (c.nota?` · ${c.nota}`:"");
+      rent += fila("− "+esc(costoTipoLabel(c.tipo)+detalle), money(c.monto));
+    });
+    const nm = saleNetMargin(d) + saleEnvioCobrado(d);   // mismo criterio que el P&L: el envío cobrado suma
+    rent += fila(t("cl.v.netmargin"), `<span style="color:${nm<0?'var(--alert)':'var(--up-ink)'}">${money(nm)}</span>`, "vd-total");
+  }
+  buildModal(`${isC?t("cl.v.purchase"):t("cl.v.invoice")} ${d.numero||""}`.trim(), `
+    <div class="vd-datos">${datos[0]}<div class="vd-meta">${datos.slice(1).join("")}</div></div>
+    <div class="vd-lineas table-scroll"><table>
       <thead><tr><th>${t("common.product")}</th><th class="r">${t("cl.th.qty")}</th><th class="r">${isC?t("cl.th.cost"):t("cl.th.price")}</th><th class="r">${t("pdf.subtotal")}</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
-    <div class="totrow"><span style="color:var(--muted)">${t("pdf.subtotal")}</span><span class="num">${money(sub)}</span></div>
-    ${extras}
-    ${(!isC ? (d.cargosCliente||[]).map(c=>`<div class="totrow"><span style="color:var(--muted)">+ ${esc(c.nota||t("pdf.charge"))}</span><span class="num">${money(c.monto)}</span></div>`).join("") : "")}
-    <div class="totrow" style="font-weight:700"><span>${t("common.total")}</span><span class="num">${money(d.total)}</span></div>
-    ${statusBlock}
-    ${vendBlock}
-    ${commBlock}
+    <div class="vd-cajas">
+      <div class="vd-caja"><h4>${t("vd.totals")}</h4>${tot}</div>
+      ${rent ? `<div class="vd-caja"><h4>${t("vd.profit")} <span class="hint">· ${t("vd.adminonly")}</span></h4>${rent}</div>` : ""}
+    </div>
   `,[
-    {label:t("common.delete"),cls:"btn danger",act:()=>deleteDoc(tipo,id)},
-    ...(isC?[]:[{label:t("cl.btn.downloadpdf"),cls:"btn",act:()=>generarInvoicePDF(id)},
-              {label:t("cl.btn.copy"),cls:"btn",act:()=>copyDoc(tipo,id)}]),
-    {label:t("common.edit"),cls:"btn",act:()=>{ closeModal(); editDoc(tipo,id); }},
+    ...(isEditor()?[]:[{label:t("common.delete"),icon:ICO.trash,cls:"btn danger",act:()=>deleteDoc(tipo,id)}]),   // v94: el editor no borra
+    ...(isC?[]:[{label:t("cl.btn.downloadpdf"),icon:ICO.pdf,cls:"btn",act:()=>generarInvoicePDF(id)},
+              {label:t("cl.btn.copy"),icon:ICO.copy,cls:"btn",act:()=>copyDoc(tipo,id)}]),
+    {label:t("common.edit"),icon:ICO.edit,cls:"btn",act:()=>{ closeModal(); editDoc(tipo,id); }},
     {label:t("common.close"),cls:"btn",act:closeModal}
   ]);
-  // Punto 1: el botón de estado dentro del detalle re-abre el modal ya actualizado.
+  // Que ningún botón quede seleccionado (sobre todo "Eliminar"): el foco va al modal.
+  setTimeout(()=>{ const md=document.querySelector("#modalRoot .modal"); if(md){ try{ md.focus({preventScroll:true}); }catch(_){ md.focus(); } } }, 0);
   const sb=document.querySelector("[data-invstatus-modal]");
   if(sb) sb.onclick=()=>{ toggleInvoiceStatus(sb.dataset.invstatusModal); closeModal(); verDoc(tipo,id); };
 }

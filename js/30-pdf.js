@@ -21,14 +21,14 @@ function generarInvoicePDF(id){
   const M = 48;
   const em = db.config.emisor||{};
   // Paleta (mismo azul del tema)
-  const INK=[26,26,26], MUT=[120,120,120], LINE=[228,225,220], ACC=[37,99,235], ZEBRA=[248,247,245];
+  const INK=[26,26,26], MUT=[120,120,120], LINE=[228,225,220], ACC=[217,119,6], ZEBRA=[248,247,245];   // v102: ámbar de Select (antes azul)
   const setInk=(c)=>doc.setTextColor(c[0],c[1],c[2]);
 
   /* ---------- Header band ---------- */
   doc.setFillColor(ACC[0],ACC[1],ACC[2]); doc.rect(0,0,W,96,"F");
   doc.setTextColor(255,255,255);
   doc.setFont("helvetica","bold"); doc.setFontSize(19);
-  doc.text(em.nombre || t("pdf.inv.title"), M, 42);
+  doc.text(em.nombre || t("pdf.lc.brand"), M, 42);
   doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
   let hy=60;
   [em.direccion, [em.email, em.tel].filter(Boolean).join("  ·  ")].filter(Boolean).forEach(t=>{ doc.text(String(t), M, hy); hy+=12; });
@@ -47,11 +47,11 @@ function generarInvoicePDF(id){
   y+=15; setInk(INK); doc.setFontSize(10);
   const leftLines=[];
   if(cli){
-    leftLines.push(["bold", cli.nombre||""]);
-    const l2=[cli.empresa, cli.contacto].filter(Boolean).join(" · "); if(l2) leftLines.push(["normal", l2]);
-    if(cli.direccion) leftLines.push(["normal", cli.direccion]);
-    const cz=[cli.ciudad, cli.estado, cli.zip].filter(Boolean).join(", "); if(cz) leftLines.push(["normal", cz]);
-    if(cli.pais) leftLines.push(["normal", cli.pais]);
+    leftLines.push(["bold", nombreVis(cli.nombre)||cli.nombre||""]);   // v87: mayúsculas al mostrar
+    const l2=[cli.empresa, cli.contacto].filter(x=> x && String(x).trim().toLowerCase()!==String(cli.nombre||"").trim().toLowerCase()).map(nombreVis).join(" · "); if(l2) leftLines.push(["normal", l2]);
+    if(cli.direccion) leftLines.push(["normal", nombreVis(cli.direccion)]);
+    const cz=[nombreVis(cli.ciudad||""), nombreVis(cli.estado||""), String(cli.zip||"").toUpperCase()].filter(Boolean).join(", "); if(cz) leftLines.push(["normal", cz]);
+    if(cli.pais) leftLines.push(["normal", paisCanon(cli.pais)||cli.pais]);
     const ce=[cli.email, cli.telefono].filter(Boolean).join(" · "); if(ce) leftLines.push(["muted", ce]);
   } else leftLines.push(["normal","—"]);
   let ly=y;
@@ -67,9 +67,9 @@ function generarInvoicePDF(id){
   /* ---------- Table ---------- */
   y = Math.max(ly, y+13) + 18;
   const cItem=M, wItem=W-M-M-200;
-  const cQty=W-M-200, wQty=44;
-  const cUnit=W-M-150, wUnit=74;
-  const cAmt=W-M-70, wAmt=70;
+  const cQty=W-M-206, wQty=44;
+  const cUnit=W-M-156, wUnit=74;
+  const cAmt=W-M-76, wAmt=70;     // v89: 6pt de aire a la derecha
   const drawHead=(yy)=>{
     doc.setFillColor(ACC[0],ACC[1],ACC[2]); doc.rect(M, yy-13, W-2*M, 24, "F");
     doc.setTextColor(255,255,255); doc.setFont("helvetica","bold"); doc.setFontSize(9);
@@ -83,10 +83,10 @@ function generarInvoicePDF(id){
   doc.setFont("helvetica","normal");
   let zebra=false;
   d.lineas.forEach(l=>{
-    const nom=(l.sku?`[${l.sku}] `:"")+(l.nombre||"");
+    const nom=(l.nombre||"");   // v94: la factura va al cliente → sin SKU (es de orden interno)
     const wrapped=doc.splitTextToSize(nom, wItem-8);
     const rowH=Math.max(20, wrapped.length*11.5 + 8);
-    if(y+rowH>H-96){ y=drawHead(60); zebra=false; }
+    if(y+rowH>H-96){ doc.addPage(); y=drawHead(60); doc.setFont("helvetica","normal"); zebra=false; }   // v102: hoja nueva (antes se encimaba)
     if(zebra){ doc.setFillColor(ZEBRA[0],ZEBRA[1],ZEBRA[2]); doc.rect(M, y-12, W-2*M, rowH, "F"); }
     zebra=!zebra;
     const tTop=y+1;                                  // baseline superior del renglón
@@ -97,11 +97,11 @@ function generarInvoicePDF(id){
     doc.text(pdfMoney(l.precio), cUnit+wUnit, tTop, {align:"right"});
     doc.setFont("helvetica","bold"); doc.text(pdfMoney(l.cantidad*l.precio), cAmt+wAmt, tTop, {align:"right"}); doc.setFont("helvetica","normal");
     y += rowH;
-    doc.setDrawColor(LINE[0],LINE[1],LINE[2]); doc.line(M, y-6, W-M, y-6);
+    doc.setDrawColor(LINE[0],LINE[1],LINE[2]); doc.line(M, y-12, W-M, y-12);   // v89: línea en el borde de la fila (antes cortaba el texto de la siguiente)
   });
 
   /* ---------- Totals box ---------- */
-  y+=14;
+  y+=14; if(y+110 > H-90){ doc.addPage(); y=70; }   // v102: totales en hoja nueva si no entran
   const sub=(d.subtotal!=null)?d.subtotal:totalLineas(d.lineas);
   const envio = d.envio && d.envio.tipo==="monto" ? (d.envio.monto||0) : 0;
   const boxX=W-M-230, boxW=230;
@@ -110,7 +110,7 @@ function generarInvoicePDF(id){
     doc.setFontSize(opts.big?12:10);
     setInk(opts.bold?INK:MUT);
     doc.text(label, boxX, y); setInk(opts.bold?INK:INK);
-    doc.text(val, W-M, y, {align:"right"}); y+= opts.big?22:16;
+    doc.text(val, W-M-6, y, {align:"right"}); y+= opts.big?22:16;
   };
   line(t("pdf.subtotal"), pdfMoney(sub));
   line(t("pdf.shipping"), d.envio && d.envio.tipo==="free" ? t("pdf.free") : pdfMoney(envio));
@@ -121,6 +121,12 @@ function generarInvoicePDF(id){
   doc.setFillColor(ACC[0],ACC[1],ACC[2]);
   const total=(d.total!=null)?d.total:round2(sub+envio+((d.cargosCliente||[]).reduce((a,c)=>a+(c.monto||0),0)));
   line(t("pdf.total"), pdfMoney(total), {bold:true, big:true});
+
+  /* ---------- Cobro (v78) ---------- */
+  if(d.medioPago){
+    setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(9);
+    doc.text("Payment: "+cobroTextoPDF(d), M, H-74, {maxWidth: W-2*M});
+  }
 
   /* ---------- Footer ---------- */
   setInk(MUT); doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
@@ -149,7 +155,7 @@ function generarRemitoPDF(conjuntaId){
     if((l.aTransito||0)>0) filas.push({ nom, owner:t("pdf.owner.ours"), ours:true, qty:l.aTransito, costo:l.costoUnit||0 });
     if((l.ajeno||0)>0){
       const c = l.terceroId ? clienteById(l.terceroId) : null;
-      filas.push({ nom, owner:(c?(c.nombre+(c.empresa?` · ${c.empresa}`:"")):t("pdf.owner.thirdparty")), ours:false, qty:l.ajeno, costo:l.costoUnit||0 });
+      filas.push({ nom, owner:(c?(nombreVis(c.nombre)+(c.empresa?` · ${nombreVis(c.empresa)}`:"")):t("pdf.owner.thirdparty")), ours:false, qty:l.ajeno, costo:l.costoUnit||0 });
     }
   });
   if(!filas.length){ toast(t("pdf.err.nothingTravels"),"warn"); return; }
@@ -158,14 +164,14 @@ function generarRemitoPDF(conjuntaId){
   const doc = new jsPDF({ unit:"pt", format:"letter" });
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 48;
   const em = db.config.emisor||{};
-  const INK=[26,26,26], MUT=[120,120,120], LINE=[228,225,220], ACC=[37,99,235], ZEBRA=[248,247,245];
+  const INK=[26,26,26], MUT=[120,120,120], LINE=[228,225,220], ACC=[217,119,6], ZEBRA=[248,247,245];   // v102: ámbar de Select (antes azul)
   const setInk=(c)=>doc.setTextColor(c[0],c[1],c[2]);
 
   /* Header band */
   doc.setFillColor(ACC[0],ACC[1],ACC[2]); doc.rect(0,0,W,96,"F");
   doc.setTextColor(255,255,255);
   doc.setFont("helvetica","bold"); doc.setFontSize(19);
-  doc.text(em.nombre || t("pdf.rem.title"), M, 42);
+  doc.text(em.nombre || t("pdf.lc.brand"), M, 42);
   doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
   doc.text(t("pdf.rem.subInternal"), M, 60);
   doc.setFont("helvetica","bold"); doc.setFontSize(20);
@@ -181,11 +187,13 @@ function generarRemitoPDF(conjuntaId){
   y+=22;
 
   /* Table */
-  const cItem=M, wItem=W-M-M-320;
-  const cOwn=W-M-320, wOwn=150;
-  const cQty=W-M-150, wQty=44;
-  const cUnit=W-M-120, wUnit=52;
-  const cAmt=W-M-60, wAmt=60;
+  /* Columnas (de derecha a izquierda): importe 80 · costo ref. 80 · cant. 44 · dueño 120 · ítem el resto.
+     Antes cant./costo/importe quedaban pegados y los títulos se pisaban. */
+  const wAmt=80, cAmt=W-M-6-wAmt;   // 6pt de aire a la derecha
+  const wUnit=80, cUnit=cAmt-wUnit;
+  const wQty=44, cQty=cUnit-wQty;
+  const wOwn=120, cOwn=cQty-14-wOwn;
+  const cItem=M, wItem=cOwn-M-8;
   const drawHead=(yy)=>{
     doc.setFillColor(ACC[0],ACC[1],ACC[2]); doc.rect(M, yy-13, W-2*M, 24, "F");
     doc.setTextColor(255,255,255); doc.setFont("helvetica","bold"); doc.setFontSize(9);
@@ -201,7 +209,7 @@ function generarRemitoPDF(conjuntaId){
   filas.forEach(f=>{
     const wrapped=doc.splitTextToSize(f.nom, wItem-8);
     const rowH=Math.max(20, wrapped.length*11.5 + 8);
-    if(y+rowH>H-96){ y=drawHead(60); zebra=false; }
+    if(y+rowH>H-96){ doc.addPage(); y=drawHead(60); doc.setFont("helvetica","normal"); zebra=false; }   // v102: hoja nueva (antes se encimaba)
     if(zebra){ doc.setFillColor(ZEBRA[0],ZEBRA[1],ZEBRA[2]); doc.rect(M, y-12, W-2*M, rowH, "F"); }
     zebra=!zebra;
     const tTop=y+1;
@@ -213,15 +221,16 @@ function generarRemitoPDF(conjuntaId){
     doc.text(pdfMoney(f.costo), cUnit+wUnit, tTop, {align:"right"});
     doc.setFont("helvetica","bold"); doc.text(pdfMoney(f.qty*f.costo), cAmt+wAmt, tTop, {align:"right"}); doc.setFont("helvetica","normal");
     totQ+=f.qty; totAmt+=f.qty*f.costo;
-    y+=rowH; doc.setDrawColor(LINE[0],LINE[1],LINE[2]); doc.line(M, y-6, W-M, y-6);
+    y+=rowH; doc.setDrawColor(LINE[0],LINE[1],LINE[2]); doc.line(M, y-12, W-M, y-12);   // v89: línea en el borde de la fila (antes cortaba el texto de la siguiente)
   });
 
   /* Totals */
-  y+=14; const boxX=W-M-230;
+  y+=14; if(y+70 > H-70){ doc.addPage(); y=70; }   // v102: los totales no se pisan con el pie
+  const boxX=W-M-230;
   const line=(label,val,opts={})=>{
     doc.setFont("helvetica",opts.bold?"bold":"normal"); doc.setFontSize(opts.big?12:10);
     setInk(opts.bold?INK:MUT); doc.text(label, boxX, y); setInk(INK);
-    doc.text(val, W-M, y, {align:"right"}); y+= opts.big?22:16;
+    doc.text(val, W-M-6, y, {align:"right"}); y+= opts.big?22:16;
   };
   line(t("pdf.rem.totunits"), qty(totQ));
   doc.setDrawColor(ACC[0],ACC[1],ACC[2]); doc.setLineWidth(1.2); doc.line(boxX, y-8, W-M, y-8); doc.setLineWidth(1); y+=4;
@@ -256,9 +265,10 @@ function generarRemitoDocPDF(remitoId){
   if(lineasVivas.some(l=> l.rol!=="ours")) lineasVivas = lineasVivas.filter(l=> l.rol!=="ours");
   const filas = lineasVivas.map(l=>{
     const detalle = l.rol==="ours"   ? t("pdf.remdoc.oursAR")
-                  : l.rol==="select" ? (t("pdf.remdoc.keptselect") + (l.owner?t("pdf.remdoc.fromowner",{owner:l.owner}):""))
-                  : (l.owner || t("pdf.owner.thirdparty"));
-    return { nom:(l.sku?`[${l.sku}] `:"")+(l.nombre||""), detalle, qty:l.cantidad||0, ours:l.rol==="ours",
+                  : l.rol==="select" ? (t("pdf.remdoc.keptselect") + (l.owner?t("pdf.remdoc.fromowner",{owner:nombreVis(l.owner)}):""))
+                  : (nombreVis(l.owner||"") || t("pdf.owner.thirdparty"));
+    // v94: el remito al dueño no lleva SKU · v102: arreglado (este comentario se había comido la cantidad)
+    return { nom:((l.sku&&!esTercero)?`[${l.sku}] `:"")+(l.nombre||""), detalle, qty:+l.cantidad||0, ours:l.rol==="ours",
              costo:+l.costoUnit||0, charge:(l.charge!=null?+l.charge:(+l.costoUnit||0)) };
   });
   if(!filas.length){ toast(t("pdf.err.remNoLines"),"warn"); return; }
@@ -267,7 +277,7 @@ function generarRemitoDocPDF(remitoId){
   const doc = new jsPDF({ unit:"pt", format:"letter" });
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 48;
   const em = db.config.emisor||{};
-  const INK=[26,26,26], MUT=[120,120,120], LINE=[228,225,220], ACC=[37,99,235], ZEBRA=[248,247,245];
+  const INK=[26,26,26], MUT=[120,120,120], LINE=[228,225,220], ACC=[217,119,6], ZEBRA=[248,247,245];   // v102: ámbar de Select (antes azul)
   const setInk=(c)=>doc.setTextColor(c[0],c[1],c[2]);
   const esAR = r.letra==="A";
 
@@ -275,7 +285,7 @@ function generarRemitoDocPDF(remitoId){
   doc.setFillColor(ACC[0],ACC[1],ACC[2]); doc.rect(0,0,W,96,"F");
   doc.setTextColor(255,255,255);
   doc.setFont("helvetica","bold"); doc.setFontSize(19);
-  doc.text(em.nombre || t("pdf.rem.title"), M, 42);
+  doc.text(em.nombre || t("pdf.lc.brand"), M, 42);
   doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
   doc.text(esTercero ? t("pdf.remdoc.subTercero")
          : esSelect  ? t("pdf.remdoc.subSelect")
@@ -320,7 +330,7 @@ function generarRemitoDocPDF(remitoId){
     { h:t("pdf.th.value"), w:70, val:f=>pdfMoney(f.qty*f.costo), bold:true },
   ];
   else rightCols = [ { h:t("pdf.th.qty"), w:60, val:f=>qty(f.qty) } ];
-  let cx = W-M; for(let k=rightCols.length-1;k>=0;k--){ rightCols[k].xr=cx; cx-=rightCols[k].w; }
+  let cx = W-M-6; for(let k=rightCols.length-1;k>=0;k--){ rightCols[k].xr=cx; cx-=rightCols[k].w; }
   const wItem = cx - M - 12;
 
   const drawHead=(yy)=>{
@@ -335,7 +345,7 @@ function generarRemitoDocPDF(remitoId){
   filas.forEach(f=>{
     const wrapped=doc.splitTextToSize(f.nom, wItem);
     const rowH=Math.max(24, wrapped.length*11.5 + 8 + (f.detalle?11:0));
-    if(y+rowH>H-96){ y=drawHead(60); zebra=false; }
+    if(y+rowH>H-96){ doc.addPage(); y=drawHead(60); doc.setFont("helvetica","normal"); zebra=false; }   // v102: hoja nueva (antes se encimaba)
     if(zebra){ doc.setFillColor(ZEBRA[0],ZEBRA[1],ZEBRA[2]); doc.rect(M, y-12, W-2*M, rowH, "F"); }
     zebra=!zebra;
     const tTop=y+1;
@@ -344,15 +354,16 @@ function generarRemitoDocPDF(remitoId){
     rightCols.forEach(c=>{ setInk(INK); doc.setFont("helvetica", c.bold?"bold":"normal"); doc.setFontSize(9.5); doc.text(String(c.val(f)), c.xr, tTop, {align:"right"}); });
     doc.setFont("helvetica","normal");
     totQ+=f.qty; totCharge+=f.qty*f.charge; totValue+=f.qty*f.costo;
-    y+=rowH; doc.setDrawColor(LINE[0],LINE[1],LINE[2]); doc.line(M, y-6, W-M, y-6);
+    y+=rowH; doc.setDrawColor(LINE[0],LINE[1],LINE[2]); doc.line(M, y-12, W-M, y-12);   // v89: línea en el borde de la fila (antes cortaba el texto de la siguiente)
   });
 
   /* Totals */
-  y+=14; const boxX=W-M-230;
+  y+=14; if(y+70 > H-70){ doc.addPage(); y=70; }   // v102: los totales no se pisan con el pie
+  const boxX=W-M-230;
   const tline=(label,val,opts={})=>{
     doc.setFont("helvetica",opts.bold?"bold":"normal"); doc.setFontSize(opts.big?12:10);
     setInk(opts.bold?INK:MUT); doc.text(label, boxX, y); setInk(INK);
-    doc.text(val, W-M, y, {align:"right"}); y+= opts.big?22:16;
+    doc.text(val, W-M-6, y, {align:"right"}); y+= opts.big?22:16;
   };
   tline(t("pdf.remdoc.totunits"), qty(totQ));
   if(esTercero){ doc.setDrawColor(ACC[0],ACC[1],ACC[2]); doc.setLineWidth(1.2); doc.line(boxX, y-8, W-M, y-8); doc.setLineWidth(1); y+=4; tline(t("pdf.remdoc.tocharge"), pdfMoney(totCharge), {bold:true, big:true}); }
@@ -385,17 +396,16 @@ function exportListaPrecios(prods){
   doc.setFont("helvetica","normal"); doc.setFontSize(9.5); doc.setTextColor(120);
   doc.text(new Date().toLocaleDateString((typeof lang==="function"&&lang()==="es")?"es-AR":"en-US"), M, y); y+=20;
 
-  const cSKU=M, cName=M+90, cPrice=W-M;
+  const cName=M, cPrice=W-M;   // v94: lista para clientes → sin columna SKU
   doc.setFillColor(245); doc.rect(M, y-12, W-2*M, 22, "F");
   doc.setFont("helvetica","bold"); doc.setFontSize(9.5); doc.setTextColor(40);
-  doc.text(t("pdf.pl.sku"), cSKU, y+3); doc.text(t("pdf.pl.product"), cName, y+3); doc.text(t("pdf.pl.price"), cPrice, y+3, {align:"right"});
+  doc.text(t("pdf.pl.product"), cName+6, y+3); doc.text(t("pdf.pl.price"), cPrice, y+3, {align:"right"});
   y+=22; doc.setFont("helvetica","normal"); doc.setTextColor(55);
   clean.slice().sort((a,b)=>String(a.nombre||"").localeCompare(String(b.nombre||""),"en")).forEach(p=>{
     if(y>740){ doc.addPage(); y=60; }
-    doc.setTextColor(120); doc.setFontSize(8.5); doc.text(p.sku||"—", cSKU, y);
     doc.setTextColor(55); doc.setFontSize(10);
-    const wrapped=doc.splitTextToSize(p.nombre||"", cPrice-cName-70);
-    doc.text(wrapped, cName, y);
+    const wrapped=doc.splitTextToSize(p.nombre||"", cPrice-cName-80);
+    doc.text(wrapped, cName+6, y);
     doc.text(pdfMoney(p.precioVenta), cPrice, y, {align:"right"});
     y += Math.max(15, wrapped.length*12);
     doc.setDrawColor(240); doc.line(M, y-5, W-M, y-5);
@@ -481,28 +491,30 @@ function openExportProdPDF(base){
     <p class="hint" style="margin:0 0 12px">${t("pdfx.intro")}</p>
     <div style="display:grid;gap:8px">
       ${opt("px_qty",   t("pdfx.col.qty"),   t("pdfx.col.qty.h"),   true)}
-      ${opt("px_cost",  t("pdfx.col.cost"),  t("pdfx.col.cost.h"),  true)}
+      ${verCostos()?`${opt("px_cost",  t("pdfx.col.cost"),  t("pdfx.col.cost.h"),  true)}
       <label id="px_brk_row" style="display:flex;gap:8px;align-items:center;margin:-2px 0 2px 34px;font-size:12.5px;color:var(--muted);cursor:pointer">
         <input type="checkbox" id="px_brk"> ${t("pdfx.col.breakdown")}
-      </label>
-      ${opt("px_price", t("pdfx.col.price"), t("pdfx.col.price.h"), true)}
+      </label>`:""}
+      ${opt("px_price", t("pdfx.col.price"), t("pdfx.col.price.h"), verCostos())}
+      ${verSku()?opt("px_sku", t("pdfx.col.sku"), t("pdfx.col.sku.h"), false):""}
     </div>
     <p class="hint" style="margin:14px 0 0" id="px_info"></p>`,
     [
       { cls:"btn", label:t("common.cancel"), act:closeModal },
       { cls:"btn primary", label:t("pdfx.btn"), act:()=>{
-          const o = { qty:g("px_qty").checked, cost:g("px_cost").checked, brk:g("px_brk").checked, price:g("px_price").checked };
+          const ck = id=> !!(g(id) && g(id).checked);   // v94: costo/desglose sólo admin; SKU sólo admin y apagado por defecto
+          const o = { qty:ck("px_qty"), cost:ck("px_cost"), brk:ck("px_brk"), price:ck("px_price"), sku:ck("px_sku") };
           if(!o.qty && !o.cost && !o.price){ toast(t("pdfx.err.none"),"warn"); return; }
           if(generarProdPDF(base, stores, o)) closeModal();
         } }
     ]);
   const info=()=>{
-    const o = { qty:g("px_qty").checked, cost:g("px_cost").checked, price:g("px_price").checked };
+    const o = { qty:g("px_qty").checked, cost:!!(g("px_cost")&&g("px_cost").checked), price:g("px_price").checked };
     const brkRow=g("px_brk_row"); if(brkRow){ brkRow.style.opacity=o.cost?"1":".45"; g("px_brk").disabled=!o.cost; }
     const n = (o.qty||o.cost||o.price) ? filasProdPDF(base, stores, o).length : 0;
     const el=g("px_info"); if(el) el.innerHTML = t("pdfx.info",{store:esc(focoTxt), n});
   };
-  ["px_qty","px_cost","px_price"].forEach(id=> g(id).onchange=info);
+  ["px_qty","px_cost","px_price"].forEach(id=>{ if(g(id)) g(id).onchange=info; });
   info();
 }
 /* Qué productos entran (ver regla arriba). */
@@ -573,14 +585,14 @@ function generarProdPDF(base, stores, o){
   let x=W-M-6;
   for(let k=cols.length-1;k>=0;k--){ cols[k].x=x; x-=cols[k].w; }
   const numStart = cols.length ? cols[0].x-cols[0].w : W-M;
-  const cSku=M+6, skuW=78, cItem=cSku+skuW+8;
+  const cSku=M+6, skuW=o.sku?78:0, cItem=o.sku?(cSku+skuW+8):(M+6);   // v94: sin SKU por defecto (va al cliente)
   const itemW=(numStart+10)-cItem;
   const FS=8.5, LH=11, PADV=5;
 
   const drawHead=(yy)=>{
     doc.setFillColor(ACC[0],ACC[1],ACC[2]); doc.rect(M, yy-13, W-2*M, 22, "F");
     doc.setTextColor(255,255,255); doc.setFont("helvetica","bold"); doc.setFontSize(8.5);
-    doc.text(pdfTxt(t("pdf.lc.sku")), cSku, yy+2);
+    if(o.sku) doc.text(pdfTxt(t("pdf.lc.sku")), cSku, yy+2);
     doc.text(pdfTxt(t("pdf.lc.product")), cItem, yy+2);
     cols.forEach(c=> doc.text(pdfTxt(c.h), c.x, yy+2, {align:"right"}));
     return yy+24;
@@ -614,7 +626,7 @@ function generarProdPDF(base, stores, o){
     const base1 = top + PADV + 8, mid = top + rowH/2 + 3;
 
     doc.setFont("helvetica","normal"); doc.setFontSize(7.5); setInk(MUT);
-    doc.text(cortar(pdfTxt(p.sku||"—"), skuW), cSku, mid);
+    if(o.sku) doc.text(cortar(pdfTxt(p.sku||"—"), skuW), cSku, mid);
     doc.setFontSize(FS); setInk(INK);
     doc.text(lineas, cItem, base1, { lineHeightFactor: LH/FS });
 
@@ -670,3 +682,41 @@ function generarProdPDF(base, stores, o){
   toast(t("pdfx.done",{n:filas.length}));
   return true;
 }
+
+
+/* ============================================================
+   Documentos SIEMPRE en inglés (v89)
+   ------------------------------------------------------------
+   Factura y remitos salen en inglés aunque la app esté en español (los avisos
+   "descargado"/errores siguen en el idioma de la app). Además todo texto pasa
+   por pdfTxt(): la Helvetica de jsPDF no tiene flechas ni otros símbolos y
+   salían como basura (ej. "!'" en lugar de la flecha).
+   ============================================================ */
+(function(){
+  const enAppLang = k => /^pdf\.err\./.test(k) || /\.downloaded$/.test(k);
+  function tEN(key, vars){
+    let s = (I18N.en && I18N.en[key]!=null) ? I18N.en[key] : key;
+    if(vars) for(const k in vars) s = s.replace(new RegExp("\\{"+k+"\\}","g"), vars[k]);
+    return s;
+  }
+  const limpio = v => Array.isArray(v) ? v.map(x=> pdfTxt(x)) : pdfTxt(v);
+  function enIngles(fn){
+    return function(){
+      const t0 = window.t, l0 = window.lang, J = window.jspdf, J0 = J && J.jsPDF;
+      window.t = (k, v)=> enAppLang(k) ? t0(k, v) : tEN(k, v);
+      window.lang = ()=> "en";
+      if(J0) J.jsPDF = function(opts){
+        const d = new J0(opts);
+        const tx = d.text.bind(d), sp = d.splitTextToSize.bind(d);
+        d.text = (s, ...r)=> tx(limpio(s), ...r);
+        d.splitTextToSize = (s, ...r)=> sp(pdfTxt(s), ...r);
+        return d;
+      };
+      try{ return fn.apply(this, arguments); }
+      finally{ window.t = t0; window.lang = l0; if(J0) J.jsPDF = J0; }
+    };
+  }
+  generarInvoicePDF   = enIngles(generarInvoicePDF);
+  generarRemitoPDF    = enIngles(generarRemitoPDF);
+  generarRemitoDocPDF = enIngles(generarRemitoDocPDF);
+})();
