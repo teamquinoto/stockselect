@@ -12,7 +12,8 @@
    ACTUALIZACIÓN CONTROLADA: no auto-activamos con skipWaiting; cuando hay
    versión nueva el SW queda "waiting" y la app muestra el botón "Update".
    ============================================================ */
-const CACHE = "mayor-stock-v110";   // v110: el Editor sólo edita lo que cargó (permiso 'editar lo de otros' por usuario); cada compra/venta guarda quién la cargó; importar factura respeta el idioma (otro idioma = otro SKU) y pide el idioma del producto nuevo
+const CACHE = "mayor-stock-v111";   // v111: Stock del grupo — "Ver como: Unidades / Cajas" (tabla, totales, orden y catálogo PDF siguen la vista elegida)
+//   // v110: el Editor sólo edita lo que cargó (permiso 'editar lo de otros' por usuario); cada compra/venta guarda quién la cargó; importar factura respeta el idioma (otro idioma = otro SKU) y pide el idioma del producto nuevo
 //   // v109: gráficos de barras sin etiquetas pisadas y Margen % alineado por semana; la página ya no se estira a lo ancho en pantallas medianas; simulador del plan en celular; cliente sin nombre repetido; encabezados de tabla pegados arriba sin hueco
 //   // v108: la app pasa a llamarse Select (barra, login, pestaña, ícono instalado, Excel)
 //   // v107: barra superior igual a Prince (chip de usuario, nubecita de sincronizado; sync, ayuda y salir a la derecha)
