@@ -683,6 +683,8 @@ function projectStore(data, identity) {
      El navegador nunca ve la clave ni habla con la otra app.
    Si GRUPO_KEY o GRUPO_PEER_URL no están configurados, la otra app
    figura "no conectada" y todo lo demás sigue igual.
+   Cada producto lleva además upc = unidades por caja de su ficha (0 si no
+   tiene), para que la app pueda mostrar el stock del grupo en cajas.
    ============================================================ */
 function grupoCodigos(p) {
   const extra = Array.isArray(p && p.skusAsoc) ? p.skusAsoc.map(x => x && x.sku) : [];
@@ -721,7 +723,7 @@ async function grupoPropio(env) {
     const tr = Math.max(0, Number(spt.__transito) || 0);
     if (tot <= 0 && tr <= 0) continue;
     productos.push({ codigos: grupoCodigos(p), sku: String(p.sku || ""), nombre: String(p.nombre || ""), juego: String(p.categoria || ""),
-                     idioma: String(p.idioma || ""), stock, transito: tr });
+                     idioma: String(p.idioma || ""), stock, transito: tr, upc: Number(p.boxesPorCase) > 0 ? Number(p.boxesPorCase) : 0 });
   }
   return { app: String(env.GRUPO_NOMBRE || "Select").slice(0, 40), depositos: deps, productos, updated_at: row ? row.updated_at : null };
 }
